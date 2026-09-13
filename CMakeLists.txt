@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 # Development versioning follows Patch NN[A-Z] -> 0.NN.letter-index.
-project(goliath-qt VERSION 0.29.2 LANGUAGES CXX C)
+project(goliath-qt VERSION 0.29.3 LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -25,7 +25,7 @@ set(GOLIATH_LICENSE_URL "https://www.gnu.org/licenses/gpl-3.0.html" CACHE STRING
     "Published Goliath license URL shown by About Goliath")
 
 if(NOT GOLIATH_BUILD_REVISION)
-    set(GOLIATH_BUILD_REVISION "patch29b")
+    set(GOLIATH_BUILD_REVISION "patch29c")
     find_package(Git QUIET)
     if(Git_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
         execute_process(

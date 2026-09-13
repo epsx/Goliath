@@ -17,6 +17,16 @@ visible-only Random smoke tests.
 
 ---
 
+## 2026-09-13 — Patch 29C: explicit Linux build instructions
+
+- Added concrete dependency-install commands for Debian/Ubuntu, Fedora, and
+  Arch Linux.
+- Added standalone Linux configure, build, and launch commands instead of
+  referring readers back to the Windows procedure.
+- Advanced the development identity to version `0.29.3` and build `patch29c`.
+
+---
+
 ## 2026-09-13 — Patch 29B: repository privacy cleanup
 
 - Removed the remaining local workstation name and workspace path from

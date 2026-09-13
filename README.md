@@ -162,9 +162,52 @@ The normal build produces only the application.
 
 ### Linux
 
-Install a C++20 compiler, CMake 3.16 or newer, Ninja, Qt 6 Widgets, and SDL3
-using your distribution's package manager, then run the same CMake commands.
-Executable names do not use the `.exe` suffix.
+Install the compiler, CMake, Ninja, Qt 6 Widgets development files, and SDL3
+development files for your distribution.
+
+Debian or Ubuntu:
+
+```bash
+sudo apt update
+sudo apt install build-essential cmake ninja-build qt6-base-dev libsdl3-dev
+```
+
+Fedora:
+
+```bash
+sudo dnf install gcc-c++ cmake ninja-build qt6-qtbase-devel SDL3-devel
+```
+
+Arch Linux:
+
+```bash
+sudo pacman -S --needed base-devel cmake ninja qt6-base sdl3
+```
+
+Then configure and build Goliath:
+
+```bash
+cmake -S . -B build -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DBUILD_TESTS=OFF
+cmake --build build -j$(nproc)
+```
+
+The executable is created at:
+
+```text
+build/goliath-qt
+```
+
+Run it from the repository root with:
+
+```bash
+./build/goliath-qt
+```
+
+Package names can vary on older distribution releases. CMake must be able to
+locate both Qt 6 Widgets and the SDL3 CMake package before configuration can
+complete.
 
 Tests are disabled by default. Developers and CI builds can enable them with
 `-DBUILD_TESTS=ON` as shown below.
