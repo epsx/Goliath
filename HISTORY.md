@@ -17,6 +17,18 @@ visible-only Random smoke tests.
 
 ---
 
+## 2026-09-13 — Patch 30A: Windows and Linux continuous integration
+
+- Added GitHub Actions jobs that build and test Goliath on Windows MSYS2
+  UCRT64 and Linux.
+- Added downloadable frontend build artifacts with license materials and
+  dependency reports; the Windows artifact also collects its Qt, SDL3, and
+  detected MSYS2 runtime DLLs.
+- Kept JGRF, Geolith, BIOS, game media, and user data outside CI artifacts.
+- Advanced the development identity to version `0.30.1` and build `patch30a`.
+
+---
+
 ## 2026-09-13 — Patch 29C: explicit Linux build instructions
 
 - Added concrete dependency-install commands for Debian/Ubuntu, Fedora, and

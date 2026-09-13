@@ -5,6 +5,7 @@
 /LICENSE text eol=lf
 /*.md text eol=lf
 /docs/*.md text eol=lf
+/.github/** text eol=lf
 /licenses/** text eol=lf
 /src/** text eol=lf
 /tests/*.cpp text eol=lf

@@ -1,0 +1,180 @@
+name: Build Goliath
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows UCRT64
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - name: Set up MSYS2 UCRT64
+        uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2.32.0
+        with:
+          msystem: UCRT64
+          update: true
+          cache: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-qt6-base
+            mingw-w64-ucrt-x86_64-sdl3
+
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Configure
+        run: >-
+          cmake -S . -B build-ci -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build build-ci -j$(nproc)
+
+      - name: Test
+        run: ctest --test-dir build-ci --output-on-failure
+
+      - name: Stage Windows frontend
+        run: |
+          set -euo pipefail
+
+          stage="$PWD/dist/Goliath-Windows-x86_64"
+          mkdir -p "$stage"
+
+          cp build-ci/goliath-qt.exe "$stage/"
+          cp LICENSE THIRD-PARTY-NOTICES.md "$stage/"
+          cp -R licenses "$stage/"
+
+          windeployqt6.exe --release "$stage/goliath-qt.exe"
+          cp /ucrt64/bin/SDL3.dll "$stage/"
+
+          for pass in 1 2 3 4 5; do
+            copied=0
+            while IFS= read -r dependency; do
+              filename=$(basename "$dependency")
+              if [ ! -f "$stage/$filename" ]; then
+                cp "$dependency" "$stage/$filename"
+                copied=1
+              fi
+            done < <(
+              find "$stage" -type f \
+                \( -iname '*.exe' -o -iname '*.dll' \) -print0 |
+              while IFS= read -r -d '' binary; do
+                ldd "$binary" 2>/dev/null || true
+              done |
+              awk '$3 ~ /^\/ucrt64\/bin\/.*\.[dD][lL][lL]$/ { print $3 }' |
+              sort -u
+            )
+
+            if [ "$copied" -eq 0 ]; then
+              break
+            fi
+          done
+
+          manifest="$stage/DEPENDENCIES.txt"
+          : > "$manifest"
+          while IFS= read -r -d '' binary; do
+            relative=${binary#"$stage"/}
+            printf '[%s]\n' "$relative" >> "$manifest"
+            ldd "$binary" >> "$manifest" 2>&1 || true
+            printf '\n' >> "$manifest"
+          done < <(
+            find "$stage" -type f \
+              \( -iname '*.exe' -o -iname '*.dll' \) -print0
+          )
+
+          if grep -qi 'not found' "$manifest"; then
+            cat "$manifest"
+            exit 1
+          fi
+
+      - name: Upload Windows frontend
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Goliath-Windows-x86_64
+          path: dist/Goliath-Windows-x86_64
+          if-no-files-found: error
+          retention-days: 14
+
+  linux:
+    name: Linux x86_64
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      QT_QPA_PLATFORM: offscreen
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            build-essential \
+            cmake \
+            ninja-build \
+            qt6-base-dev
+
+      - name: Build and cache SDL3
+        id: sdl
+        uses: libsdl-org/setup-sdl@30cb786f3595c27d05018cd374b679f2313c59d3 # v1.0.1
+        with:
+          version: 3.4.12
+          build-type: Release
+          install-linux-dependencies: true
+
+      - name: Configure
+        run: >-
+          cmake -S . -B build-ci -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_TESTS=ON
+          -DCMAKE_PREFIX_PATH="${{ steps.sdl.outputs.prefix }}"
+
+      - name: Build
+        run: cmake --build build-ci -j$(nproc)
+
+      - name: Test
+        run: ctest --test-dir build-ci --output-on-failure
+
+      - name: Stage Linux frontend
+        run: |
+          set -euo pipefail
+
+          stage="$PWD/dist/Goliath-Linux-x86_64"
+          mkdir -p "$stage"
+
+          cp build-ci/goliath-qt "$stage/"
+          cp LICENSE THIRD-PARTY-NOTICES.md "$stage/"
+          cp -R licenses "$stage/"
+
+          ldd "$stage/goliath-qt" | tee "$stage/DEPENDENCIES.txt"
+          if grep -qi 'not found' "$stage/DEPENDENCIES.txt"; then
+            exit 1
+          fi
+
+      - name: Upload Linux frontend
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Goliath-Linux-x86_64
+          path: dist/Goliath-Linux-x86_64
+          if-no-files-found: error
+          retention-days: 14

@@ -7,6 +7,10 @@
   <a href="#build-linux">Build Linux</a>
 </p>
 
+<p align="center">
+  <a href="https://github.com/epsx/Goliath/actions/workflows/build.yml"><img src="https://github.com/epsx/Goliath/actions/workflows/build.yml/badge.svg" alt="Windows and Linux build"></a>
+</p>
+
 # Goliath
 
 Goliath is a C++20 and Qt 6 desktop frontend for Neo Geo MVS/AES and
@@ -259,10 +263,18 @@ Install the reported Qt 6 and SDL3 dependencies through the target
 distribution, or use a dedicated AppImage/package workflow. Do not blindly
 bundle glibc or every `.so` path printed by the build machine.
 
-GitHub Actions can build and test Windows and Linux jobs and upload their
-staged outputs as downloadable artifacts. The release workflow must still add
-the matching JGRF/Geolith runtime, run the platform dependency checks, include
-all license materials, and validate each package on a clean environment.
+GitHub Actions builds and tests every push and pull request on Windows MSYS2
+UCRT64 and Linux. Successful runs provide separate downloadable frontend build
+artifacts for both platforms from the workflow run page.
+
+The Windows artifact contains Goliath, its detected Qt/SDL3 runtime DLLs, and
+the license materials. The Linux artifact contains the Goliath binary, license
+materials, and an `ldd` dependency report; it is a build artifact, not an
+AppImage or distribution-independent package.
+
+These CI artifacts intentionally exclude JGRF, Geolith, BIOS, game media,
+metadata, configuration, and user data. A full release must add and validate
+the matching JGRF/Geolith runtime separately.
 
 ## Tests
 

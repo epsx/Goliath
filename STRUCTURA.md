@@ -15,6 +15,9 @@ The intended source repository contains:
 
 ```text
 goliath-qt-cpp/
+├── .github/
+│   └── workflows/
+│       └── build.yml
 ├── .gitattributes
 ├── .gitignore
 ├── CMakeLists.txt
@@ -53,6 +56,7 @@ archive, patch, editor-backup, and operating-system artifacts out of commits.
 | `HOWTO.md` | Build, setup, deployment, rescan, validation, and troubleshooting. |
 | `HISTORY.md` | Chronological implementation and cleanup record. |
 | `STRUCTURA.md` | Detailed component ownership and data-flow map. |
+| `.github/workflows/build.yml` | Windows/Linux CI, tests, dependency audits, and frontend build artifacts. |
 | `licenses/` | Exact source, upstream, MSYS2 runtime, and Qt SBOM license materials. |
 | `Screenshots/` | Public, content-free application screenshots used by `README.md`. |
 | `docs/` | Release-compliance and compatibility-patch records. |
