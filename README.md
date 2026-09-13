@@ -267,10 +267,12 @@ GitHub Actions builds and tests every push and pull request on Windows MSYS2
 UCRT64 and Linux. Successful runs provide separate downloadable frontend build
 artifacts for both platforms from the workflow run page.
 
-The Windows artifact contains Goliath, its detected Qt/SDL3 runtime DLLs, and
-the license materials. The Linux artifact contains the Goliath binary, license
-materials, and an `ldd` dependency report; it is a build artifact, not an
-AppImage or distribution-independent package.
+The Windows artifact contains Goliath, its detected Qt, SDL3, and transitive
+MSYS2 runtime DLLs, together with matching license materials. CI verifies the
+license checksum manifest and requires a retained MSYS2 license directory for
+every top-level DLL owned by an installed package. The Linux artifact contains
+the Goliath binary, license materials, and an `ldd` dependency report; it is a
+build artifact, not an AppImage or distribution-independent package.
 
 These CI artifacts intentionally exclude JGRF, Geolith, BIOS, game media,
 metadata, configuration, and user data. A full release must add and validate

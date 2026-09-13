@@ -56,7 +56,7 @@ archive, patch, editor-backup, and operating-system artifacts out of commits.
 | `HOWTO.md` | Build, setup, deployment, rescan, validation, and troubleshooting. |
 | `HISTORY.md` | Chronological implementation and cleanup record. |
 | `STRUCTURA.md` | Detailed component ownership and data-flow map. |
-| `.github/workflows/build.yml` | Windows/Linux CI, tests, dependency audits, and frontend build artifacts. |
+| `.github/workflows/build.yml` | Windows/Linux CI, tests, dependency and license-coverage audits, and frontend build artifacts. |
 | `licenses/` | Exact source, upstream, MSYS2 runtime, and Qt SBOM license materials. |
 | `Screenshots/` | Public, content-free application screenshots used by `README.md`. |
 | `docs/` | Release-compliance and compatibility-patch records. |
@@ -765,6 +765,11 @@ vendored project source.
 Their audited notices, together with the standalone notices for vendored
 source, are preserved under `licenses/` and indexed by
 `THIRD-PARTY-NOTICES.md`.
+
+The Windows CI staging step verifies `licenses/SHA256SUMS` and maps every
+top-level DLL found in the MSYS2 installation back to its owning package. The
+artifact is rejected when `licenses/msys2/` has no matching package license
+directory.
 
 ---
 

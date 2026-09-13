@@ -89,6 +89,36 @@ jobs:
             fi
           done
 
+          (
+            cd "$stage/licenses"
+            sha256sum -c SHA256SUMS
+          )
+
+          missing_license=0
+          while IFS= read -r -d '' runtime; do
+            filename=$(basename "$runtime")
+            installed="/ucrt64/bin/$filename"
+
+            if [ ! -f "$installed" ]; then
+              continue
+            fi
+
+            package=$(pacman -Qoq "$installed")
+            license_dir=${package#mingw-w64-ucrt-x86_64-}
+
+            if ! find "$stage/licenses/msys2" \
+                -mindepth 1 -maxdepth 1 -type d \
+                -iname "$license_dir" -print -quit | grep -q .; then
+              printf 'Missing license material for %s (%s)\n' \
+                "$filename" "$package" >&2
+              missing_license=1
+            fi
+          done < <(find "$stage" -maxdepth 1 -type f -iname '*.dll' -print0)
+
+          if [ "$missing_license" -ne 0 ]; then
+            exit 1
+          fi
+
           manifest="$stage/DEPENDENCIES.txt"
           : > "$manifest"
           while IFS= read -r -d '' binary; do
@@ -165,6 +195,11 @@ jobs:
           cp build-ci/goliath-qt "$stage/"
           cp LICENSE THIRD-PARTY-NOTICES.md "$stage/"
           cp -R licenses "$stage/"
+
+          (
+            cd "$stage/licenses"
+            sha256sum -c SHA256SUMS
+          )
 
           ldd "$stage/goliath-qt" | tee "$stage/DEPENDENCIES.txt"
           if grep -qi 'not found' "$stage/DEPENDENCIES.txt"; then

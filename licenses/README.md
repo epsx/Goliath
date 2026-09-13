@@ -7,6 +7,8 @@ source and Windows runtime components used or redistributed with Goliath.
 - `upstream/` covers JG, JGRF, Geolith, libchdr, and their bundled material.
 - `msys2/` contains the license files shipped by the exact MSYS2 UCRT64
   packages used for the audited Windows portable build.
+- `msys2/libffi/` and `msys2/libjpeg-turbo/` cover transitive DLLs collected
+  from the deployed Qt runtime.
 - `msys2/qt6-base/qtbase-6.11.1.spdx` is Qt Base's installed SPDX SBOM.
 - `SHA256SUMS` records the exact bytes of every other file in this directory.
 

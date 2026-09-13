@@ -17,6 +17,19 @@ visible-only Random smoke tests.
 
 ---
 
+## 2026-09-13 — Patch 30B: Windows artifact license coverage
+
+- Added the exact MSYS2 license materials for libffi 3.7.1-1 and
+  libjpeg-turbo 3.2.0-1 after GitHub Actions identified their DLLs as
+  transitive dependencies of the deployed Qt runtime.
+- Expanded the audited Qt runtime inventory to include Qt Network and the Qt
+  plugin groups copied by `windeployqt6.exe`.
+- Added CI checks for the license checksum manifest and for a matching MSYS2
+  license directory for every top-level DLL owned by an installed package.
+- Advanced the development identity to version `0.30.2` and build `patch30b`.
+
+---
+
 ## 2026-09-13 — Patch 30A: Windows and Linux continuous integration
 
 - Added GitHub Actions jobs that build and test Goliath on Windows MSYS2

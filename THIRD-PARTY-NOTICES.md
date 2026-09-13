@@ -89,12 +89,14 @@ upstream package supplies more than one option.
 | bzip2 | 1.0.8-3 | bzip2 license |
 | double-conversion | 3.4.0-1 | BSD-3-Clause |
 | libepoxy | 1.5.10-7 | MIT |
+| libffi | 3.7.1-1 | MIT |
 | FreeType | 2.14.3-1 | FreeType License selected from its FTL/GPL dual license |
 | GCC runtime libraries | 16.1.0-5 | GPL-3.0-or-later WITH GCC-exception-3.1 and applicable LGPL terms |
 | GLib | 2.88.2-1 | LGPL-2.1-or-later |
 | Graphite2 | 1.3.15-1 | LGPL-2.1-or-later |
 | HarfBuzz | 14.2.1-1 | MIT |
 | GNU libiconv/libcharset | 1.19-1 | LGPL-2.1-or-later; package documentation retains its separate terms |
+| libjpeg-turbo | 3.2.0-1 | BSD-style terms with the complete IJG and other upstream notices retained |
 | ICU | 78.3-3 | ICU license |
 | gettext runtime | 1.0-1 | LGPL-2.1-or-later for the runtime library; all package notices are retained |
 | md4c | 0.5.3-1 | MIT |
@@ -105,10 +107,12 @@ upstream package supplies more than one option.
 | zstd | 1.5.7-2 | BSD-3-Clause selected from its BSD/GPL dual license |
 | zlib | 1.3.2-2 | Zlib |
 
-The audited Qt files are `Qt6Core.dll`, `Qt6Gui.dll`, `Qt6Widgets.dll`,
-`platforms/qwindows.dll`, and `imageformats/qico.dll`. They are dynamically
-linked and may be replaced by the user with interface-compatible builds. The
-Qt Base 6.11.1 SPDX document and its full installed license set are in
+The audited Qt deployment contains `Qt6Core.dll`, `Qt6Gui.dll`,
+`Qt6Network.dll`, `Qt6Widgets.dll`, and the plugins selected by
+`windeployqt6.exe` under `generic/`, `imageformats/`, `networkinformation/`,
+`platforms/`, `styles/`, and `tls/`. They are dynamically linked and may be
+replaced by the user with interface-compatible builds. The Qt Base 6.11.1
+SPDX document and its full installed license set are in
 `licenses/msys2/qt6-base/`.
 
 Goliath's Windows build statically links eligible GCC runtime and winpthreads
