@@ -843,8 +843,8 @@ void MainWindow::onSortChanged() {
     refreshLibraryView(true);
 }
 
-void MainWindow::onShowVariantsChanged(Qt::CheckState state) {
-    m_showVariants = (state == Qt::Checked);
+void MainWindow::onShowVariantsChanged(bool checked) {
+    m_showVariants = checked;
 
     m_config.set("UI", "show_variants", m_showVariants ? "true" : "false");
     save_config(m_config);

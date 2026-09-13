@@ -17,6 +17,16 @@ visible-only Random smoke tests.
 
 ---
 
+## 2026-09-13 — Patch 30C: older Qt checkbox compatibility
+
+- Replaced the Qt 6.7-only `QCheckBox::checkStateChanged` signal used by
+  **Show variants** with the older, equivalent `toggled(bool)` signal.
+- Preserved the existing setting, configuration save, and library-refresh
+  behavior while allowing the Ubuntu GitHub Actions Qt version to compile it.
+- Advanced the development identity to version `0.30.3` and build `patch30c`.
+
+---
+
 ## 2026-09-13 — Patch 30B: Windows artifact license coverage
 
 - Added the exact MSYS2 license materials for libffi 3.7.1-1 and

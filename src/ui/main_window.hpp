@@ -59,7 +59,7 @@ protected:
 
 private slots:
     void onSortChanged();
-    void onShowVariantsChanged(Qt::CheckState state);
+    void onShowVariantsChanged(bool checked);
     void updateSelection();
     void filterGames(const QString& text);
     void launchSelected();

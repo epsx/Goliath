@@ -214,7 +214,7 @@ void MainWindow::buildUi() {
 
     auto* showVariantsCheckbox = new QCheckBox("Show variants");
     showVariantsCheckbox->setChecked(m_showVariants);
-    connect(showVariantsCheckbox, &QCheckBox::checkStateChanged, this, &MainWindow::onShowVariantsChanged);
+    connect(showVariantsCheckbox, &QCheckBox::toggled, this, &MainWindow::onShowVariantsChanged);
     toolbar->addWidget(showVariantsCheckbox);
 
     toolbar->addWidget(new QLabel("  "));
