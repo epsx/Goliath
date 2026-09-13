@@ -1,0 +1,59 @@
+# CMake and Ninja build output.
+/build/
+/build-*/
+/cmake-build-*/
+/CMakeCache.txt
+/CMakeFiles/
+/CTestTestfile.cmake
+/Testing/
+/cmake_install.cmake
+/compile_commands.json
+/CMakeUserPresets.json
+/Makefile
+/build.ninja
+/rules.ninja
+/.ninja_deps
+/.ninja_log
+/*_autogen/
+
+# Compiled artifacts.
+*.a
+*.dll
+*.dylib
+*.exe
+*.exp
+*.ilk
+*.lib
+!/licenses/**/*.LIB
+*.o
+*.obj
+*.pdb
+*.so
+*.so.*
+
+# Local runtime configuration, logs, and generated or user-provided data.
+/goliath.ini
+/goliath-qt-debug.log
+/jollygood.log
+/bios/
+/config/
+/data/
+/database/
+/icons/
+/jollygood/
+/metadata/
+/neocd/
+/roms/
+/snaps/
+
+# Local patch, archive, editor-backup, and rejection artifacts.
+/*.patch
+/*.zip
+*.bak
+*.orig
+*.rej
+*~
+
+# Common operating-system metadata.
+.DS_Store
+Thumbs.db

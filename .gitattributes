@@ -1,0 +1,17 @@
+# Keep first-party text files consistent across Windows and Unix checkouts.
+/.gitattributes text eol=lf
+/.gitignore text eol=lf
+/CMakeLists.txt text eol=lf
+/LICENSE text eol=lf
+/*.md text eol=lf
+/docs/*.md text eol=lf
+/licenses/** text eol=lf
+/src/** text eol=lf
+/tests/*.cpp text eol=lf
+/assets/*.qrc text eol=lf
+/assets/*.rc text eol=lf
+
+# Do not run text conversion on binary assets and source/reference archives.
+*.ico binary
+*.png binary
+*.zip binary

@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/icons">
+        <file alias="goliath-qt.ico">goliath-qt.ico</file>
+    </qresource>
+</RCC>
