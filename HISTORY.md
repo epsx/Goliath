@@ -7,13 +7,27 @@ Historical test counts are retained as checkpoint evidence. The current
 authoritative baseline is:
 
 ```text
-All tests passed (2215 assertions in 156 test cases)
+All tests passed (2391 assertions in 181 test cases)
 ```
 
 The preceding `1360/99` Feature 9 baseline passed its per-game mapping,
 isolation, and global-configuration regression checks. The `1239/88` runtime
 baseline passed manual MVS/AES, Neo Geo CD CUE, Neo Geo CD CHD, Settings, and
 visible-only Random smoke tests.
+
+---
+
+## 2026-09-14 — Patch 31A: persistent Favorites and `.neo` guidance
+
+- Added an exact-media Favorites list for cartridge parents, variants, CUE,
+  and CHD entries, stored atomically outside scanner-generated `games.json`.
+- Added a details-panel Favorite button, tree markers, a context-menu action,
+  a persistent **Favorites only** filter, and favorite-only Random behavior.
+- Kept favorite variants directly visible through their parent container even
+  when the normal **Show variants** option is disabled.
+- Added the author-requested README link to the official `neoconv` converter
+  for compatible MAME Neo Geo `.zip` ROM sets and TerraOnion `.neo` output.
+- Advanced the development identity to version `0.31.1` and build `patch31a`.
 
 ---
 

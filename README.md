@@ -42,7 +42,8 @@ Linux support is maintained where practical.
 - Parent and variant grouping for cartridge games.
 - Recursive Neo Geo CD discovery.
 - Optional local verification against MAME and Redump metadata.
-- Search, name/year sorting, visible-only Random, snapshots, and history.
+- Search, persistent exact-media Favorites, name/year sorting, visible-only
+  Random, snapshots, and history.
 - Per-game BIOS, video, input, and core settings without changing global
   configuration.
 - BIOS verification and safe JGRF BIOS preparation.
@@ -94,6 +95,11 @@ Goliath scans `.neo` files. When compatible local metadata is available, it
 groups parents and variants and uses the configured parent `main_rom` as the
 authoritative launch file.
 
+To convert legally obtained Neo Geo ROM data from a compatible MAME ROM-set
+archive (`.zip`) to the TerraOnion `.neo` format, use
+[neoconv](https://github.com/carmiker/neoconv) and follow its upstream
+instructions. Goliath does not download ROMs or perform this conversion.
+
 ### Neo Geo CD
 
 Goliath recursively scans `.cue` and `.chd` images. Track files such as `.bin`,
@@ -118,6 +124,11 @@ The main library supports live search, parent/variant browsing, explicit
 sorting, visible-only Random selection, context actions, and a details panel.
 Selection and search are preserved across sorting, rescans, and view rebuilds.
 
+Use the **☆ Favorite** button or a game's context menu to add the exact
+selected parent, variant, CUE, or CHD. **★ Favorites only** filters the current
+system without hiding a favorite variant behind its parent; Random selects
+only favorite media while this filter is active.
+
 Use **Tools** or a game's context menu for:
 
 - per-game settings;
@@ -127,8 +138,8 @@ Use **Tools** or a game's context menu for:
 - diagnostics and log controls;
 - opening relevant media or configuration folders.
 
-Per-game profiles and playtime are stored separately from the generated game
-database, so rescanning does not remove them.
+Per-game profiles, playtime, and Favorites are stored separately from the
+generated game database, so rescanning does not remove them.
 
 ## Build from source
 

@@ -5,6 +5,8 @@
 using goliath::VisibleSelectionDecision;
 using goliath::detailsScrollTarget;
 using goliath::libraryDetailsTitle;
+using goliath::libraryFavoriteGroupAllowed;
+using goliath::libraryVariantAllowed;
 using goliath::treeItemHasExpandableChildren;
 using goliath::visibleSelectionDecision;
 using goliath::visibleSelectionShouldBeRevealed;
@@ -37,6 +39,22 @@ TEST_CASE("retained and replacement selections are revealed",
 TEST_CASE("per-item expansion requires children", "[library-view]") {
     CHECK_FALSE(treeItemHasExpandableChildren(0));
     CHECK(treeItemHasExpandableChildren(1));
+}
+
+TEST_CASE("Favorites view keeps exact favorite variants visible",
+          "[library-view][favorites]") {
+    CHECK(libraryVariantAllowed(true, false, false));
+    CHECK_FALSE(libraryVariantAllowed(false, false, true));
+    CHECK(libraryVariantAllowed(false, true, true));
+    CHECK_FALSE(libraryVariantAllowed(false, true, false));
+}
+
+TEST_CASE("Favorites view retains the parent container for favorite variants",
+          "[library-view][favorites]") {
+    CHECK(libraryFavoriteGroupAllowed(false, false, false));
+    CHECK(libraryFavoriteGroupAllowed(true, true, false));
+    CHECK(libraryFavoriteGroupAllowed(true, false, true));
+    CHECK_FALSE(libraryFavoriteGroupAllowed(true, false, false));
 }
 
 TEST_CASE("details scroll resets only for a true selection change",

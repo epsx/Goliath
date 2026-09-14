@@ -89,7 +89,8 @@ without constructing the main window:
 - filesystem discovery and long-path I/O helpers;
 - metadata parsers and Neo Geo CD verification;
 - game-model validation;
-- exact-media profile/playtime identity and safe save-data backup logic;
+- exact-media profile/playtime/Favorites identity and safe save-data backup
+  logic;
 - input maps and SDL3 joystick enumeration/capture;
 - audio-device primitives;
 - JGRF executable, launch-policy, and Geolith capability helpers;
@@ -154,6 +155,7 @@ src/
 │   ├── detached_process_tracker.hpp/.cpp
 │   ├── filesystem_io.hpp/.cpp
 │   ├── game_model.hpp/.cpp
+│   ├── game_library_state.hpp/.cpp
 │   ├── game_playtime.hpp/.cpp
 │   ├── game_profile.hpp/.cpp
 │   ├── game_profile_runtime.hpp/.cpp
@@ -287,6 +289,7 @@ launch-process context.
 | --- | --- | --- |
 | `audio_export` | core | Sanitizes portable WAV suggestions, adds collision-free suffixes, and validates non-overwriting output targets. |
 | `game_model` | core | Defines `Game`/`Rom` and validates `games.json`. |
+| `game_library_state` | core | Validates and atomically persists exact-media Favorites independently from `games.json`. |
 | `game_playtime` | core | Validates, formats, and atomically persists exact-media playtime statistics. |
 | `game_profile` | core | Persists and validates exact-media launch/video/input overrides independently from `games.json`. |
 | `game_profile_runtime` | core | Composes short isolated JGRF configuration trees and layered input mappings for profiled launches. |
@@ -551,8 +554,13 @@ followed by Tools, Settings, and About on the right. The title-bar close button
 retains the existing `closeEvent` lifecycle; there is no duplicate Exit button.
 
 Library state deliberately preserves selection and search where possible
-across sort changes, view rebuilds, and rescans. Random selects only visible
-top-level entries. The search line edit uses Qt's native trailing clear action;
+across sort changes, view rebuilds, and rescans. The exact selected parent,
+variant, CUE, or CHD can be marked through the details button or context menu;
+its marker and the persistent **Favorites only** filter use
+`game_library_state.json`, not scanner output. Favorite variants remain visible
+through their parent container even when normal variants are hidden. Random
+selects visible parents normally and exact favorite media in the Favorites
+view. The search line edit uses Qt's native trailing clear action;
 Escape is widget-scoped so it clears only a focused search field, while Ctrl+F
 focuses and selects the current query.
 
@@ -690,6 +698,7 @@ tests/
 ├── test_bios_verify.cpp
 ├── test_db_scanner.cpp
 ├── test_game_model.cpp
+├── test_game_library_state.cpp
 ├── test_game_playtime.cpp
 ├── test_game_profiles.cpp
 ├── test_game_system.cpp
@@ -715,6 +724,7 @@ tests/
 | `test_bios_verify.cpp` | BIOS catalog, missing paths/archives/members, and optional CD sets. |
 | `test_db_scanner.cpp` | Grouping, metadata, CD verification, cache, path safety, and statistics. |
 | `test_game_model.cpp` | Required fields, invalid rows, `main_rom`, and optional metadata. |
+| `test_game_library_state.cpp` | Exact-media Favorite identity, validation, atomic persistence, removal, and rescan independence. |
 | `test_game_playtime.cpp` | Exact-media accumulation, formatting, threshold, validation, atomic persistence, failures, and overflow saturation. |
 | `test_game_profiles.cpp` | Exact-media keys, authoritative video schema, validated video/input JSON, isolated layered INIs/defaults, constraints, controller retargeting, and path limits. |
 | `test_game_system.cpp` | System/source/identity compatibility and legacy defaults. |
@@ -782,6 +792,7 @@ The source tree and runtime tree have different ownership:
 | Application config | `goliath.ini` | Goliath `Config` |
 | Per-game profiles | `config/game_profiles.json` | `GameProfileStore` |
 | Per-game playtime | `config/game_playtime.json` | `GamePlaytimeStore` |
+| Personal library state | `config/game_library_state.json` | `GameLibraryStateStore` |
 | Profile runtime cache | `config/p/*/jollygood/*.ini` | `game_profile_runtime` |
 | Exact-media save backups | `data/goliath/save_backups/<hash>/*.zip` | `save_data_manager` |
 | One-shot WAV captures | `data/goliath/audio_exports/*.wav` by default | Stock JGRF, selected and preflighted by Goliath |
@@ -814,6 +825,7 @@ main.cpp
        -> compute AppPaths
        -> load game_profiles.json
        -> load game_playtime.json
+       -> load game_library_state.json
        -> load and validate games.json
        -> build UI and library view
        -> apply saved theme/state
@@ -963,6 +975,12 @@ Normal game session
   -> GamePlaytimeStore
   -> config/game_playtime.json
   -> Playtime / Last Played details
+
+Favorite toggle
+  -> exact system + media key
+  -> GameLibraryStateStore
+  -> atomic config/game_library_state.json replacement
+  -> tree marker / Favorites filter / favorite-only Random
 ```
 
 ### Save-data management
@@ -1025,6 +1043,8 @@ The current organization follows these rules:
 15. WAV export is explicit, transient, non-overwriting, and exact-media: no
     output path is persisted, Benchmark/Random receive no implicit capture,
     and the requested file is created only by stock JGRF after preflight.
+16. Favorites are exact-media personal state stored outside `games.json`;
+    rescans may rebuild the library but never erase the saved list.
 
 ---
 

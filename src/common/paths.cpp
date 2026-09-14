@@ -40,6 +40,7 @@ AppPaths compute_app_paths(const Config& config) {
     p.game_profiles_json = p.config_dir / "game_profiles.json";
     p.profile_runtime_dir = p.config_dir / "p";
     p.game_playtime_json = p.config_dir / "game_playtime.json";
+    p.game_library_state_json = p.config_dir / "game_library_state.json";
     p.save_backup_dir = p.data_dir / "goliath" / "save_backups";
     p.audio_export_dir = p.data_dir / "goliath" / "audio_exports";
 

@@ -28,6 +28,18 @@ constexpr bool treeItemHasExpandableChildren(int childCount) noexcept {
     return childCount > 0;
 }
 
+constexpr bool libraryVariantAllowed(bool showVariants,
+                                     bool favoritesOnly,
+                                     bool variantFavorite) noexcept {
+    return showVariants || (favoritesOnly && variantFavorite);
+}
+
+constexpr bool libraryFavoriteGroupAllowed(bool favoritesOnly,
+                                           bool parentFavorite,
+                                           bool visibleFavoriteVariant) noexcept {
+    return !favoritesOnly || parentFavorite || visibleFavoriteVariant;
+}
+
 constexpr int detailsScrollTarget(bool selectionChanged,
                                   int currentValue) noexcept {
     return selectionChanged ? 0 : currentValue;

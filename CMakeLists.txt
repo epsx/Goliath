@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 # Development versioning follows Patch NN[A-Z] -> 0.NN.letter-index.
-project(goliath-qt VERSION 0.30.3 LANGUAGES CXX C)
+project(goliath-qt VERSION 0.31.1 LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -25,7 +25,7 @@ set(GOLIATH_LICENSE_URL "https://www.gnu.org/licenses/gpl-3.0.html" CACHE STRING
     "Published Goliath license URL shown by About Goliath")
 
 if(NOT GOLIATH_BUILD_REVISION)
-    set(GOLIATH_BUILD_REVISION "patch30c")
+    set(GOLIATH_BUILD_REVISION "patch31a")
     find_package(Git QUIET)
     if(Git_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
         execute_process(
@@ -53,6 +53,7 @@ endfunction()
 add_library(goliath-core STATIC
     src/game/audio_export.cpp
     src/game/game_model.cpp
+    src/game/game_library_state.cpp
     src/game/game_playtime.cpp
     src/game/game_profile.cpp
     src/game/game_profile_runtime.cpp
@@ -250,6 +251,7 @@ if(BUILD_TESTS)
         tests/test_sha1_cache.cpp
         tests/test_db_scanner.cpp
         tests/test_game_model.cpp
+        tests/test_game_library_state.cpp
         tests/test_game_system.cpp
         tests/test_game_profiles.cpp
         tests/test_game_playtime.cpp

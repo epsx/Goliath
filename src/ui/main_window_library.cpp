@@ -24,6 +24,7 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QSignalBlocker>
 #include <QStatusBar>
 #include <QTextEdit>
 #include <QTreeWidget>
@@ -232,14 +233,24 @@ void MainWindow::populateTree() {
 
         auto* parentItem = new QTreeWidgetItem(m_tree);
         QString parentText = QString::fromStdString(game.display);
+        QString parentTooltip;
+        const auto parentMedia = selected_launch_media(game, -1);
+        const bool parentFavorite = parentMedia.has_value() &&
+            m_gameLibraryState.is_favorite(game.system, *parentMedia);
+        if (parentFavorite) {
+            parentText.prepend(QString::fromUtf8("\xE2\x98\x85 ")); // ★
+            parentTooltip = "This exact media item is in Favorites.";
+        }
         if (game.main_rom.has_value() &&
             m_gameProfiles.find(game.system, *game.main_rom)) {
             parentText += QString::fromUtf8(" \xE2\x9A\x99");
-            parentItem->setToolTip(
-                0, "A per-game launch profile is active for this media. "
-                   "Right-click and choose Game settings to inspect or reset it.");
+            if (!parentTooltip.isEmpty()) parentTooltip += "\n\n";
+            parentTooltip +=
+                "A per-game launch profile is active for this media. "
+                "Right-click and choose Game settings to inspect or reset it.";
         }
         parentItem->setText(0, parentText);
+        if (!parentTooltip.isEmpty()) parentItem->setToolTip(0, parentTooltip);
         parentItem->setData(0, GameIndexRole, idx);
         parentItem->setData(0, RomIndexRole, -1);
 
@@ -265,6 +276,11 @@ void MainWindow::populateTree() {
             QString childText = QString::fromStdString(
                 rom.mame.empty() ? rom.file : rom.mame);
             QString childTooltip = variantFullName(rom);
+            if (m_gameLibraryState.is_favorite(game.system, rom.file)) {
+                childText.prepend(QString::fromUtf8("\xE2\x98\x85 ")); // ★
+                if (!childTooltip.isEmpty()) childTooltip += "\n\n";
+                childTooltip += "This exact variant is in Favorites.";
+            }
             if (m_gameProfiles.find(game.system, rom.file)) {
                 childText += QString::fromUtf8(" \xE2\x9A\x99");
                 if (!childTooltip.isEmpty()) childTooltip += "\n\n";
@@ -294,7 +310,8 @@ void MainWindow::refreshLibraryView(bool preserveSelection) {
 
     populateTree();
 
-    const bool filtered = m_searchEntry && !m_searchEntry->text().isEmpty();
+    const bool filtered =
+        (m_searchEntry && !m_searchEntry->text().isEmpty()) || m_favoritesOnly;
     m_rebuildingLibraryView = true;
     if (filtered) {
         filterGames(m_searchEntry->text());
@@ -323,6 +340,7 @@ void MainWindow::setSelectionActionsEnabled(bool enabled) {
         if (action) action->setEnabled(enabled);
     }
     if (m_launchButton) m_launchButton->setEnabled(enabled);
+    if (m_favoriteButton) m_favoriteButton->setEnabled(enabled);
 }
 
 void MainWindow::ensureVisibleSelection(bool filtered) {
@@ -369,6 +387,15 @@ void MainWindow::clearDetailsForNoSelection(bool filtered) {
     m_detailsSelectionKey.clear();
     setSelectionActionsEnabled(false);
 
+    if (m_favoriteButton) {
+        const QSignalBlocker blocker(m_favoriteButton);
+        m_favoriteButton->setChecked(false);
+        m_favoriteButton->setText(
+            QString::fromUtf8("\xE2\x98\x86 Favorite")); // ☆
+        m_favoriteButton->setToolTip(
+            "Select a parent, variant, CUE, or CHD to add it to Favorites");
+    }
+
     const bool isCd = m_librarySystem == "neogeocd";
     m_detailsTitleLabel->setText(
         filtered ? "No matching games"
@@ -379,7 +406,7 @@ void MainWindow::clearDetailsForNoSelection(bool filtered) {
         entry.second->setText("-");
     }
     m_historyText->setPlainText(filtered
-        ? "No games match the current search."
+        ? "No games match the current library filters."
         : (isCd
                ? "No Neo Geo CD games are currently in the database."
                : "No Neo Geo MVS/AES games are currently in the database."));
@@ -433,6 +460,20 @@ void MainWindow::updateSelection() {
 
     m_detailsSelectionKey = selectionKey;
     setSelectionActionsEnabled(true);
+
+    const bool favorite = playtimeMedia.has_value() &&
+        m_gameLibraryState.is_favorite(game.system, *playtimeMedia);
+    if (m_favoriteButton) {
+        const QSignalBlocker blocker(m_favoriteButton);
+        m_favoriteButton->setEnabled(playtimeMedia.has_value());
+        m_favoriteButton->setChecked(favorite);
+        m_favoriteButton->setText(favorite
+            ? QString::fromUtf8("\xE2\x98\x85 Favorite")
+            : QString::fromUtf8("\xE2\x98\x86 Favorite"));
+        m_favoriteButton->setToolTip(favorite
+            ? "Remove the selected exact media item from Favorites"
+            : "Add the selected exact media item to Favorites");
+    }
 
     const auto finishDetailsUpdate =
         [this, selectionKey, selectionChanged,
@@ -587,38 +628,52 @@ void MainWindow::filterGames(const QString& text) {
                                 .toLower();
         bool gameMatch = haystack.contains(needle);
 
+        const auto parentMedia = selected_launch_media(game, -1);
+        const bool parentFavorite = parentMedia.has_value() &&
+            m_gameLibraryState.is_favorite(game.system, *parentMedia);
+
         bool variantMatch = false;
-        if (m_showVariants) {
-            for (int j = 0; j < parent->childCount(); ++j) {
-                QTreeWidgetItem* child = parent->child(j);
-                int romIdx = child->data(0, RomIndexRole).toInt();
-                const Rom& rom = game.roms[romIdx];
-                QString romHay = QString("%1 %2 %3 %4")
-                                      .arg(QString::fromStdString(rom.mame))
-                                      .arg(QString::fromStdString(rom.name.value_or("")))
-                                      .arg(QString::fromStdString(rom.label.value_or("")))
-                                      .arg(QString::fromStdString(rom.file))
-                                      .toLower();
-                if (romHay.contains(needle)) {
-                    variantMatch = true;
-                    child->setHidden(false);
-                } else {
-                    child->setHidden(true);
-                }
+        bool visibleFavoriteVariant = false;
+        for (int j = 0; j < parent->childCount(); ++j) {
+            QTreeWidgetItem* child = parent->child(j);
+            int romIdx = child->data(0, RomIndexRole).toInt();
+            const Rom& rom = game.roms[romIdx];
+            QString romHay = QString("%1 %2 %3 %4")
+                                  .arg(QString::fromStdString(rom.mame))
+                                  .arg(QString::fromStdString(rom.name.value_or("")))
+                                  .arg(QString::fromStdString(rom.label.value_or("")))
+                                  .arg(QString::fromStdString(rom.file))
+                                  .toLower();
+            const bool textMatch = romHay.contains(needle);
+            const bool childFavorite =
+                m_gameLibraryState.is_favorite(game.system, rom.file);
+            const bool searchAllowsChild = gameMatch || textMatch;
+            const bool variantsAllowed = libraryVariantAllowed(
+                m_showVariants, m_favoritesOnly, childFavorite);
+            const bool childVisible = variantsAllowed && searchAllowsChild &&
+                (!m_favoritesOnly || childFavorite);
+
+            child->setHidden(!childVisible);
+            if (childVisible) {
+                variantMatch = true;
+                visibleFavoriteVariant |= childFavorite;
             }
         }
 
-        if (gameMatch || variantMatch) {
-            parent->setHidden(false);
-            if (gameMatch && m_showVariants) {
-                for (int j = 0; j < parent->childCount(); ++j) parent->child(j)->setHidden(false);
-            }
-        } else {
-            parent->setHidden(true);
+        const bool parentTextMatch = gameMatch || variantMatch;
+        const bool favoriteMatch = libraryFavoriteGroupAllowed(
+            m_favoritesOnly, parentFavorite, visibleFavoriteVariant);
+        parent->setHidden(!(parentTextMatch && favoriteMatch));
+
+        // A non-favorite parent remains the necessary container for an exact
+        // favorite variant. Expand it automatically in the Favorites view so
+        // the row that actually owns the favorite is immediately visible.
+        if (m_favoritesOnly && !parentFavorite && visibleFavoriteVariant) {
+            parent->setExpanded(true);
         }
     }
     if (!m_rebuildingLibraryView) {
-        ensureVisibleSelection(!needle.isEmpty());
+        ensureVisibleSelection(!needle.isEmpty() || m_favoritesOnly);
     }
     updateStatus();
 }
@@ -852,6 +907,68 @@ void MainWindow::onShowVariantsChanged(bool checked) {
     refreshLibraryView(true);
 }
 
+void MainWindow::onFavoritesOnlyChanged(bool checked) {
+    m_favoritesOnly = checked;
+
+    m_config.set("UI", "favorites_only", m_favoritesOnly ? "true" : "false");
+    save_config(m_config);
+
+    refreshLibraryView(true);
+}
+
+void MainWindow::toggleSelectedFavorite(bool favorite) {
+    const QList<QTreeWidgetItem*> items = m_tree->selectedItems();
+    if (items.isEmpty()) {
+        updateSelection();
+        return;
+    }
+
+    QTreeWidgetItem* item = items.first();
+    const int gameIdx = item->data(0, GameIndexRole).toInt();
+    const int romIdx = item->data(0, RomIndexRole).toInt();
+    if (gameIdx < 0 || gameIdx >= static_cast<int>(m_games.size())) {
+        updateSelection();
+        return;
+    }
+
+    const Game& game = m_games[gameIdx];
+    const auto media = selected_launch_media(game, romIdx);
+    if (!media.has_value()) {
+        updateSelection();
+        return;
+    }
+
+    if (!m_gameLibraryStatePersistenceAvailable) {
+        QMessageBox::critical(
+            this, "Favorites",
+            "The personal library state could not be loaded safely. "
+            "Goliath will not overwrite it. Check Diagnostics & Logs for details.");
+        updateSelection();
+        return;
+    }
+
+    const bool previous =
+        m_gameLibraryState.is_favorite(game.system, *media);
+    if (previous == favorite) {
+        updateSelection();
+        return;
+    }
+
+    m_gameLibraryState.set_favorite(game.system, *media, favorite);
+    std::string error;
+    if (!m_gameLibraryState.save(m_paths.game_library_state_json, &error)) {
+        m_gameLibraryState.set_favorite(game.system, *media, previous);
+        QMessageBox::critical(
+            this, "Favorites",
+            QString("Could not save the Favorites list.\n\n%1")
+                .arg(QString::fromStdString(error)));
+        updateSelection();
+        return;
+    }
+
+    refreshLibraryView(true);
+}
+
 void MainWindow::expandAll() {
     for (int i = 0; i < m_tree->topLevelItemCount(); ++i) m_tree->topLevelItem(i)->setExpanded(true);
 }
@@ -866,8 +983,33 @@ void MainWindow::launchRandomGame() {
     visibleItems.reserve(m_tree->topLevelItemCount());
 
     for (int i = 0; i < m_tree->topLevelItemCount(); ++i) {
-        QTreeWidgetItem* item = m_tree->topLevelItem(i);
-        if (item && !item->isHidden()) visibleItems.push_back(item);
+        QTreeWidgetItem* parent = m_tree->topLevelItem(i);
+        if (!parent || parent->isHidden()) continue;
+
+        if (!m_favoritesOnly) {
+            visibleItems.push_back(parent);
+            continue;
+        }
+
+        const int gameIdx = parent->data(0, GameIndexRole).toInt();
+        if (gameIdx < 0 || gameIdx >= static_cast<int>(m_games.size())) continue;
+        const Game& game = m_games[gameIdx];
+        const auto parentMedia = selected_launch_media(game, -1);
+        if (parentMedia.has_value() &&
+            m_gameLibraryState.is_favorite(game.system, *parentMedia)) {
+            visibleItems.push_back(parent);
+        }
+
+        for (int j = 0; j < parent->childCount(); ++j) {
+            QTreeWidgetItem* child = parent->child(j);
+            if (!child || child->isHidden()) continue;
+            const int romIdx = child->data(0, RomIndexRole).toInt();
+            if (romIdx < 0 || romIdx >= static_cast<int>(game.roms.size())) continue;
+            if (m_gameLibraryState.is_favorite(
+                    game.system, game.roms[romIdx].file)) {
+                visibleItems.push_back(child);
+            }
+        }
     }
 
     if (visibleItems.empty()) return;
@@ -990,9 +1132,23 @@ void MainWindow::showTreeContextMenu(const QPoint& pos) {
     if (!item) return;
     m_tree->setCurrentItem(item);
     int romIdx = item->data(0, RomIndexRole).toInt();
+    const int gameIdx = item->data(0, GameIndexRole).toInt();
 
     QMenu menu(m_tree);
     menu.addAction("Launch", this, &MainWindow::launchSelected);
+    if (gameIdx >= 0 && gameIdx < static_cast<int>(m_games.size())) {
+        const Game& game = m_games[gameIdx];
+        const auto media = selected_launch_media(game, romIdx);
+        if (media.has_value()) {
+            const bool favorite =
+                m_gameLibraryState.is_favorite(game.system, *media);
+            menu.addAction(
+                favorite ? "Remove from Favorites" : "Add to Favorites",
+                this, [this, favorite]() {
+                    toggleSelectedFavorite(!favorite);
+                });
+        }
+    }
     menu.addAction("Export audio WAV...", this,
                    &MainWindow::exportSelectedAudio);
     menu.addAction("Game settings...", this, &MainWindow::openGameSettings);
@@ -1002,7 +1158,6 @@ void MainWindow::showTreeContextMenu(const QPoint& pos) {
     menu.addAction("Open ROM folder", this, &MainWindow::openRomFolder);
     menu.addAction("Open snapshot folder", this, &MainWindow::openSnapshotFolder);
 
-    const int gameIdx = item->data(0, GameIndexRole).toInt();
     if (gameIdx >= 0 && gameIdx < static_cast<int>(m_games.size())) {
         const Game& game = m_games[gameIdx];
         const auto media = selected_launch_media(game, romIdx);
@@ -1036,11 +1191,25 @@ void MainWindow::updateStatus() {
     std::size_t cueMismatch = 0;
     std::size_t metadataOnly = 0;
     std::size_t unknown = 0;
+    std::size_t favorites = 0;
     for (const Game& g : m_games) {
         if (g.system != m_librarySystem) continue;
         totalRoms += g.roms.size();
         parents++;
         if (g.source == "homebrew") homebrew++;
+
+        const auto parentMedia = selected_launch_media(g, -1);
+        if (parentMedia.has_value() &&
+            m_gameLibraryState.is_favorite(g.system, *parentMedia)) {
+            ++favorites;
+        }
+        for (const Rom& rom : g.roms) {
+            if (!rom.main &&
+                m_gameLibraryState.is_favorite(g.system, rom.file)) {
+                ++favorites;
+            }
+        }
+
         if (g.system == "neogeocd") {
             if (g.identified) identified++;
             else unknown++;
@@ -1072,6 +1241,9 @@ void MainWindow::updateStatus() {
         message = QString("Neo Geo MVS/AES - ROMs: %1 - Parents: %2 - Variants: %3 - Homebrew: %4")
                       .arg(totalRoms).arg(parents).arg(variants).arg(homebrew);
     }
+
+    message += QString(" - Favorites: %1").arg(
+        static_cast<qulonglong>(favorites));
 
     int count = m_tree->topLevelItemCount();
     int visible = 0;

@@ -50,6 +50,7 @@ MainWindow::MainWindow(Config config, QWidget* parent)
     refreshResolvedPaths();
     loadGameProfiles();
     loadGamePlaytime();
+    loadGameLibraryState();
 
     DebugLogger::logInfo(QString("base_dir: %1").arg(QString::fromStdString(m_paths.base_dir.string())));
     DebugLogger::logInfo(QString("config_dir: %1").arg(QString::fromStdString(m_paths.config_dir.string())));
@@ -80,6 +81,7 @@ MainWindow::MainWindow(Config config, QWidget* parent)
         m_sortKey = "display";
     }
     m_showVariants = m_config.get_bool("UI", "show_variants", true);
+    m_favoritesOnly = m_config.get_bool("UI", "favorites_only", false);
     m_librarySystem = m_config.get("UI", "library_system", "neogeo");
     if (m_librarySystem != "neogeo" && m_librarySystem != "neogeocd") {
         m_librarySystem = "neogeo";
@@ -136,6 +138,27 @@ void MainWindow::loadGamePlaytime() {
     DebugLogger::logInfo(
         QString("loaded playtime statistics for %1 exact media item(s)")
             .arg(static_cast<qulonglong>(m_gamePlaytime.size())));
+}
+
+void MainWindow::loadGameLibraryState() {
+    GameLibraryStateStore loaded;
+    std::string error;
+    if (!loaded.load(m_paths.game_library_state_json, &error)) {
+        // Keep the last valid in-memory state and do not overwrite a malformed
+        // file after a configured path change.
+        m_gameLibraryStatePersistenceAvailable = false;
+        DebugLogger::logError(
+            QString("could not load personal game library state: %1")
+                .arg(QString::fromStdString(error)));
+        return;
+    }
+
+    m_gameLibraryState = std::move(loaded);
+    m_gameLibraryStatePersistenceAvailable = true;
+    DebugLogger::logInfo(
+        QString("loaded %1 favorite exact media item(s)")
+            .arg(static_cast<qulonglong>(
+                m_gameLibraryState.favorite_count())));
 }
 
 void MainWindow::saveGamePlaytime() {
@@ -461,6 +484,7 @@ void MainWindow::openSettings() {
     refreshResolvedPaths();
     loadGameProfiles();
     loadGamePlaytime();
+    loadGameLibraryState();
     refreshLibraryView(true);
 }
 

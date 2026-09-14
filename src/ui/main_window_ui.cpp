@@ -217,6 +217,15 @@ void MainWindow::buildUi() {
     connect(showVariantsCheckbox, &QCheckBox::toggled, this, &MainWindow::onShowVariantsChanged);
     toolbar->addWidget(showVariantsCheckbox);
 
+    auto* favoritesOnlyCheckbox = new QCheckBox(
+        QString::fromUtf8("\xE2\x98\x85 Favorites only")); // ★
+    favoritesOnlyCheckbox->setChecked(m_favoritesOnly);
+    favoritesOnlyCheckbox->setToolTip(
+        "Show only favorite games in the current Neo Geo library");
+    connect(favoritesOnlyCheckbox, &QCheckBox::toggled,
+            this, &MainWindow::onFavoritesOnlyChanged);
+    toolbar->addWidget(favoritesOnlyCheckbox);
+
     toolbar->addWidget(new QLabel("  "));
 
     auto* randomBtn = new QPushButton(QString::fromUtf8("\xF0\x9F\x8E\xB2 Random")); // 🎲 Random
@@ -369,11 +378,28 @@ void MainWindow::buildUi() {
     detailsLayout->setContentsMargins(8, 8, 8, 8);
     detailsLayout->setSpacing(6);
 
+    auto* detailsTitleRow = new QHBoxLayout();
+    detailsTitleRow->setContentsMargins(0, 0, 0, 0);
+    detailsTitleRow->setSpacing(10);
+
     m_detailsTitleLabel = new QLabel();
     m_detailsTitleLabel->setObjectName("details_title");
     m_detailsTitleLabel->setFont(QFont("Sans", 20, QFont::Bold));
     m_detailsTitleLabel->setWordWrap(true);
-    detailsLayout->addWidget(m_detailsTitleLabel);
+    detailsTitleRow->addWidget(m_detailsTitleLabel, 1);
+
+    m_favoriteButton = new QPushButton(
+        QString::fromUtf8("\xE2\x98\x86 Favorite")); // ☆
+    m_favoriteButton->setObjectName("favorite_btn");
+    m_favoriteButton->setCheckable(true);
+    m_favoriteButton->setEnabled(false);
+    m_favoriteButton->setToolTip(
+        "Add the selected parent, variant, CUE, or CHD to Favorites");
+    connect(m_favoriteButton, &QPushButton::toggled,
+            this, &MainWindow::toggleSelectedFavorite);
+    detailsTitleRow->addWidget(m_favoriteButton, 0, Qt::AlignTop);
+
+    detailsLayout->addLayout(detailsTitleRow);
 
     m_variantLabel = new QLabel();
     m_variantLabel->setObjectName("variant_label");

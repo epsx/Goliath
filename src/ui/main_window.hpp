@@ -1,5 +1,5 @@
 // main_window.hpp — the main application window: custom title bar, themed
-// toolbar, game library (tree, search/filter, sort, show-variants), the
+// toolbar, game library (tree, search/filter, Favorites, sort, show-variants), the
 // details/snapshot panel, theme switching, launching or benchmarking a ROM via
 // jollygood, exact-media playtime observation, safe save-data management,
 // one-shot WAV audio export, Settings, About, ROM rescan, and BIOS verification.
@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "game/detached_process_tracker.hpp"
+#include "game/game_library_state.hpp"
 #include "game/game_model.hpp"
 #include "game/game_playtime.hpp"
 #include "game/game_profile.hpp"
@@ -60,6 +61,8 @@ protected:
 private slots:
     void onSortChanged();
     void onShowVariantsChanged(bool checked);
+    void onFavoritesOnlyChanged(bool checked);
+    void toggleSelectedFavorite(bool favorite);
     void updateSelection();
     void filterGames(const QString& text);
     void launchSelected();
@@ -102,6 +105,7 @@ private:
     void refreshResolvedPaths();
     void loadGameProfiles();
     void loadGamePlaytime();
+    void loadGameLibraryState();
     void saveGamePlaytime();
     void trackGameProcess(qint64 pid, const std::string& system,
                           const std::string& media);
@@ -134,7 +138,9 @@ private:
     std::vector<Game> m_games;
     GameProfileStore m_gameProfiles;
     GamePlaytimeStore m_gamePlaytime;
+    GameLibraryStateStore m_gameLibraryState;
     bool m_gamePlaytimePersistenceAvailable = true;
+    bool m_gameLibraryStatePersistenceAvailable = true;
     // Diagnostics toggle for this Goliath session only. It is intentionally
     // absent from goliath.ini and exact-media profiles.
     bool m_verboseJgrfLogging = false;
@@ -144,6 +150,7 @@ private:
 
     QString m_sortKey = "display";
     bool m_showVariants = true;
+    bool m_favoritesOnly = false;
     bool m_rebuildingLibraryView = false;
     std::string m_librarySystem = "neogeo";
 
@@ -162,6 +169,7 @@ private:
     QScrollArea* m_detailsScroll = nullptr;
     QLabel* m_snapshotLabel = nullptr;
     QLabel* m_detailsTitleLabel = nullptr;
+    QPushButton* m_favoriteButton = nullptr;
     QLabel* m_variantLabel = nullptr;
     std::map<std::string, QLabel*> m_infoLabels;
     QTextEdit* m_historyText = nullptr;
