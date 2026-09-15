@@ -15,6 +15,7 @@
 #include "ui/rescan_dialog.hpp"
 
 #include <QCloseEvent>
+#include <QCoreApplication>
 #include <QResizeEvent>
 #include <QDialog>
 #include <QFont>
@@ -205,13 +206,26 @@ void MainWindow::pollTrackedGameProcesses() {
             std::chrono::duration_cast<std::chrono::seconds>(
                 std::chrono::system_clock::now().time_since_epoch()).count();
         const std::int64_t seconds = tracker.elapsed_seconds();
-        changed |= m_gamePlaytime.add_session(
-            tracker.system(), tracker.media(), seconds, endedEpoch);
-
-        DebugLogger::logInfo(
-            QString("JGRF play session ended: %1 second(s), %2")
-                .arg(static_cast<qlonglong>(seconds))
-                .arg(QString::fromStdString(tracker.media())));
+        const std::optional<std::uint32_t> exitCode = tracker.exit_code();
+        if (should_record_tracked_session(seconds, exitCode)) {
+            changed |= m_gamePlaytime.add_session(
+                tracker.system(), tracker.media(), seconds, endedEpoch);
+            DebugLogger::logInfo(
+                QString("JGRF play session ended: %1 second(s), %2")
+                    .arg(static_cast<qlonglong>(seconds))
+                    .arg(QString::fromStdString(tracker.media())));
+        } else {
+            const QString codeText = exitCode.has_value()
+                ? QString("0x%1").arg(
+                      QString::number(*exitCode, 16).rightJustified(8, '0'))
+                : QStringLiteral("unavailable");
+            DebugLogger::logInfo(
+                QString("JGRF launch did not become a countable play "
+                        "session: %1 second(s), exit=%2, %3")
+                    .arg(static_cast<qlonglong>(seconds))
+                    .arg(codeText)
+                    .arg(QString::fromStdString(tracker.media())));
+        }
         it = m_trackedGameProcesses.erase(it);
     }
 
@@ -219,8 +233,14 @@ void MainWindow::pollTrackedGameProcesses() {
         saveGamePlaytime();
         updateSelection();
     }
-    if (m_trackedGameProcesses.empty() && m_playtimeTimer)
-        m_playtimeTimer->stop();
+    if (m_trackedGameProcesses.empty()) {
+        if (m_playtimeTimer) m_playtimeTimer->stop();
+        if (m_exitWhenTrackedProcessesFinish) {
+            DebugLogger::logInfo(
+                "all background JGRF sessions finished; exiting Goliath");
+            QCoreApplication::quit();
+        }
+    }
 }
 
 void MainWindow::finishTrackedGameSessions() {
@@ -231,11 +251,15 @@ void MainWindow::finishTrackedGameSessions() {
             std::chrono::system_clock::now().time_since_epoch()).count();
     bool changed = false;
     for (const auto& tracker : m_trackedGameProcesses) {
-        // Detached games intentionally survive Goliath. On graceful launcher
-        // exit, persist the portion observed so far instead of discarding it.
-        changed |= m_gamePlaytime.add_session(
-            tracker->system(), tracker->media(),
-            tracker->elapsed_seconds(), endedEpoch);
+        // Detached games intentionally survive Goliath. This is a fallback
+        // for application-wide shutdown paths other than the normal window
+        // close, which now remains in the background until tracking finishes.
+        const std::int64_t seconds = tracker->elapsed_seconds();
+        const std::optional<std::uint32_t> exitCode = tracker->exit_code();
+        if (should_record_tracked_session(seconds, exitCode)) {
+            changed |= m_gamePlaytime.add_session(
+                tracker->system(), tracker->media(), seconds, endedEpoch);
+        }
     }
     m_trackedGameProcesses.clear();
 
@@ -589,10 +613,9 @@ void MainWindow::centerWindow() {
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {
-    // The game runs as a detached process and intentionally survives the
-    // launcher being closed.
-
-    finishTrackedGameSessions();
+    // Harvest processes which ended since the last timer tick before deciding
+    // whether the frontend must remain as a background observer.
+    pollTrackedGameProcesses();
 
     if (m_rescanWorker) {
         disconnect(m_rescanWorker, nullptr, this, nullptr);
@@ -609,7 +632,22 @@ void MainWindow::closeEvent(QCloseEvent* event) {
         m_config.set("UI", "last_rom", lastRom.toStdString());
     }
     save_config(m_config);
+
+    if (!m_trackedGameProcesses.empty()) {
+        m_exitWhenTrackedProcessesFinish = true;
+        DebugLogger::logInfo(
+            QString("Goliath window closed; monitoring %1 JGRF process(es) "
+                    "in the background")
+                .arg(static_cast<qlonglong>(
+                    m_trackedGameProcesses.size())));
+        hide();
+        event->ignore();
+        return;
+    }
+
+    finishTrackedGameSessions();
     QMainWindow::closeEvent(event);
+    QCoreApplication::quit();
 }
 
 void MainWindow::resizeEvent(QResizeEvent* event) {

@@ -7,13 +7,32 @@ Historical test counts are retained as checkpoint evidence. The current
 authoritative baseline is:
 
 ```text
-All tests passed (2391 assertions in 181 test cases)
+All tests passed (2408 assertions in 183 test cases)
 ```
 
 The preceding `1360/99` Feature 9 baseline passed its per-game mapping,
 isolation, and global-configuration regression checks. The `1239/88` runtime
 baseline passed manual MVS/AES, Neo Geo CD CUE, Neo Geo CD CHD, Settings, and
 visible-only Random smoke tests.
+
+---
+
+## 2026-09-15 — Patch 31B: validated background playtime tracking
+
+- Kept Goliath running as a windowless background observer when its main
+  window is closed while one or more detached JGRF games are still active.
+- Saved the complete observed session after the final JGRF process exits on
+  both Windows and Linux, then terminated Goliath automatically.
+- Read Windows process exit codes without owning or terminating JGRF and
+  excluded missing/incompatible DLL loader failures from playtime even when an
+  operating-system error dialog remained open beyond the five-second guard.
+- Rejected other abnormal exits during the initial 30-second launch window
+  while preserving longer real sessions, including sessions ending in a
+  later emulator error.
+- Added regression coverage for loader status codes and launch-validation
+  boundaries, and added the public LLM-assistance disclaimer near the README
+  build links.
+- Advanced the development identity to version `0.31.2` and build `patch31b`.
 
 ---
 
@@ -25,7 +44,7 @@ visible-only Random smoke tests.
   a persistent **Favorites only** filter, and favorite-only Random behavior.
 - Kept favorite variants directly visible through their parent container even
   when the normal **Show variants** option is disabled.
-- Added the author-requested README link to the official `neoconv` converter
+- Added the author-requested README link to the official `Lithogen` converter
   for compatible MAME Neo Geo `.zip` ROM sets and TerraOnion `.neo` output.
 - Advanced the development identity to version `0.31.1` and build `patch31a`.
 

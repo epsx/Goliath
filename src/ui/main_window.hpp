@@ -147,6 +147,7 @@ private:
     std::vector<std::unique_ptr<DetachedProcessTracker>>
         m_trackedGameProcesses;
     QTimer* m_playtimeTimer = nullptr;
+    bool m_exitWhenTrackedProcessesFinish = false;
 
     QString m_sortKey = "display";
     bool m_showVariants = true;

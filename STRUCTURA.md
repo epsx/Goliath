@@ -307,7 +307,7 @@ launch-process context.
 | `jollygood_benchmark` | core | Builds transient benchmark arguments, parses completion, resolves displayed overrides, and calculates metrics. |
 | `jollygood_launch` | core | Selects media and prepares validated launch state. |
 | `jollygood_process` | app | Starts detached JGRF and redirects both output streams. |
-| `detached_process_tracker` | app | Observes exact detached process objects without controlling or terminating them. |
+| `detached_process_tracker` | app | Observes exact detached process objects without controlling them and reads Windows termination status when permitted. |
 | `about_dialog` | app | Presents Goliath identity/build metadata, authorship, upstream acknowledgements, and verified external links. |
 | `audio_export_dialog` | app | Selects, probes, and confirms a new one-shot WAV destination without creating the requested target. |
 | `benchmark_dialog` | app | Supervises, times, cancels, logs, and reports a selected-media JGRF benchmark. |
@@ -584,12 +584,17 @@ and optional exact-media runtime profile, but keeps the child `QProcess`
 attached for the duration of the measurement. The benchmark flag is transient;
 the dialog never writes global INIs or `game_profiles.json`.
 
-Normal detached launches are separately observed for playtime. The main window
-updates `GamePlaytimeStore` only after at least five observed seconds, stores
-the exact-media total atomically, and refreshes Playtime/Last Played details.
+Normal detached launches are separately observed for playtime. Closing the
+main window while JGRF is active hides the UI but keeps Goliath as a background
+observer on Windows and Linux; it saves the complete observed session and exits
+after the final tracked process ends. The main window updates
+`GamePlaytimeStore` only after launch validation, stores the exact-media total
+atomically, and refreshes Playtime/Last Played details. Windows loader failures
+such as missing or incompatible DLLs are rejected from playtime by exit status
+even when their operating-system dialog outlives the normal duration guard.
 Benchmark processes are managed by `benchmark_dialog` and never enter this
-tracking path. Closing Goliath records the observed portion without touching
-the detached game, which continues independently.
+tracking path. Observation remains non-owning and never signals or terminates
+the detached game.
 
 `save_data_dialog` is opened for the exact selected row from Tools or the
 context menu. It displays both exact media and the upstream JGRF basename,
@@ -725,7 +730,7 @@ tests/
 | `test_db_scanner.cpp` | Grouping, metadata, CD verification, cache, path safety, and statistics. |
 | `test_game_model.cpp` | Required fields, invalid rows, `main_rom`, and optional metadata. |
 | `test_game_library_state.cpp` | Exact-media Favorite identity, validation, atomic persistence, removal, and rescan independence. |
-| `test_game_playtime.cpp` | Exact-media accumulation, formatting, threshold, validation, atomic persistence, failures, and overflow saturation. |
+| `test_game_playtime.cpp` | Exact-media accumulation, formatting, launch/loader validation, atomic persistence, failures, and overflow saturation. |
 | `test_game_profiles.cpp` | Exact-media keys, authoritative video schema, validated video/input JSON, isolated layered INIs/defaults, constraints, controller retargeting, and path limits. |
 | `test_game_system.cpp` | System/source/identity compatibility and legacy defaults. |
 | `test_ini_document.cpp` | Load, edit, remove, preservation, and save round trips. |
@@ -891,6 +896,8 @@ selected tree row
        -> Windows session-volume retry
        -> exact-process playtime observation
             -> ignore sessions shorter than five seconds
+            -> reject validated loader/early-start failures
+            -> remain windowless after UI close until every session ends
             -> atomically update config/game_playtime.json
 ```
 
@@ -1036,7 +1043,9 @@ The current organization follows these rules:
     managed; it never changes the detached gameplay process contract or saves
     benchmark state in global/per-game configuration.
 13. Playtime observation is exact-media and non-owning: it never terminates
-    JGRF, never counts Benchmark, and never writes scanner-generated data.
+    JGRF, never counts Benchmark or validated loader failures, never writes
+    scanner-generated data, and remains active without a visible main window
+    until all tracked games finish.
 14. Save-data mutation is limited to computed upstream filenames and validated
     direct exact-media archives, always protects live data first, and is
     disabled while a process tracked by the current Goliath session may run.

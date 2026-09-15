@@ -14,6 +14,9 @@ using goliath::format_playtime_seconds;
 using goliath::GamePlaytimeRecord;
 using goliath::GamePlaytimeStore;
 using goliath::kMinimumTrackedSessionSeconds;
+using goliath::kTrackedLaunchValidationSeconds;
+using goliath::is_windows_loader_failure_exit_code;
+using goliath::should_record_tracked_session;
 
 namespace {
 
@@ -70,6 +73,38 @@ TEST_CASE("playtime store rejects launch failures and invalid identity",
     CHECK(store.add_session(
         "neogeo", "kof98.neo", kMinimumTrackedSessionSeconds, 1000));
     CHECK(store.size() == 1);
+}
+
+TEST_CASE("playtime validation rejects Windows loader failures even after a long dialog",
+          "[game_playtime][launch-validation][windows]") {
+    const std::uint32_t loaderFailures[] = {
+        0xC000007Bu, // invalid image format
+        0xC0000135u, // DLL not found
+        0xC0000138u, // ordinal not found
+        0xC0000139u, // entry point not found
+        0xC0000142u, // DLL initialization failed
+    };
+
+    for (const std::uint32_t code : loaderFailures) {
+        CHECK(is_windows_loader_failure_exit_code(code));
+        CHECK_FALSE(should_record_tracked_session(10 * 60, code));
+    }
+    CHECK_FALSE(is_windows_loader_failure_exit_code(0));
+    CHECK_FALSE(is_windows_loader_failure_exit_code(1));
+}
+
+TEST_CASE("playtime validation preserves real sessions and rejects early abnormal exits",
+          "[game_playtime][launch-validation]") {
+    CHECK_FALSE(should_record_tracked_session(
+        kMinimumTrackedSessionSeconds - 1));
+    CHECK(should_record_tracked_session(
+        kMinimumTrackedSessionSeconds));
+    CHECK(should_record_tracked_session(
+        kMinimumTrackedSessionSeconds, 0));
+    CHECK_FALSE(should_record_tracked_session(
+        kTrackedLaunchValidationSeconds - 1, 1));
+    CHECK(should_record_tracked_session(
+        kTrackedLaunchValidationSeconds, 1));
 }
 
 TEST_CASE("playtime sessions accumulate on exact normalized media keys",

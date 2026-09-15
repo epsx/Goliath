@@ -7,6 +7,8 @@
   <a href="#build-linux">Build Linux</a>
 </p>
 
+<p align="center"><em>Goliath was developed with LLM (A.I.) assistance.</em></p>
+
 <p align="center">
   <a href="https://github.com/epsx/Goliath/actions/workflows/build.yml"><img src="https://github.com/epsx/Goliath/actions/workflows/build.yml/badge.svg" alt="Windows and Linux build"></a>
 </p>
@@ -48,7 +50,8 @@ Linux support is maintained where practical.
   configuration.
 - BIOS verification and safe JGRF BIOS preparation.
 - Save-data backup, validation, restore, deletion, and folder access.
-- Exact-media playtime, session count, and last-played tracking.
+- Exact-media playtime, session count, and last-played tracking, including
+  background observation after the main window is closed.
 - Selected-game performance benchmark and one-shot WAV export.
 - Frontend and JGRF diagnostics with guarded log controls.
 - SDL3 controller mapping and asynchronous audio-device discovery.
@@ -97,7 +100,7 @@ authoritative launch file.
 
 To convert legally obtained Neo Geo ROM data from a compatible MAME ROM-set
 archive (`.zip`) to the TerraOnion `.neo` format, use
-[neoconv](https://github.com/carmiker/neoconv) and follow its upstream
+[Lithogen](https://github.com/carmiker/lithogen) and follow its upstream
 instructions. Goliath does not download ROMs or perform this conversion.
 
 ### Neo Geo CD

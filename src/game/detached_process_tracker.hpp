@@ -4,6 +4,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <optional>
 #include <string>
 
 namespace goliath {
@@ -28,6 +29,7 @@ public:
 
     bool valid() const noexcept;
     DetachedProcessState state() const noexcept;
+    std::optional<std::uint32_t> exit_code() const noexcept;
     std::int64_t elapsed_seconds() const noexcept;
 
     std::int64_t pid() const noexcept { return m_pid; }

@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <map>
+#include <optional>
 #include <string>
 
 namespace goliath {
@@ -14,6 +15,41 @@ namespace goliath {
 // sessions. Keeping the threshold public makes the policy explicit and
 // deterministic for the UI and regression tests.
 inline constexpr std::int64_t kMinimumTrackedSessionSeconds = 5;
+
+// A nonzero process exit very soon after launch is treated as startup failure.
+// Known Windows loader failures remain launch failures regardless of how long
+// an operating-system error dialog kept the process alive.
+inline constexpr std::int64_t kTrackedLaunchValidationSeconds = 30;
+
+inline constexpr bool is_windows_loader_failure_exit_code(
+        std::uint32_t exit_code) noexcept {
+    switch (exit_code) {
+        case 0xC000007Bu: // STATUS_INVALID_IMAGE_FORMAT
+        case 0xC0000135u: // STATUS_DLL_NOT_FOUND
+        case 0xC0000138u: // STATUS_ORDINAL_NOT_FOUND
+        case 0xC0000139u: // STATUS_ENTRYPOINT_NOT_FOUND
+        case 0xC0000142u: // STATUS_DLL_INIT_FAILED
+            return true;
+        default:
+            return false;
+    }
+}
+
+inline constexpr bool should_record_tracked_session(
+        std::int64_t session_seconds,
+        std::optional<std::uint32_t> exit_code = std::nullopt) noexcept {
+    if (session_seconds < kMinimumTrackedSessionSeconds)
+        return false;
+
+    if (!exit_code.has_value())
+        return true;
+
+    if (is_windows_loader_failure_exit_code(*exit_code))
+        return false;
+
+    return *exit_code == 0 ||
+           session_seconds >= kTrackedLaunchValidationSeconds;
+}
 
 struct GamePlaytimeRecord {
     std::int64_t total_seconds = 0;

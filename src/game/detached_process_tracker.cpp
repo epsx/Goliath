@@ -62,7 +62,14 @@ DetachedProcessTracker::DetachedProcessTracker(std::int64_t pid,
     // object. A later process reusing the numeric PID cannot extend the
     // measured session accidentally.
     HANDLE handle = OpenProcess(
-        SYNCHRONIZE, FALSE, static_cast<DWORD>(m_pid));
+        SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION,
+        FALSE, static_cast<DWORD>(m_pid));
+    if (!handle) {
+        // Observation is still useful if a restricted process denies query
+        // access; launch validation will then fall back to duration alone.
+        handle = OpenProcess(
+            SYNCHRONIZE, FALSE, static_cast<DWORD>(m_pid));
+    }
     if (!handle) return;
 
     m_observerKind = ObserverKind::NativeHandle;
@@ -156,6 +163,26 @@ DetachedProcessState DetachedProcessTracker::state() const noexcept {
     return probe_pid(m_pid);
 #else
     return probe_pid(m_pid);
+#endif
+}
+
+std::optional<std::uint32_t>
+DetachedProcessTracker::exit_code() const noexcept {
+#if defined(_WIN32)
+    if (m_observerKind != ObserverKind::NativeHandle || m_observer == -1)
+        return std::nullopt;
+
+    DWORD code = STILL_ACTIVE;
+    HANDLE handle = reinterpret_cast<HANDLE>(m_observer);
+    if (!GetExitCodeProcess(handle, &code) || code == STILL_ACTIVE)
+        return std::nullopt;
+    return static_cast<std::uint32_t>(code);
+#else
+    // QProcess::startDetached deliberately makes JGRF independent of Goliath,
+    // so the launcher is not guaranteed to be its waitable parent on Unix.
+    // pidfd/PID observation remains authoritative for process lifetime, while
+    // the existing minimum-duration guard rejects normal loader failures.
+    return std::nullopt;
 #endif
 }
 

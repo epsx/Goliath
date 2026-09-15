@@ -8,6 +8,10 @@
 
 int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
+    // MainWindow explicitly decides when the application may exit. If a game
+    // is still active, closing the visible window leaves the event loop alive
+    // until the detached-process observer has finalized the full session.
+    app.setQuitOnLastWindowClosed(false);
     app.setStyle("Fusion");
     // Applies to every top-level window (MainWindow's custom title bar and
     // SettingsDialog's native title bar alike) so the same branded icon is
