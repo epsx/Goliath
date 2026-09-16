@@ -289,7 +289,7 @@ launch-process context.
 | --- | --- | --- |
 | `audio_export` | core | Sanitizes portable WAV suggestions, adds collision-free suffixes, and validates non-overwriting output targets. |
 | `game_model` | core | Defines `Game`/`Rom` and validates `games.json`. |
-| `game_library_state` | core | Validates and atomically persists exact-media Favorites independently from `games.json`. |
+| `game_library_state` | core | Validates and atomically persists exact-media Favorites and ratings independently from `games.json`. |
 | `game_playtime` | core | Validates, formats, and atomically persists exact-media playtime statistics. |
 | `game_profile` | core | Persists and validates exact-media launch/video/input overrides independently from `games.json`. |
 | `game_profile_runtime` | core | Composes short isolated JGRF configuration trees and layered input mappings for profiled launches. |
@@ -543,7 +543,7 @@ One `MainWindow` class is implemented across three translation units:
 | --- | --- |
 | `main_window.cpp` | Lifecycle, paths, launch preflight, Settings, rescan, and responsive layout. |
 | `main_window_ui.cpp` | UI construction, custom title bar, branch assets, and themes. |
-| `main_window_library.cpp` | Library views, sort, search, details, variants, Random, and actions. |
+| `main_window_library.cpp` | Library views, exact-media Rating/Playtime sort and filters, search, details, variants, Random, and actions. |
 
 The main content uses a `QSplitter`. The details side collapses below the narrow
 window threshold and restores its previous proportion when sufficient width
@@ -553,16 +553,40 @@ The top toolbar keeps library controls and Random on the left, then a stretch
 followed by Tools, Settings, and About on the right. The title-bar close button
 retains the existing `closeEvent` lifecycle; there is no duplicate Exit button.
 
-Library state deliberately preserves selection and search where possible
-across sort changes, view rebuilds, and rescans. The exact selected parent,
-variant, CUE, or CHD can be marked through the details button or context menu;
-its marker and the persistent **Favorites only** filter use
-`game_library_state.json`, not scanner output. Favorite variants remain visible
-through their parent container even when normal variants are hidden. Random
-selects visible parents normally and exact favorite media in the Favorites
-view. The search line edit uses Qt's native trailing clear action;
+Library state deliberately preserves selection across applicable view rebuilds,
+while an explicit Sort change selects and reveals its first ranked exact-media
+result. Search and expanded parent groups remain preserved. The exact selected
+parent, variant, CUE, or CHD can be marked through the details button or context
+menu; its marker and the persistent **Favorites only** filter use
+`game_library_state.json`, not scanner output. Toggling that marker also
+restores the current tree viewport unless the Favorites-only view must remove
+the selected item.
+Expand-all and collapse-all preserve the viewport's top visible library region
+independently from selection. When collapse-all hides a selected variant, its
+parent becomes selected without replacing the viewport anchor.
+Before replacing the scanned game model, a completed rescan captures the
+current exact-media selection and restores it against the rebuilt model;
+`last_rom` remains the startup fallback rather than the rescan target.
+The same exact-media record owns an independent 1–5-star rating; clearing a
+Favorite preserves its rating and clearing a rating preserves its Favorite.
+Rating and Playtime sorts keep missing values last in both directions, rank a
+parent group by its best exact-media value, sort variants by their own values,
+and use the display name as a stable tie-break. The compact Filters menu
+combines Rating and Playtime predicates and persists both choices in
+`goliath.ini`. Exact matching variants remain visible through their parent
+container even when normal variants are hidden; container-only parents are not
+eligible selections. Parent expansion performed only to expose an exact filter
+match is tagged as temporary and excluded from the user expansion state carried
+across rebuilds. Random selects visible parents normally and exact media matching
+Search, Favorites, and all active personal filters in a restrictive view. The
+details panel presents Playtime and Sessions separately with complete tooltips.
+The search line edit uses Qt's native trailing clear action;
 Escape is widget-scoped so it clears only a focused search field, while Ctrl+F
 focuses and selects the current query.
+The Theme, Sort, and Settings combo views and their separate popup containers
+receive the same generated palette explicitly, preventing native Windows frame
+colors from appearing above or below their item views. Settings applies the
+shared popup helper once to every combo descendant across all tabs.
 
 `game_profile_dialog` edits the profile for the exact selected media. Its
 **General** tab owns system/input launch settings, its generated **Video** tab
@@ -667,7 +691,9 @@ cancellation/close behavior without running scanner logic itself.
 
 `InputPanelWidget` gives Settings one common interface for device-specific
 panels. Free helper functions bridge specialized `ControllerButton` instances
-and fallback `QPushButton` rows.
+and fallback `QPushButton` rows. The shared System panel keeps its single
+**Cabinet** group at its content width, so widening Settings or exact-media
+Input Mapping adds free space without stretching the control background.
 
 ---
 
@@ -676,13 +702,14 @@ and fallback `QPushButton` rows.
 ```text
 assets/
 ├── app_icon.qrc
-├── app_icon.rc
+├── app_icon.rc.in
 ├── goliath_icon.png
 └── goliath-qt.ico
 ```
 
 - `app_icon.qrc` embeds the icon in Qt resources for application windows;
-- `app_icon.rc` assigns the Windows executable icon;
+- `app_icon.rc.in` is configured from the CMake project version and assigns
+  the Windows executable icon and version metadata;
 - `goliath_icon.png` is the canonical high-resolution source artwork with a
   transparent background;
 - `goliath-qt.ico` is the derived multi-image asset used by Qt and Windows.
@@ -729,7 +756,7 @@ tests/
 | `test_bios_verify.cpp` | BIOS catalog, missing paths/archives/members, and optional CD sets. |
 | `test_db_scanner.cpp` | Grouping, metadata, CD verification, cache, path safety, and statistics. |
 | `test_game_model.cpp` | Required fields, invalid rows, `main_rom`, and optional metadata. |
-| `test_game_library_state.cpp` | Exact-media Favorite identity, validation, atomic persistence, removal, and rescan independence. |
+| `test_game_library_state.cpp` | Exact-media Favorite/rating identity, v1-to-v2 migration, validation, atomic persistence, independent removal, and rescan survival. |
 | `test_game_playtime.cpp` | Exact-media accumulation, formatting, launch/loader validation, atomic persistence, failures, and overflow saturation. |
 | `test_game_profiles.cpp` | Exact-media keys, authoritative video schema, validated video/input JSON, isolated layered INIs/defaults, constraints, controller retargeting, and path limits. |
 | `test_game_system.cpp` | System/source/identity compatibility and legacy defaults. |
@@ -983,11 +1010,11 @@ Normal game session
   -> config/game_playtime.json
   -> Playtime / Last Played details
 
-Favorite toggle
+Favorite toggle / rating selection
   -> exact system + media key
   -> GameLibraryStateStore
   -> atomic config/game_library_state.json replacement
-  -> tree marker / Favorites filter / favorite-only Random
+  -> Favorite tree marker / filter / Random and details-panel rating stars
 ```
 
 ### Save-data management
@@ -1052,8 +1079,9 @@ The current organization follows these rules:
 15. WAV export is explicit, transient, non-overwriting, and exact-media: no
     output path is persisted, Benchmark/Random receive no implicit capture,
     and the requested file is created only by stock JGRF after preflight.
-16. Favorites are exact-media personal state stored outside `games.json`;
-    rescans may rebuild the library but never erase the saved list.
+16. Favorites and independent 1–5-star ratings are exact-media personal state
+    stored outside `games.json`; rescans may rebuild the library but never
+    erase either field.
 
 ---
 

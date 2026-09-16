@@ -11,6 +11,8 @@
 #include "ui/save_data_dialog.hpp"
 
 #include <QAction>
+#include <QActionGroup>
+#include <QAbstractItemView>
 #include <QComboBox>
 #include <QDateTime>
 #include <QDesktopServices>
@@ -26,6 +28,8 @@
 #include <QScrollBar>
 #include <QSignalBlocker>
 #include <QStatusBar>
+#include <QStyle>
+#include <QStringList>
 #include <QTextEdit>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
@@ -46,6 +50,16 @@ namespace goliath {
 namespace {
 constexpr int GameIndexRole = Qt::UserRole;
 constexpr int RomIndexRole = Qt::UserRole + 1;
+constexpr int ExactMatchRole = Qt::UserRole + 2;
+constexpr int FilterAutoExpandedRole = Qt::UserRole + 3;
+
+std::string lowercaseAscii(std::string text) {
+    std::transform(text.begin(), text.end(), text.begin(),
+                   [](unsigned char c) {
+                       return static_cast<char>(std::tolower(c));
+                   });
+    return text;
+}
 
 QString variantFullName(const Rom& rom) {
     if (rom.name.has_value() && !rom.name->empty())
@@ -64,6 +78,26 @@ bool treeItemIsEffectivelyVisible(const QTreeWidgetItem* item) {
         if (current->parent() && !current->parent()->isExpanded()) return false;
     }
     return item != nullptr;
+}
+
+QTreeWidgetItem* treeItemForIndexes(
+        QTreeWidget* tree, int gameIndex, int romIndex) {
+    if (!tree) return nullptr;
+    for (int i = 0; i < tree->topLevelItemCount(); ++i) {
+        QTreeWidgetItem* parent = tree->topLevelItem(i);
+        if (!parent || parent->data(0, GameIndexRole).toInt() != gameIndex) {
+            continue;
+        }
+        if (romIndex < 0) return parent;
+        for (int j = 0; j < parent->childCount(); ++j) {
+            QTreeWidgetItem* child = parent->child(j);
+            if (child && child->data(0, RomIndexRole).toInt() == romIndex) {
+                return child;
+            }
+        }
+        return nullptr;
+    }
+    return nullptr;
 }
 
 struct CdVerificationBadge {
@@ -178,16 +212,85 @@ QString benchmarkPreparationError(
 
 } // namespace
 
+std::int64_t MainWindow::mediaPlaytimeSeconds(
+        const Game& game, const std::string& media) const {
+    const GamePlaytimeRecord* record =
+        m_gamePlaytime.find(game.system, media);
+    return record ? record->total_seconds : 0;
+}
+
+bool MainWindow::mediaMatchesPersonalFilters(
+        const Game& game, const std::string& media) const {
+    return libraryPersonalFiltersAllow(
+        m_ratingFilter,
+        m_playtimeFilter,
+        m_gameLibraryState.rating(game.system, media),
+        mediaPlaytimeSeconds(game, media));
+}
+
+std::int64_t MainWindow::gameSortMetric(
+        const Game& game, bool ratingMetric) const {
+    std::int64_t best = 0;
+    const auto consider = [&](const std::string& media) {
+        const std::int64_t value = ratingMetric
+            ? static_cast<std::int64_t>(
+                  m_gameLibraryState.rating(game.system, media))
+            : mediaPlaytimeSeconds(game, media);
+        best = std::max(best, value);
+    };
+
+    const auto parentMedia = selected_launch_media(game, -1);
+    if (parentMedia.has_value()) consider(*parentMedia);
+    for (const Rom& rom : game.roms) {
+        if (!rom.main) consider(rom.file);
+    }
+    return best;
+}
+
+std::vector<int> MainWindow::sortedVariantOrder(const Game& game) const {
+    std::vector<int> order;
+    order.reserve(game.roms.size());
+    for (int index = 0; index < static_cast<int>(game.roms.size()); ++index) {
+        if (!game.roms[index].main) order.push_back(index);
+    }
+
+    const bool ratingSort = m_sortKey == "rating" ||
+                            m_sortKey == "rating_desc";
+    const bool playtimeSort = m_sortKey == "playtime" ||
+                              m_sortKey == "playtime_desc";
+    if (!ratingSort && !playtimeSort) return order;
+
+    const bool descending = m_sortKey.endsWith("_desc");
+    std::stable_sort(order.begin(), order.end(), [&](int left, int right) {
+        const Rom& leftRom = game.roms[left];
+        const Rom& rightRom = game.roms[right];
+        const std::int64_t leftMetric = ratingSort
+            ? static_cast<std::int64_t>(
+                  m_gameLibraryState.rating(game.system, leftRom.file))
+            : mediaPlaytimeSeconds(game, leftRom.file);
+        const std::int64_t rightMetric = ratingSort
+            ? static_cast<std::int64_t>(
+                  m_gameLibraryState.rating(game.system, rightRom.file))
+            : mediaPlaytimeSeconds(game, rightRom.file);
+
+        if (libraryMetricPrecedes(leftMetric, rightMetric, descending)) {
+            return true;
+        }
+        if (libraryMetricPrecedes(rightMetric, leftMetric, descending)) {
+            return false;
+        }
+        const std::string& leftName = leftRom.mame.empty()
+            ? leftRom.file : leftRom.mame;
+        const std::string& rightName = rightRom.mame.empty()
+            ? rightRom.file : rightRom.mame;
+        return lowercaseAscii(leftName) < lowercaseAscii(rightName);
+    });
+    return order;
+}
+
 std::vector<int> MainWindow::sortedGameOrder() const {
     std::vector<int> idx(m_games.size());
     for (std::size_t i = 0; i < idx.size(); ++i) idx[i] = static_cast<int>(i);
-
-    auto lower = [](std::string s) {
-        std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) {
-            return static_cast<char>(std::tolower(c));
-        });
-        return s;
-    };
 
     auto yearValue = [&](const Game& game) -> int {
         if (!game.year.has_value() || game.year->empty()) return 0;
@@ -200,7 +303,8 @@ std::vector<int> MainWindow::sortedGameOrder() const {
 
     if (m_sortKey == "display_desc") {
         std::stable_sort(idx.begin(), idx.end(), [&](int a, int b) {
-            return lower(m_games[a].display) > lower(m_games[b].display);
+            return lowercaseAscii(m_games[a].display) >
+                   lowercaseAscii(m_games[b].display);
         });
     } else if (m_sortKey == "year_desc") {
         std::stable_sort(idx.begin(), idx.end(), [&](int a, int b) {
@@ -210,10 +314,25 @@ std::vector<int> MainWindow::sortedGameOrder() const {
         std::stable_sort(idx.begin(), idx.end(), [&](int a, int b) {
             return yearValue(m_games[a]) < yearValue(m_games[b]);
         });
+    } else if (m_sortKey == "rating" || m_sortKey == "rating_desc" ||
+               m_sortKey == "playtime" || m_sortKey == "playtime_desc") {
+        const bool ratingMetric = m_sortKey.startsWith("rating");
+        const bool descending = m_sortKey.endsWith("_desc");
+        std::stable_sort(idx.begin(), idx.end(), [&](int a, int b) {
+            const std::int64_t left = gameSortMetric(
+                m_games[a], ratingMetric);
+            const std::int64_t right = gameSortMetric(
+                m_games[b], ratingMetric);
+            if (libraryMetricPrecedes(left, right, descending)) return true;
+            if (libraryMetricPrecedes(right, left, descending)) return false;
+            return lowercaseAscii(m_games[a].display) <
+                   lowercaseAscii(m_games[b].display);
+        });
     } else {
         // "display" and legacy/unknown sort keys fall back to Name (A -> Z).
         std::stable_sort(idx.begin(), idx.end(), [&](int a, int b) {
-            return lower(m_games[a].display) < lower(m_games[b].display);
+            return lowercaseAscii(m_games[a].display) <
+                   lowercaseAscii(m_games[b].display);
         });
     }
 
@@ -253,6 +372,7 @@ void MainWindow::populateTree() {
         if (!parentTooltip.isEmpty()) parentItem->setToolTip(0, parentTooltip);
         parentItem->setData(0, GameIndexRole, idx);
         parentItem->setData(0, RomIndexRole, -1);
+        parentItem->setData(0, ExactMatchRole, true);
 
         const CdVerificationBadge badge = cdVerificationBadge(game);
         if (!badge.text.isEmpty()) {
@@ -269,9 +389,8 @@ void MainWindow::populateTree() {
             }
         }
 
-        for (int romIdx = 0; romIdx < (int)game.roms.size(); ++romIdx) {
+        for (int romIdx : sortedVariantOrder(game)) {
             const Rom& rom = game.roms[romIdx];
-            if (rom.main) continue;
             auto* childItem = new QTreeWidgetItem(parentItem);
             QString childText = QString::fromStdString(
                 rom.mame.empty() ? rom.file : rom.mame);
@@ -292,6 +411,7 @@ void MainWindow::populateTree() {
             childItem->setToolTip(0, childTooltip);
             childItem->setData(0, GameIndexRole, idx);
             childItem->setData(0, RomIndexRole, romIdx);
+            childItem->setData(0, ExactMatchRole, true);
             childItem->setHidden(!m_showVariants);
         }
 
@@ -305,19 +425,47 @@ void MainWindow::populateTree() {
     updateStatus();
 }
 
-void MainWindow::refreshLibraryView(bool preserveSelection) {
-    const QString preferredRom = preserveSelection ? selectedRomFile() : QString();
+void MainWindow::refreshLibraryView(
+        bool preserveSelection, const QString& preferredRomOverride) {
+    const QString preferredRom = !preferredRomOverride.isEmpty()
+        ? preferredRomOverride
+        : (preserveSelection ? selectedRomFile() : QString());
+    std::vector<int> expandedGameIndexes;
+    if (preserveSelection && m_tree) {
+        expandedGameIndexes.reserve(m_tree->topLevelItemCount());
+        for (int i = 0; i < m_tree->topLevelItemCount(); ++i) {
+            QTreeWidgetItem* parent = m_tree->topLevelItem(i);
+            if (parent && libraryExpansionShouldBePreserved(
+                    parent->isExpanded(),
+                    parent->data(0, FilterAutoExpandedRole).toBool())) {
+                expandedGameIndexes.push_back(
+                    parent->data(0, GameIndexRole).toInt());
+            }
+        }
+    }
 
     populateTree();
 
     const bool filtered =
-        (m_searchEntry && !m_searchEntry->text().isEmpty()) || m_favoritesOnly;
+        (m_searchEntry && !m_searchEntry->text().isEmpty()) ||
+        m_favoritesOnly ||
+        libraryPersonalFiltersActive(m_ratingFilter, m_playtimeFilter);
     m_rebuildingLibraryView = true;
     if (filtered) {
         filterGames(m_searchEntry->text());
     }
 
     restoreSelection(preferredRom);
+    for (int i = 0; i < m_tree->topLevelItemCount(); ++i) {
+        QTreeWidgetItem* parent = m_tree->topLevelItem(i);
+        if (!parent) continue;
+        const int gameIdx = parent->data(0, GameIndexRole).toInt();
+        if (std::find(expandedGameIndexes.begin(), expandedGameIndexes.end(),
+                      gameIdx) != expandedGameIndexes.end()) {
+            parent->setExpanded(true);
+            parent->setData(0, FilterAutoExpandedRole, false);
+        }
+    }
     m_rebuildingLibraryView = false;
     ensureVisibleSelection(filtered);
 }
@@ -341,32 +489,80 @@ void MainWindow::setSelectionActionsEnabled(bool enabled) {
     }
     if (m_launchButton) m_launchButton->setEnabled(enabled);
     if (m_favoriteButton) m_favoriteButton->setEnabled(enabled);
+    for (QPushButton* button : m_ratingButtons) {
+        if (button) button->setEnabled(enabled);
+    }
+}
+
+void MainWindow::updateRatingButtons(int rating, bool enabled) {
+    for (std::size_t index = 0; index < m_ratingButtons.size(); ++index) {
+        QPushButton* button = m_ratingButtons[index];
+        if (!button) continue;
+
+        const int star = static_cast<int>(index) + 1;
+        const bool filled = star <= rating;
+        button->setEnabled(enabled);
+        button->setText(filled
+            ? QString::fromUtf8("\xE2\x98\x85") // ★
+            : QString::fromUtf8("\xE2\x98\x86")); // ☆
+        button->setProperty("rated", filled);
+        button->setToolTip(!enabled
+            ? "Select a parent, variant, CUE, or CHD to rate it"
+            : (star == rating
+                   ? QString("Clear the %1-star rating").arg(star)
+                   : QString("Set rating to %1 star%2")
+                         .arg(star)
+                         .arg(star == 1 ? "" : "s")));
+        button->style()->unpolish(button);
+        button->style()->polish(button);
+        button->update();
+    }
 }
 
 void MainWindow::ensureVisibleSelection(bool filtered) {
     QTreeWidgetItem* current = m_tree->currentItem();
-    QTreeWidgetItem* replacement = current;
-    while (replacement && replacement->parent()) {
-        replacement = replacement->parent();
+    const auto isExactMatch = [filtered](QTreeWidgetItem* item) {
+        return !filtered || item->data(0, ExactMatchRole).toBool();
+    };
+    const auto isSelectable = [&isExactMatch, filtered](QTreeWidgetItem* item) {
+        return item && librarySelectionAllowed(
+            treeItemIsEffectivelyVisible(item), filtered,
+            isExactMatch(item));
+    };
+    const auto firstSelectableInGroup = [&isExactMatch](
+            QTreeWidgetItem* parent) -> QTreeWidgetItem* {
+        if (!parent || parent->isHidden()) return nullptr;
+        if (isExactMatch(parent)) return parent;
+
+        for (int i = 0; i < parent->childCount(); ++i) {
+            QTreeWidgetItem* child = parent->child(i);
+            if (child && !child->isHidden() && isExactMatch(child)) {
+                return child;
+            }
+        }
+        return nullptr;
+    };
+
+    QTreeWidgetItem* currentGroup = current;
+    while (currentGroup && currentGroup->parent()) {
+        currentGroup = currentGroup->parent();
     }
-    if (replacement && replacement->isHidden()) replacement = nullptr;
+    QTreeWidgetItem* replacement = firstSelectableInGroup(currentGroup);
 
     if (!replacement) {
         for (int i = 0; i < m_tree->topLevelItemCount(); ++i) {
-            QTreeWidgetItem* item = m_tree->topLevelItem(i);
-            if (item && !item->isHidden()) {
-                replacement = item;
-                break;
-            }
+            replacement = firstSelectableInGroup(m_tree->topLevelItem(i));
+            if (replacement) break;
         }
     }
 
     const VisibleSelectionDecision decision = visibleSelectionDecision(
-        treeItemIsEffectivelyVisible(current), replacement != nullptr);
+        isSelectable(current), replacement != nullptr);
     switch (decision) {
     case VisibleSelectionDecision::KeepCurrent:
         break;
     case VisibleSelectionDecision::SelectVisibleReplacement:
+        if (replacement->parent()) replacement->parent()->setExpanded(true);
         m_tree->setCurrentItem(replacement);
         break;
     case VisibleSelectionDecision::ClearSelection:
@@ -395,6 +591,7 @@ void MainWindow::clearDetailsForNoSelection(bool filtered) {
         m_favoriteButton->setToolTip(
             "Select a parent, variant, CUE, or CHD to add it to Favorites");
     }
+    updateRatingButtons(0, false);
 
     const bool isCd = m_librarySystem == "neogeocd";
     m_detailsTitleLabel->setText(
@@ -404,6 +601,7 @@ void MainWindow::clearDetailsForNoSelection(bool filtered) {
     m_variantLabel->setToolTip(QString());
     for (auto& entry : m_infoLabels) {
         entry.second->setText("-");
+        entry.second->setToolTip(QString());
     }
     m_historyText->setPlainText(filtered
         ? "No games match the current library filters."
@@ -463,6 +661,9 @@ void MainWindow::updateSelection() {
 
     const bool favorite = playtimeMedia.has_value() &&
         m_gameLibraryState.is_favorite(game.system, *playtimeMedia);
+    const int rating = playtimeMedia.has_value()
+        ? m_gameLibraryState.rating(game.system, *playtimeMedia)
+        : 0;
     if (m_favoriteButton) {
         const QSignalBlocker blocker(m_favoriteButton);
         m_favoriteButton->setEnabled(playtimeMedia.has_value());
@@ -474,6 +675,7 @@ void MainWindow::updateSelection() {
             ? "Remove the selected exact media item from Favorites"
             : "Add the selected exact media item to Favorites");
     }
+    updateRatingButtons(rating, playtimeMedia.has_value());
 
     const auto finishDetailsUpdate =
         [this, selectionKey, selectionChanged,
@@ -526,11 +728,17 @@ void MainWindow::updateSelection() {
         ? m_gamePlaytime.find(game.system, *playtimeMedia)
         : nullptr;
     if (playtime) {
-        m_infoLabels["playtime"]->setText(
-            QString("%1 (%2 session%3)")
-                .arg(QString::fromStdString(
-                    format_playtime_seconds(playtime->total_seconds)))
-                .arg(static_cast<qlonglong>(playtime->session_count))
+        const QString duration = QString::fromStdString(
+            format_playtime_seconds(playtime->total_seconds));
+        const QString sessions = QString::number(
+            static_cast<qlonglong>(playtime->session_count));
+        m_infoLabels["playtime"]->setText(duration);
+        m_infoLabels["playtime"]->setToolTip(
+            QString("Total playtime: %1").arg(duration));
+        m_infoLabels["sessions"]->setText(sessions);
+        m_infoLabels["sessions"]->setToolTip(
+            QString("%1 recorded session%2")
+                .arg(sessions)
                 .arg(playtime->session_count == 1 ? "" : "s"));
 
         const QDateTime lastPlayed = QDateTime::fromSecsSinceEpoch(
@@ -541,6 +749,9 @@ void MainWindow::updateSelection() {
                 : QString("-"));
     } else {
         m_infoLabels["playtime"]->setText("Not played yet");
+        m_infoLabels["playtime"]->setToolTip("Not played yet");
+        m_infoLabels["sessions"]->setText("0");
+        m_infoLabels["sessions"]->setToolTip("No recorded sessions");
         m_infoLabels["last_played"]->setText("-");
     }
 
@@ -614,6 +825,8 @@ void MainWindow::loadSnapshotFor(QString path, const std::string& shortFallback)
 
 void MainWindow::filterGames(const QString& text) {
     QString needle = text.toLower().trimmed();
+    const bool personalFiltersActive = libraryPersonalFiltersActive(
+        m_ratingFilter, m_playtimeFilter);
 
     for (int i = 0; i < m_tree->topLevelItemCount(); ++i) {
         QTreeWidgetItem* parent = m_tree->topLevelItem(i);
@@ -631,9 +844,13 @@ void MainWindow::filterGames(const QString& text) {
         const auto parentMedia = selected_launch_media(game, -1);
         const bool parentFavorite = parentMedia.has_value() &&
             m_gameLibraryState.is_favorite(game.system, *parentMedia);
+        const bool parentFilterMatch = parentMedia.has_value() &&
+            mediaMatchesPersonalFilters(game, *parentMedia);
+        const bool parentOwnMatch = gameMatch && parentFilterMatch &&
+            (!m_favoritesOnly || parentFavorite);
+        parent->setData(0, ExactMatchRole, parentOwnMatch);
 
-        bool variantMatch = false;
-        bool visibleFavoriteVariant = false;
+        bool visibleMatchingVariant = false;
         for (int j = 0; j < parent->childCount(); ++j) {
             QTreeWidgetItem* child = parent->child(j);
             int romIdx = child->data(0, RomIndexRole).toInt();
@@ -647,33 +864,33 @@ void MainWindow::filterGames(const QString& text) {
             const bool textMatch = romHay.contains(needle);
             const bool childFavorite =
                 m_gameLibraryState.is_favorite(game.system, rom.file);
+            const bool childFilterMatch =
+                mediaMatchesPersonalFilters(game, rom.file);
             const bool searchAllowsChild = gameMatch || textMatch;
             const bool variantsAllowed = libraryVariantAllowed(
-                m_showVariants, m_favoritesOnly, childFavorite);
+                m_showVariants, m_favoritesOnly, childFavorite,
+                personalFiltersActive, childFilterMatch);
             const bool childVisible = variantsAllowed && searchAllowsChild &&
-                (!m_favoritesOnly || childFavorite);
+                childFilterMatch && (!m_favoritesOnly || childFavorite);
 
             child->setHidden(!childVisible);
-            if (childVisible) {
-                variantMatch = true;
-                visibleFavoriteVariant |= childFavorite;
-            }
+            child->setData(0, ExactMatchRole, childVisible);
+            visibleMatchingVariant |= childVisible;
         }
 
-        const bool parentTextMatch = gameMatch || variantMatch;
-        const bool favoriteMatch = libraryFavoriteGroupAllowed(
-            m_favoritesOnly, parentFavorite, visibleFavoriteVariant);
-        parent->setHidden(!(parentTextMatch && favoriteMatch));
+        parent->setHidden(!(parentOwnMatch || visibleMatchingVariant));
 
-        // A non-favorite parent remains the necessary container for an exact
-        // favorite variant. Expand it automatically in the Favorites view so
-        // the row that actually owns the favorite is immediately visible.
-        if (m_favoritesOnly && !parentFavorite && visibleFavoriteVariant) {
+        // A parent that does not itself match remains the necessary container
+        // for an exact matching variant. Reveal that result immediately.
+        if (!parentOwnMatch && visibleMatchingVariant &&
+            (m_favoritesOnly || personalFiltersActive)) {
+            parent->setData(0, FilterAutoExpandedRole, true);
             parent->setExpanded(true);
         }
     }
     if (!m_rebuildingLibraryView) {
-        ensureVisibleSelection(!needle.isEmpty() || m_favoritesOnly);
+        ensureVisibleSelection(!needle.isEmpty() || m_favoritesOnly ||
+                               personalFiltersActive);
     }
     updateStatus();
 }
@@ -896,6 +1113,183 @@ void MainWindow::onSortChanged() {
     save_config(m_config);
 
     refreshLibraryView(true);
+    selectFirstSortedResult();
+}
+
+void MainWindow::selectFirstSortedResult() {
+    if (!m_tree) return;
+
+    const bool filtered =
+        (m_searchEntry && !m_searchEntry->text().trimmed().isEmpty()) ||
+        m_favoritesOnly ||
+        libraryPersonalFiltersActive(m_ratingFilter, m_playtimeFilter);
+    const bool ratingSort = m_sortKey == "rating" ||
+                            m_sortKey == "rating_desc";
+    const bool playtimeSort = m_sortKey == "playtime" ||
+                              m_sortKey == "playtime_desc";
+
+    const auto isSelectable = [filtered](QTreeWidgetItem* item) {
+        return item && !item->isHidden() &&
+               (!filtered || item->data(0, ExactMatchRole).toBool());
+    };
+
+    for (int i = 0; i < m_tree->topLevelItemCount(); ++i) {
+        QTreeWidgetItem* parent = m_tree->topLevelItem(i);
+        if (!parent || parent->isHidden()) continue;
+
+        QTreeWidgetItem* target = nullptr;
+        const int gameIdx = parent->data(0, GameIndexRole).toInt();
+        if ((ratingSort || playtimeSort) && gameIdx >= 0 &&
+            gameIdx < static_cast<int>(m_games.size())) {
+            const Game& game = m_games[gameIdx];
+            const bool ratingMetric = ratingSort;
+            const std::int64_t groupMetric = gameSortMetric(
+                game, ratingMetric);
+            const auto metricForMedia = [&](const std::string& media) {
+                return ratingMetric
+                    ? static_cast<std::int64_t>(
+                          m_gameLibraryState.rating(game.system, media))
+                    : mediaPlaytimeSeconds(game, media);
+            };
+
+            const auto parentMedia = selected_launch_media(game, -1);
+            if (isSelectable(parent) && parentMedia.has_value() &&
+                metricForMedia(*parentMedia) == groupMetric) {
+                target = parent;
+            }
+
+            if (!target) {
+                for (int j = 0; j < parent->childCount(); ++j) {
+                    QTreeWidgetItem* child = parent->child(j);
+                    if (!isSelectable(child)) continue;
+                    const int romIdx = child->data(0, RomIndexRole).toInt();
+                    if (romIdx < 0 ||
+                        romIdx >= static_cast<int>(game.roms.size())) {
+                        continue;
+                    }
+                    if (metricForMedia(game.roms[romIdx].file) ==
+                        groupMetric) {
+                        target = child;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!target && isSelectable(parent)) target = parent;
+        if (!target) {
+            for (int j = 0; j < parent->childCount(); ++j) {
+                QTreeWidgetItem* child = parent->child(j);
+                if (isSelectable(child)) {
+                    target = child;
+                    break;
+                }
+            }
+        }
+        if (!target) continue;
+
+        if (target->parent()) target->parent()->setExpanded(true);
+        m_tree->setCurrentItem(target);
+        m_tree->scrollToItem(parent, QAbstractItemView::PositionAtTop);
+        return;
+    }
+
+    m_tree->setCurrentItem(nullptr);
+    m_tree->clearSelection();
+    clearDetailsForNoSelection(filtered);
+}
+
+void MainWindow::setRatingFilter(LibraryRatingFilter filter) {
+    if (m_ratingFilter == filter) return;
+    m_ratingFilter = filter;
+    m_config.set("UI", "rating_filter",
+                 std::string(libraryRatingFilterKey(filter)));
+    save_config(m_config);
+    updateFiltersButton();
+    refreshLibraryView(true);
+}
+
+void MainWindow::setPlaytimeFilter(LibraryPlaytimeFilter filter) {
+    if (m_playtimeFilter == filter) return;
+    m_playtimeFilter = filter;
+    m_config.set("UI", "playtime_filter",
+                 std::string(libraryPlaytimeFilterKey(filter)));
+    save_config(m_config);
+    updateFiltersButton();
+    refreshLibraryView(true);
+}
+
+void MainWindow::clearLibraryFilters() {
+    if (!libraryPersonalFiltersActive(m_ratingFilter, m_playtimeFilter)) {
+        return;
+    }
+
+    m_ratingFilter = LibraryRatingFilter::Any;
+    m_playtimeFilter = LibraryPlaytimeFilter::Any;
+    m_config.set("UI", "rating_filter", "any");
+    m_config.set("UI", "playtime_filter", "any");
+    save_config(m_config);
+
+    if (m_ratingFilterGroup) {
+        for (QAction* action : m_ratingFilterGroup->actions()) {
+            if (action && action->data().toInt() ==
+                    static_cast<int>(LibraryRatingFilter::Any)) {
+                action->setChecked(true);
+                break;
+            }
+        }
+    }
+    if (m_playtimeFilterGroup) {
+        for (QAction* action : m_playtimeFilterGroup->actions()) {
+            if (action && action->data().toInt() ==
+                    static_cast<int>(LibraryPlaytimeFilter::Any)) {
+                action->setChecked(true);
+                break;
+            }
+        }
+    }
+
+    updateFiltersButton();
+    refreshLibraryView(true);
+}
+
+void MainWindow::updateFiltersButton() {
+    if (!m_filtersButton) return;
+
+    QStringList descriptions;
+    switch (m_ratingFilter) {
+    case LibraryRatingFilter::Rated: descriptions << "Rating: Rated"; break;
+    case LibraryRatingFilter::Unrated: descriptions << "Rating: Unrated"; break;
+    case LibraryRatingFilter::AtLeast1:
+        descriptions << "Rating: At least 1 star"; break;
+    case LibraryRatingFilter::AtLeast2:
+        descriptions << "Rating: At least 2 stars"; break;
+    case LibraryRatingFilter::AtLeast3:
+        descriptions << "Rating: At least 3 stars"; break;
+    case LibraryRatingFilter::AtLeast4:
+        descriptions << "Rating: At least 4 stars"; break;
+    case LibraryRatingFilter::AtLeast5:
+        descriptions << "Rating: 5 stars"; break;
+    case LibraryRatingFilter::Any: break;
+    }
+    switch (m_playtimeFilter) {
+    case LibraryPlaytimeFilter::Played:
+        descriptions << "Playtime: Played"; break;
+    case LibraryPlaytimeFilter::NotPlayed:
+        descriptions << "Playtime: Not played"; break;
+    case LibraryPlaytimeFilter::Any: break;
+    }
+
+    const int activeCount = static_cast<int>(descriptions.size());
+    m_filtersButton->setText(activeCount == 0
+        ? "Filters"
+        : QString("Filters (%1)").arg(activeCount));
+    m_filtersButton->setToolTip(activeCount == 0
+        ? "Filter the library by rating or playtime"
+        : descriptions.join("\n"));
+    if (m_clearFiltersAction) {
+        m_clearFiltersAction->setEnabled(activeCount > 0);
+    }
 }
 
 void MainWindow::onShowVariantsChanged(bool checked) {
@@ -966,47 +1360,156 @@ void MainWindow::toggleSelectedFavorite(bool favorite) {
         return;
     }
 
+    const bool preserveTreeViewport = !m_favoritesOnly;
+    const int treeScrollValue = preserveTreeViewport
+        ? m_tree->verticalScrollBar()->value()
+        : 0;
+
     refreshLibraryView(true);
+
+    if (preserveTreeViewport) {
+        m_tree->doItemsLayout();
+        m_tree->verticalScrollBar()->setValue(treeScrollValue);
+    }
+}
+
+void MainWindow::setSelectedRating(int rating) {
+    if (rating < 1 || rating > 5) return;
+
+    const QList<QTreeWidgetItem*> items = m_tree->selectedItems();
+    if (items.isEmpty()) {
+        updateSelection();
+        return;
+    }
+
+    QTreeWidgetItem* item = items.first();
+    const int gameIdx = item->data(0, GameIndexRole).toInt();
+    const int romIdx = item->data(0, RomIndexRole).toInt();
+    if (gameIdx < 0 || gameIdx >= static_cast<int>(m_games.size())) {
+        updateSelection();
+        return;
+    }
+
+    const Game& game = m_games[gameIdx];
+    const auto media = selected_launch_media(game, romIdx);
+    if (!media.has_value()) {
+        updateSelection();
+        return;
+    }
+
+    if (!m_gameLibraryStatePersistenceAvailable) {
+        QMessageBox::critical(
+            this, "Rating",
+            "The personal library state could not be loaded safely. "
+            "Goliath will not overwrite it. Check Diagnostics & Logs for details.");
+        updateSelection();
+        return;
+    }
+
+    const int previous = m_gameLibraryState.rating(game.system, *media);
+    const int next = previous == rating ? 0 : rating;
+    m_gameLibraryState.set_rating(game.system, *media, next);
+
+    std::string error;
+    if (!m_gameLibraryState.save(m_paths.game_library_state_json, &error)) {
+        m_gameLibraryState.set_rating(game.system, *media, previous);
+        QMessageBox::critical(
+            this, "Rating",
+            QString("Could not save the game rating.\n\n%1")
+                .arg(QString::fromStdString(error)));
+        updateSelection();
+        return;
+    }
+
+    const bool ratingAffectsView = m_sortKey.startsWith("rating") ||
+        m_ratingFilter != LibraryRatingFilter::Any;
+    if (ratingAffectsView) {
+        refreshLibraryView(true);
+    } else {
+        updateSelection();
+    }
 }
 
 void MainWindow::expandAll() {
-    for (int i = 0; i < m_tree->topLevelItemCount(); ++i) m_tree->topLevelItem(i)->setExpanded(true);
+    setAllGroupsExpanded(true);
 }
 
 void MainWindow::collapseAll() {
-    for (int i = 0; i < m_tree->topLevelItemCount(); ++i) m_tree->topLevelItem(i)->setExpanded(false);
-    ensureVisibleSelection(false);
+    setAllGroupsExpanded(false);
+}
+
+void MainWindow::setAllGroupsExpanded(bool expanded) {
+    QTreeWidgetItem* anchor = m_tree->itemAt(0, 0);
+    if (!anchor) anchor = m_tree->currentItem();
+    if (!expanded && anchor && anchor->parent()) {
+        anchor = anchor->parent();
+    }
+    const int anchorGameIndex = anchor
+        ? anchor->data(0, GameIndexRole).toInt()
+        : -1;
+    const int anchorRomIndex = anchor
+        ? anchor->data(0, RomIndexRole).toInt()
+        : -1;
+
+    bool changed = false;
+    for (int i = 0; i < m_tree->topLevelItemCount(); ++i) {
+        QTreeWidgetItem* parent = m_tree->topLevelItem(i);
+        if (parent->isExpanded() == expanded) continue;
+        parent->setExpanded(expanded);
+        changed = true;
+    }
+
+    if (!changed) return;
+    if (!expanded) ensureVisibleSelection(false);
+    if (!anchor) return;
+
+    // Bulk expansion/collapse finishes across queued layout passes. Restore
+    // the same top row after both so selection and scroll remain independent.
+    QTimer::singleShot(0, m_tree,
+        [this, anchorGameIndex, anchorRomIndex]() {
+            QTreeWidgetItem* activeAnchor = treeItemForIndexes(
+                m_tree, anchorGameIndex, anchorRomIndex);
+            if (!activeAnchor) return;
+            m_tree->doItemsLayout();
+            m_tree->scrollToItem(
+                activeAnchor, QAbstractItemView::PositionAtTop);
+            QTimer::singleShot(0, m_tree,
+                [this, anchorGameIndex, anchorRomIndex]() {
+                    QTreeWidgetItem* finalAnchor = treeItemForIndexes(
+                        m_tree, anchorGameIndex, anchorRomIndex);
+                    if (!finalAnchor) return;
+                    m_tree->doItemsLayout();
+                    m_tree->scrollToItem(
+                        finalAnchor, QAbstractItemView::PositionAtTop);
+                });
+        });
 }
 
 void MainWindow::launchRandomGame() {
     std::vector<QTreeWidgetItem*> visibleItems;
     visibleItems.reserve(m_tree->topLevelItemCount());
 
+    const bool restrictiveView = m_favoritesOnly ||
+        libraryPersonalFiltersActive(m_ratingFilter, m_playtimeFilter) ||
+        (m_searchEntry && !m_searchEntry->text().trimmed().isEmpty());
+
     for (int i = 0; i < m_tree->topLevelItemCount(); ++i) {
         QTreeWidgetItem* parent = m_tree->topLevelItem(i);
         if (!parent || parent->isHidden()) continue;
 
-        if (!m_favoritesOnly) {
+        if (!restrictiveView) {
             visibleItems.push_back(parent);
             continue;
         }
 
-        const int gameIdx = parent->data(0, GameIndexRole).toInt();
-        if (gameIdx < 0 || gameIdx >= static_cast<int>(m_games.size())) continue;
-        const Game& game = m_games[gameIdx];
-        const auto parentMedia = selected_launch_media(game, -1);
-        if (parentMedia.has_value() &&
-            m_gameLibraryState.is_favorite(game.system, *parentMedia)) {
+        if (parent->data(0, ExactMatchRole).toBool()) {
             visibleItems.push_back(parent);
         }
 
         for (int j = 0; j < parent->childCount(); ++j) {
             QTreeWidgetItem* child = parent->child(j);
             if (!child || child->isHidden()) continue;
-            const int romIdx = child->data(0, RomIndexRole).toInt();
-            if (romIdx < 0 || romIdx >= static_cast<int>(game.roms.size())) continue;
-            if (m_gameLibraryState.is_favorite(
-                    game.system, game.roms[romIdx].file)) {
+            if (child->data(0, ExactMatchRole).toBool()) {
                 visibleItems.push_back(child);
             }
         }

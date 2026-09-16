@@ -3,7 +3,7 @@
 #include "common/theme.hpp"
 #include "ui/widgets/title_bar.hpp"
 
-#include <QAbstractItemView>
+#include <QActionGroup>
 #include <QCheckBox>
 #include <QColor>
 #include <QComboBox>
@@ -36,6 +36,7 @@
 #include <QWidget>
 
 #include <algorithm>
+#include <cstddef>
 #include <filesystem>
 #include <utility>
 
@@ -201,6 +202,10 @@ void MainWindow::buildUi() {
         {"display_desc", "Name (Z → A)"},
         {"year_desc", "Year (Newest → Oldest)"},
         {"year", "Year (Oldest → Newest)"},
+        {"rating_desc", "Rating (5 → 1)"},
+        {"rating", "Rating (1 → 5)"},
+        {"playtime_desc", "Playtime (Most → Least)"},
+        {"playtime", "Playtime (Least → Most)"},
     };
     int sortIndex = 0;
     for (int i = 0; i < (int)(sizeof(sortOptions) / sizeof(sortOptions[0])); ++i) {
@@ -209,8 +214,77 @@ void MainWindow::buildUi() {
     }
     m_sortCombo->setCurrentIndex(sortIndex);
     connect(m_sortCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MainWindow::onSortChanged);
-    m_sortCombo->setFixedWidth(190);
+    m_sortCombo->setFixedWidth(205);
     toolbar->addWidget(m_sortCombo);
+
+    m_filtersButton = new QPushButton("Filters");
+    m_filtersButton->setObjectName("filters_btn");
+    m_filtersButton->setMinimumWidth(90);
+    auto* filtersMenu = new QMenu(m_filtersButton);
+
+    auto* ratingMenu = filtersMenu->addMenu("Rating");
+    m_ratingFilterGroup = new QActionGroup(filtersMenu);
+    m_ratingFilterGroup->setExclusive(true);
+    struct RatingFilterOption {
+        LibraryRatingFilter filter;
+        const char* label;
+    };
+    static const RatingFilterOption ratingFilterOptions[] = {
+        {LibraryRatingFilter::Any, "Any rating"},
+        {LibraryRatingFilter::Rated, "Rated"},
+        {LibraryRatingFilter::Unrated, "Unrated"},
+        {LibraryRatingFilter::AtLeast1, "At least 1 star"},
+        {LibraryRatingFilter::AtLeast2, "At least 2 stars"},
+        {LibraryRatingFilter::AtLeast3, "At least 3 stars"},
+        {LibraryRatingFilter::AtLeast4, "At least 4 stars"},
+        {LibraryRatingFilter::AtLeast5, "5 stars"},
+    };
+    for (const RatingFilterOption& option : ratingFilterOptions) {
+        QAction* action = ratingMenu->addAction(option.label);
+        action->setCheckable(true);
+        action->setData(static_cast<int>(option.filter));
+        action->setChecked(m_ratingFilter == option.filter);
+        m_ratingFilterGroup->addAction(action);
+    }
+    connect(m_ratingFilterGroup, &QActionGroup::triggered, this,
+            [this](QAction* action) {
+                if (!action) return;
+                setRatingFilter(static_cast<LibraryRatingFilter>(
+                    action->data().toInt()));
+            });
+
+    auto* playtimeMenu = filtersMenu->addMenu("Playtime");
+    m_playtimeFilterGroup = new QActionGroup(filtersMenu);
+    m_playtimeFilterGroup->setExclusive(true);
+    struct PlaytimeFilterOption {
+        LibraryPlaytimeFilter filter;
+        const char* label;
+    };
+    static const PlaytimeFilterOption playtimeFilterOptions[] = {
+        {LibraryPlaytimeFilter::Any, "Any"},
+        {LibraryPlaytimeFilter::Played, "Played"},
+        {LibraryPlaytimeFilter::NotPlayed, "Not played"},
+    };
+    for (const PlaytimeFilterOption& option : playtimeFilterOptions) {
+        QAction* action = playtimeMenu->addAction(option.label);
+        action->setCheckable(true);
+        action->setData(static_cast<int>(option.filter));
+        action->setChecked(m_playtimeFilter == option.filter);
+        m_playtimeFilterGroup->addAction(action);
+    }
+    connect(m_playtimeFilterGroup, &QActionGroup::triggered, this,
+            [this](QAction* action) {
+                if (!action) return;
+                setPlaytimeFilter(static_cast<LibraryPlaytimeFilter>(
+                    action->data().toInt()));
+            });
+
+    filtersMenu->addSeparator();
+    m_clearFiltersAction = filtersMenu->addAction(
+        "Clear filters", this, &MainWindow::clearLibraryFilters);
+    m_filtersButton->setMenu(filtersMenu);
+    toolbar->addWidget(m_filtersButton);
+    updateFiltersButton();
 
     auto* showVariantsCheckbox = new QCheckBox("Show variants");
     showVariantsCheckbox->setChecked(m_showVariants);
@@ -378,6 +452,10 @@ void MainWindow::buildUi() {
     detailsLayout->setContentsMargins(8, 8, 8, 8);
     detailsLayout->setSpacing(6);
 
+    auto* detailsHeaderLayout = new QVBoxLayout();
+    detailsHeaderLayout->setContentsMargins(0, 0, 0, 0);
+    detailsHeaderLayout->setSpacing(0);
+
     auto* detailsTitleRow = new QHBoxLayout();
     detailsTitleRow->setContentsMargins(0, 0, 0, 0);
     detailsTitleRow->setSpacing(10);
@@ -386,7 +464,7 @@ void MainWindow::buildUi() {
     m_detailsTitleLabel->setObjectName("details_title");
     m_detailsTitleLabel->setFont(QFont("Sans", 20, QFont::Bold));
     m_detailsTitleLabel->setWordWrap(true);
-    detailsTitleRow->addWidget(m_detailsTitleLabel, 1);
+    detailsTitleRow->addWidget(m_detailsTitleLabel, 1, Qt::AlignTop);
 
     m_favoriteButton = new QPushButton(
         QString::fromUtf8("\xE2\x98\x86 Favorite")); // ☆
@@ -399,14 +477,43 @@ void MainWindow::buildUi() {
             this, &MainWindow::toggleSelectedFavorite);
     detailsTitleRow->addWidget(m_favoriteButton, 0, Qt::AlignTop);
 
-    detailsLayout->addLayout(detailsTitleRow);
+    detailsHeaderLayout->addLayout(detailsTitleRow);
+
+    auto* detailsVariantRow = new QHBoxLayout();
+    detailsVariantRow->setContentsMargins(0, 0, 0, 0);
+    detailsVariantRow->setSpacing(10);
 
     m_variantLabel = new QLabel();
     m_variantLabel->setObjectName("variant_label");
     m_variantLabel->setFixedHeight(16);
     m_variantLabel->clear();
+    detailsVariantRow->addWidget(m_variantLabel, 1, Qt::AlignVCenter);
 
-    detailsLayout->addWidget(m_variantLabel);
+    auto* ratingRow = new QHBoxLayout();
+    ratingRow->setContentsMargins(0, 0, 0, 0);
+    ratingRow->setSpacing(0);
+    auto* ratingLabel = new QLabel("Rating:");
+    ratingLabel->setObjectName("secondary_text");
+    ratingRow->addWidget(ratingLabel, 0, Qt::AlignVCenter);
+
+    for (std::size_t index = 0; index < m_ratingButtons.size(); ++index) {
+        auto* button = new QPushButton(
+            QString::fromUtf8("\xE2\x98\x86")); // ☆
+        button->setObjectName("rating_star_btn");
+        button->setFixedSize(28, 24);
+        button->setEnabled(false);
+        const int rating = static_cast<int>(index) + 1;
+        button->setAccessibleName(QString("%1-star rating").arg(rating));
+        button->setToolTip(
+            "Select a parent, variant, CUE, or CHD to rate it");
+        connect(button, &QPushButton::clicked, this,
+                [this, rating]() { setSelectedRating(rating); });
+        m_ratingButtons[index] = button;
+        ratingRow->addWidget(button);
+    }
+    detailsVariantRow->addLayout(ratingRow);
+    detailsHeaderLayout->addLayout(detailsVariantRow);
+    detailsLayout->addLayout(detailsHeaderLayout);
 
     auto* separator = new QFrame();
     separator->setFrameShape(QFrame::HLine);
@@ -435,6 +542,7 @@ void MainWindow::buildUi() {
         {"players", "Players"},
         {"series", "Series"},
         {"playtime", "Playtime"},
+        {"sessions", "Sessions"},
         {"last_played", "Last Played"},
     };
 
@@ -554,8 +662,10 @@ void MainWindow::applyTheme(const QString& themeNameIn) {
     qss.replace("<<BRANCH_OPEN_SELECTED>>", toUrlPath(openSelPath));
 
     setStyleSheet(qss);
-    m_themeCombo->view()->setStyleSheet(QString::fromStdString(
-        generate_theme_selector_popup_style(theme)));
+    const QString comboPopupStyle = QString::fromStdString(
+        generate_combo_popup_style(theme));
+    applyComboPopupStyle(m_themeCombo, comboPopupStyle);
+    applyComboPopupStyle(m_sortCombo, comboPopupStyle);
 
     m_config.set("UI", "theme", themeName.toStdString());
     save_config(m_config);

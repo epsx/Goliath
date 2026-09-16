@@ -155,6 +155,32 @@ QPushButton:pressed {
     background-color: @bg_tertiary@;
 }
 
+QPushButton#rating_star_btn {
+    background-color: transparent;
+    border: none;
+    border-radius: 4px;
+    padding: 0;
+    color: @text_secondary@;
+    font-size: 18px;
+    font-weight: normal;
+}
+
+QPushButton#rating_star_btn[rated="true"] {
+    color: @accent@;
+}
+
+QPushButton#rating_star_btn:hover {
+    background-color: @bg_hover@;
+    border: none;
+    color: @accent_hover@;
+}
+
+QPushButton#rating_star_btn:disabled {
+    background-color: transparent;
+    border: none;
+    color: @text_secondary@;
+}
+
 QWidget:disabled {
     color: @text_secondary@;
 }
@@ -725,12 +751,17 @@ QToolTip {
     return out;
 }
 
-std::string generate_theme_selector_popup_style(const Theme& theme) {
+std::string generate_combo_popup_style(const Theme& theme) {
     static const char* TEMPLATE = R"QSS(
+QWidget#combo_popup_container {
+    background-color: @bg_hover@;
+    border: 1px solid @border@;
+}
+
 QAbstractItemView {
     background-color: @bg_hover@;
     color: @text_primary@;
-    border: 1px solid @border@;
+    border: none;
     outline: none;
     selection-background-color: @accent@;
     selection-color: @on_accent@;

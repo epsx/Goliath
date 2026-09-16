@@ -78,11 +78,17 @@ MainWindow::MainWindow(Config config, QWidget* parent)
 
     m_sortKey = QString::fromStdString(m_config.get("UI", "sort_key", "display"));
     if (m_sortKey != "display" && m_sortKey != "display_desc" &&
-        m_sortKey != "year" && m_sortKey != "year_desc") {
+        m_sortKey != "year" && m_sortKey != "year_desc" &&
+        m_sortKey != "rating" && m_sortKey != "rating_desc" &&
+        m_sortKey != "playtime" && m_sortKey != "playtime_desc") {
         m_sortKey = "display";
     }
     m_showVariants = m_config.get_bool("UI", "show_variants", true);
     m_favoritesOnly = m_config.get_bool("UI", "favorites_only", false);
+    m_ratingFilter = libraryRatingFilterFromKey(
+        m_config.get("UI", "rating_filter", "any"));
+    m_playtimeFilter = libraryPlaytimeFilterFromKey(
+        m_config.get("UI", "playtime_filter", "any"));
     m_librarySystem = m_config.get("UI", "library_system", "neogeo");
     if (m_librarySystem != "neogeo" && m_librarySystem != "neogeocd") {
         m_librarySystem = "neogeo";
@@ -157,9 +163,12 @@ void MainWindow::loadGameLibraryState() {
     m_gameLibraryState = std::move(loaded);
     m_gameLibraryStatePersistenceAvailable = true;
     DebugLogger::logInfo(
-        QString("loaded %1 favorite exact media item(s)")
+        QString("loaded personal library state for %1 favorite and %2 rated "
+                "exact media item(s)")
             .arg(static_cast<qulonglong>(
-                m_gameLibraryState.favorite_count())));
+                m_gameLibraryState.favorite_count()))
+            .arg(static_cast<qulonglong>(
+                m_gameLibraryState.rating_count())));
 }
 
 void MainWindow::saveGamePlaytime() {
@@ -231,7 +240,14 @@ void MainWindow::pollTrackedGameProcesses() {
 
     if (changed) {
         saveGamePlaytime();
-        updateSelection();
+        const bool playtimeAffectsView =
+            m_sortKey.startsWith("playtime") ||
+            m_playtimeFilter != LibraryPlaytimeFilter::Any;
+        if (playtimeAffectsView) {
+            refreshLibraryView(true);
+        } else {
+            updateSelection();
+        }
     }
     if (m_trackedGameProcesses.empty()) {
         if (m_playtimeTimer) m_playtimeTimer->stop();
@@ -565,6 +581,8 @@ void MainWindow::rescanRoms() {
 }
 
 void MainWindow::onRescanFinished() {
+    const QString preferredRom = selectedRomFile();
+
     if (m_rescanWorker) {
         m_rescanWorker->wait(); // Ensure the thread has finished before deleting it.
         m_rescanWorker->deleteLater();
@@ -577,7 +595,7 @@ void MainWindow::onRescanFinished() {
     refreshResolvedPaths();
 
     loadGames();
-    refreshLibraryView(false);
+    refreshLibraryView(false, preferredRom);
     m_rescanAction->setEnabled(true);
 }
 

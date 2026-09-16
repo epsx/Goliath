@@ -1,6 +1,7 @@
 #include "ui/settings_dialog.hpp"
 
 #include "common/goliath_common.hpp"
+#include "common/theme.hpp"
 #include "ui/tabs/audio_tab.hpp"
 #include "ui/tabs/core_tab.hpp"
 #include "ui/tabs/misc_tab.hpp"
@@ -142,6 +143,13 @@ SettingsDialog::SettingsDialog(Config& config, AppPaths paths, QWidget* parent)
 
     m_infoTab = new InfoTab(m_paths.jollygood_exe, this);
     m_tabs->addTab(m_infoTab, "Info");
+
+    const std::string themeKey =
+        m_config.get("UI", "theme", "Dark Modern");
+    const Theme& theme = find_theme(themeKey);
+    applyComboPopupStyleToDescendants(
+        this,
+        QString::fromStdString(generate_combo_popup_style(theme)));
 }
 
 SettingsDialog::~SettingsDialog() {

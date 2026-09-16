@@ -44,8 +44,9 @@ Linux support is maintained where practical.
 - Parent and variant grouping for cartridge games.
 - Recursive Neo Geo CD discovery.
 - Optional local verification against MAME and Redump metadata.
-- Search, persistent exact-media Favorites, name/year sorting, visible-only
-  Random, snapshots, and history.
+- Search, persistent exact-media Favorites and 1–5-star ratings, name/year/
+  rating/playtime sorting, compact personal filters, visible-only Random,
+  snapshots, and history.
 - Per-game BIOS, video, input, and core settings without changing global
   configuration.
 - BIOS verification and safe JGRF BIOS preparation.
@@ -125,12 +126,38 @@ Goliath repository or release packages.
 
 The main library supports live search, parent/variant browsing, explicit
 sorting, visible-only Random selection, context actions, and a details panel.
-Selection and search are preserved across sorting, rescans, and view rebuilds.
+An explicit Sort change selects and reveals its first ranked result; other
+applicable view rebuilds preserve selection. Search and expanded parent groups
+remain preserved. Toggling a Favorite also keeps the current list viewport
+fixed unless the Favorites-only filter must remove that item.
+**Expand all** and **Collapse all** preserve the current visible library region
+independently from selection. When a selected variant is collapsed, its parent
+becomes the selection without forcing the list to another alphabetical region.
 
 Use the **☆ Favorite** button or a game's context menu to add the exact
 selected parent, variant, CUE, or CHD. **★ Favorites only** filters the current
 system without hiding a favorite variant behind its parent; Random selects
 only favorite media while this filter is active.
+
+Use the five stars below **Favorite** to rate any exact media item from 1 to
+5. Selecting the current rating again clears it. Ratings are independent from
+Favorites, so removing a game from Favorites does not remove its rating.
+
+The **Sort** selector can order the library by name, year, Rating, or Playtime.
+Unrated and unplayed entries remain last in either direction. A parent group is
+ranked by the best exact-media value it contains, while its variants use their
+own values. The compact **Filters** menu supports Rated, Unrated, minimum-star,
+Played, and Not played views; Rating and Playtime choices can be combined and
+cleared together. Matching variants remain visible through their parent
+container; groups opened only to reveal such a match return to the user's
+previous expansion state when the filter changes or is cleared. Random chooses
+only exact media matching Search, Favorites, and the active personal filters.
+Sort and filter choices persist across restarts.
+The Theme, Sort, and Settings combo popup containers use the active palette
+throughout, including their outer Windows frames.
+
+The details panel displays **Playtime** and **Sessions** on separate rows, with
+tooltips retaining the complete values even for unusually large counters.
 
 Use **Tools** or a game's context menu for:
 
@@ -141,8 +168,10 @@ Use **Tools** or a game's context menu for:
 - diagnostics and log controls;
 - opening relevant media or configuration folders.
 
-Per-game profiles, playtime, and Favorites are stored separately from the
-generated game database, so rescanning does not remove them.
+Per-game profiles, playtime, Favorites, and ratings are stored separately from
+the generated game database, so rescanning does not remove them.
+After a completed rescan, Goliath also restores the current exact-media
+selection when that media still exists in the rebuilt library.
 
 ## Build from source
 
