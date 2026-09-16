@@ -41,10 +41,10 @@ std::string contrast_text_for(const std::string& background);
 // substituted by the caller after generating the branch PNGs on disk.
 std::string generate_theme_style(const Theme& theme);
 
-// Dedicated stylesheet installed directly on the theme selector's popup
-// view. Keeping this separate from the window stylesheet prevents the combo
-// button's accent foreground from winning Qt's popup cascade on Windows.
-std::string generate_theme_selector_popup_style(const Theme& theme);
+// Dedicated stylesheet installed directly on a combo's popup view and native
+// popup container. Keeping this separate from the window stylesheet prevents
+// native Windows colors and the combo button palette from leaking into it.
+std::string generate_combo_popup_style(const Theme& theme);
 
 // Foreground used by the theme selector popup delegate. Rendering this text
 // explicitly prevents the QComboBox button palette from leaking into its

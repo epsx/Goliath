@@ -13,6 +13,7 @@ class QEvent;
 class QLabel;
 class QMouseEvent;
 class QPushButton;
+class QComboBox;
 class QTimer;
 class QVBoxLayout;
 class QWidget;
@@ -68,5 +69,12 @@ private:
 void setupFramelessDialog(QDialog* dialog, const QString& title,
                           QVBoxLayout** contentLayout = nullptr,
                           bool resizable = true, bool showMinMax = true);
+
+// Apply the generated palette to both a combo's item view and the separate
+// native popup container created by Qt on Windows. The descendant overload is
+// intended for dialogs that own several QComboBox controls.
+void applyComboPopupStyle(QComboBox* combo, const QString& styleSheet);
+void applyComboPopupStyleToDescendants(QWidget* root,
+                                       const QString& styleSheet);
 
 } // namespace goliath

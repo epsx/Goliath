@@ -367,6 +367,7 @@ void SystemInputWidget::buildButtons() {
     main->setContentsMargins(15, 15, 15, 15);
 
     auto* box = new QGroupBox("Cabinet");
+    box->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
     auto* layout = new QHBoxLayout(box);
     layout->setSpacing(12);
     layout->setContentsMargins(8, 12, 8, 8);
@@ -380,7 +381,7 @@ void SystemInputWidget::buildButtons() {
         layout->addWidget(btn);
     }
     layout->addStretch();
-    main->addWidget(box);
+    main->addWidget(box, 0, Qt::AlignLeft | Qt::AlignTop);
     main->addStretch();
 }
 

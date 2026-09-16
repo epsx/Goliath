@@ -1,6 +1,7 @@
 // main_window.hpp — the main application window: custom title bar, themed
-// toolbar, game library (tree, search/filter, Favorites, sort, show-variants), the
-// details/snapshot panel, theme switching, launching or benchmarking a ROM via
+// toolbar, game library (tree, search, exact-media personal filters, Favorites,
+// sort, show-variants), the details/snapshot panel, theme switching, launching
+// or benchmarking a ROM via
 // jollygood, exact-media playtime observation, safe save-data management,
 // one-shot WAV audio export, Settings, About, ROM rescan, and BIOS verification.
 
@@ -12,6 +13,8 @@
 #include <QtCore/qnamespace.h>
 #include <QtGlobal>
 
+#include <array>
+#include <cstdint>
 #include <filesystem>
 #include <map>
 #include <memory>
@@ -26,6 +29,7 @@
 #include "game/game_profile.hpp"
 #include "common/goliath_common.hpp"
 #include "common/paths.hpp"
+#include "ui/library_view_logic.hpp"
 
 class QCloseEvent;
 class QEvent;
@@ -40,6 +44,7 @@ class QLabel;
 class QTextEdit;
 class QPushButton;
 class QAction;
+class QActionGroup;
 class QTimer;
 
 namespace goliath {
@@ -63,6 +68,7 @@ private slots:
     void onShowVariantsChanged(bool checked);
     void onFavoritesOnlyChanged(bool checked);
     void toggleSelectedFavorite(bool favorite);
+    void setSelectedRating(int rating);
     void updateSelection();
     void filterGames(const QString& text);
     void launchSelected();
@@ -95,11 +101,25 @@ private:
     void loadGames();
     std::vector<int> sortedGameOrder() const; // indices into m_games
     void populateTree();
-    void refreshLibraryView(bool preserveSelection);
+    void refreshLibraryView(bool preserveSelection,
+                            const QString& preferredRomOverride = {});
+    void setAllGroupsExpanded(bool expanded);
+    void setRatingFilter(LibraryRatingFilter filter);
+    void setPlaytimeFilter(LibraryPlaytimeFilter filter);
+    void clearLibraryFilters();
+    void updateFiltersButton();
+    void selectFirstSortedResult();
+    bool mediaMatchesPersonalFilters(const Game& game,
+                                     const std::string& media) const;
+    std::int64_t mediaPlaytimeSeconds(const Game& game,
+                                      const std::string& media) const;
+    std::int64_t gameSortMetric(const Game& game, bool ratingMetric) const;
+    std::vector<int> sortedVariantOrder(const Game& game) const;
     void setLibrarySystem(const std::string& system);
     void clearDetailsForNoSelection(bool filtered);
     void ensureVisibleSelection(bool filtered);
     void setSelectionActionsEnabled(bool enabled);
+    void updateRatingButtons(int rating, bool enabled);
     void updateStatus();
     void centerWindow();
     void refreshResolvedPaths();
@@ -152,12 +172,18 @@ private:
     QString m_sortKey = "display";
     bool m_showVariants = true;
     bool m_favoritesOnly = false;
+    LibraryRatingFilter m_ratingFilter = LibraryRatingFilter::Any;
+    LibraryPlaytimeFilter m_playtimeFilter = LibraryPlaytimeFilter::Any;
     bool m_rebuildingLibraryView = false;
     std::string m_librarySystem = "neogeo";
 
     TitleBar* m_titleBar = nullptr;
     QComboBox* m_themeCombo = nullptr;
     QComboBox* m_sortCombo = nullptr;
+    QPushButton* m_filtersButton = nullptr;
+    QActionGroup* m_ratingFilterGroup = nullptr;
+    QActionGroup* m_playtimeFilterGroup = nullptr;
+    QAction* m_clearFiltersAction = nullptr;
     QAction* m_rescanAction = nullptr;
 
     QPushButton* m_mvsAesButton = nullptr;
@@ -171,6 +197,7 @@ private:
     QLabel* m_snapshotLabel = nullptr;
     QLabel* m_detailsTitleLabel = nullptr;
     QPushButton* m_favoriteButton = nullptr;
+    std::array<QPushButton*, 5> m_ratingButtons{};
     QLabel* m_variantLabel = nullptr;
     std::map<std::string, QLabel*> m_infoLabels;
     QTextEdit* m_historyText = nullptr;

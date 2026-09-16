@@ -2,8 +2,10 @@
 
 #include "common/window_geometry.hpp"
 
+#include <QAbstractItemView>
 #include <QAbstractSlider>
 #include <QApplication>
+#include <QComboBox>
 #include <QCursor>
 #include <QDialog>
 #include <QEvent>
@@ -362,6 +364,28 @@ void setupFramelessDialog(QDialog* dialog, const QString& title,
 
     if (contentLayout)
         *contentLayout = layout;
+}
+
+void applyComboPopupStyle(QComboBox* combo, const QString& styleSheet) {
+    if (!combo || !combo->view()) return;
+
+    QAbstractItemView* view = combo->view();
+    QWidget* container = view->window();
+    if (container) {
+        container->setObjectName("combo_popup_container");
+        container->setAttribute(Qt::WA_StyledBackground, true);
+        container->setStyleSheet(styleSheet);
+    }
+    view->setStyleSheet(styleSheet);
+}
+
+void applyComboPopupStyleToDescendants(QWidget* root,
+                                       const QString& styleSheet) {
+    if (!root) return;
+    const auto combos = root->findChildren<QComboBox*>();
+    for (QComboBox* combo : combos) {
+        applyComboPopupStyle(combo, styleSheet);
+    }
 }
 
 } // namespace goliath

@@ -1,7 +1,8 @@
 // game_library_state.hpp — Goliath-owned personal library state. This data is
 // intentionally stored outside scanner-generated games.json so rescans cannot
-// erase a user's favorites. Every selectable parent, variant, CUE, or CHD is
-// keyed by the same exact system/media identity used by profiles and playtime.
+// erase a user's favorites or ratings. Every selectable parent, variant, CUE,
+// or CHD is keyed by the same exact system/media identity used by profiles and
+// playtime.
 #pragma once
 
 #include <cstddef>
@@ -13,6 +14,7 @@ namespace goliath {
 
 struct GameLibraryState {
     bool favorite = false;
+    int rating = 0;
 
     bool empty() const noexcept;
 };
@@ -41,8 +43,14 @@ public:
     void set_favorite(const std::string& system,
                       const std::string& media,
                       bool favorite);
+    int rating(const std::string& system,
+               const std::string& media) const;
+    void set_rating(const std::string& system,
+                    const std::string& media,
+                    int rating);
 
     std::size_t favorite_count(const std::string& system = {}) const;
+    std::size_t rating_count(const std::string& system = {}) const;
     void clear();
     std::size_t size() const;
 

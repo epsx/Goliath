@@ -14,7 +14,7 @@ using goliath::Theme;
 using goliath::all_themes;
 using goliath::contrast_text_for;
 using goliath::find_theme;
-using goliath::generate_theme_selector_popup_style;
+using goliath::generate_combo_popup_style;
 using goliath::generate_theme_style;
 using goliath::theme_selector_popup_text;
 
@@ -238,7 +238,7 @@ TEST_CASE("About Goliath remains theme-aware across every palette", "[theme]") {
     }
 }
 
-TEST_CASE("theme selector popup remains readable across every palette", "[theme]") {
+TEST_CASE("combo popup remains readable across every palette", "[theme]") {
     constexpr const char* popup_selector =
         "QAbstractItemView#theme_selector_popup";
 
@@ -248,10 +248,13 @@ TEST_CASE("theme selector popup remains readable across every palette", "[theme]
     for (const Theme& theme : all_themes()) {
         INFO("theme=" << theme.key);
         const std::string popup_style =
-            generate_theme_selector_popup_style(theme);
+            generate_combo_popup_style(theme);
         CHECK(contrast_ratio(theme.bg_hover, theme.text_primary) >= 4.5);
         CHECK(popup_style.find('@') == std::string::npos);
-        CHECK(popup_style.find("QAbstractItemView") != std::string::npos);
+        CHECK((popup_style.find("QWidget#combo_popup_container") !=
+                   std::string::npos &&
+               popup_style.find("QAbstractItemView") != std::string::npos &&
+               popup_style.find("border: none") != std::string::npos));
         CHECK(popup_style.find(theme.bg_hover) != std::string::npos);
         CHECK(popup_style.find(theme.text_primary) != std::string::npos);
         CHECK(popup_style.find(theme.accent) != std::string::npos);

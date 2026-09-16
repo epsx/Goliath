@@ -7,13 +7,68 @@ Historical test counts are retained as checkpoint evidence. The current
 authoritative baseline is:
 
 ```text
-All tests passed (2408 assertions in 183 test cases)
+All tests passed (2500 assertions in 198 test cases)
 ```
 
 The preceding `1360/99` Feature 9 baseline passed its per-game mapping,
 isolation, and global-configuration regression checks. The `1239/88` runtime
 baseline passed manual MVS/AES, Neo Geo CD CUE, Neo Geo CD CHD, Settings, and
 visible-only Random smoke tests.
+
+---
+
+## 2026-09-16 — Patch 31D: rating and playtime library views
+
+- Added ascending and descending Rating and Playtime sort modes while keeping
+  unrated or unplayed media last in both directions and using stable
+  alphabetical tie-breaking.
+- Ranked each parent group by its best exact-media value and sorted its visible
+  variants by their own values under Rating or Playtime sorting.
+- Added one compact **Filters** menu for Rated, Unrated, minimum-star, Played,
+  and Not played views, with combined filtering and a one-action reset.
+- Kept matching variants visible through their parent containers, excluded
+  nonmatching variants, and limited Random to exact media matching Search,
+  Favorites, and active personal filters.
+- Kept filter-required parent expansion temporary, so clearing or changing a
+  filter restores the user's tree expansion state instead of retaining groups
+  opened only to reveal a matching variant.
+- Persisted the selected Rating/Playtime filters and new sort modes, and kept
+  filtered selection on a real matching media row instead of a container-only
+  parent.
+- Made an explicit Sort change select and reveal the first ranked exact-media
+  result while leaving Filter, Favorite, rescan, and restart selection
+  preservation unchanged.
+- Split the playtime detail into independent **Playtime** and **Sessions** rows
+  with full-value tooltips so large counters do not hide one another.
+- Applied the active palette directly to the separate Theme, Sort, and Settings
+  combo popup containers so their Windows frames no longer expose light native
+  strips.
+- Kept the Neo Geo System **Cabinet** control group anchored to its content
+  width instead of stretching its background when an Input editor is widened.
+- Generated the Windows executable resource from the CMake project version
+  so its version metadata cannot remain stale independently.
+- Advanced the development identity to version `0.31.4` and build `patch31d`.
+
+---
+
+## 2026-09-15 — Patch 31C: persistent exact-media ratings
+
+- Added an independent 1–5-star rating for every selectable cartridge parent,
+  variant, CUE, or CHD through the details panel.
+- Made selecting the active star clear a rating while preserving Favorite
+  state, and made Favorite removal preserve an existing rating.
+- Preserved all expanded parent groups when Favorite or other personal-library
+  changes rebuild the game tree, and kept the tree viewport fixed when a
+  Favorite marker is toggled outside the Favorites-only view.
+- Kept the current visible library region anchored independently from selection
+  while expanding or collapsing all parent groups.
+- Restored the current exact-media selection after a completed rescan instead
+  of jumping back to the `last_rom` saved by an earlier application close.
+- Advanced `game_library_state.json` to schema version 2 with compatible
+  version 1 loading, atomic persistence, validation, and rescan independence.
+- Added regression coverage for normalized identity, rating-only and combined
+  records, migration, invalid values, removal semantics, and rescans.
+- Advanced the development identity to version `0.31.3` and build `patch31c`.
 
 ---
 

@@ -19,7 +19,8 @@ namespace goliath {
 
 namespace {
 
-constexpr int kLibraryStateSchemaVersion = 1;
+constexpr int kLibraryStateSchemaVersion = 2;
+constexpr int kOldestSupportedLibraryStateSchemaVersion = 1;
 
 bool is_supported_system(const std::string& system) {
     return system == "neogeo" || system == "neogeocd";
@@ -36,7 +37,7 @@ QString filesystem_path_to_qstring(const fs::path& path) {
 } // namespace
 
 bool GameLibraryState::empty() const noexcept {
-    return !favorite;
+    return !favorite && rating == 0;
 }
 
 bool GameLibraryStateStore::load(const fs::path& path, std::string* error) {
@@ -73,9 +74,15 @@ bool GameLibraryStateStore::load(const fs::path& path, std::string* error) {
         if (!root.is_object() ||
             !root.contains("version") ||
             !root.at("version").is_number_integer() ||
-            root.at("version").get<int>() != kLibraryStateSchemaVersion ||
             !root.contains("records") ||
             !root.at("records").is_array()) {
+            if (error) *error = "Unsupported or malformed game library state schema.";
+            return false;
+        }
+
+        const int version = root.at("version").get<int>();
+        if (version < kOldestSupportedLibraryStateSchemaVersion ||
+            version > kLibraryStateSchemaVersion) {
             if (error) *error = "Unsupported or malformed game library state schema.";
             return false;
         }
@@ -88,6 +95,16 @@ bool GameLibraryStateStore::load(const fs::path& path, std::string* error) {
                 continue;
             }
 
+            int rating = 0;
+            if (version >= 2) {
+                if (!item.contains("rating") ||
+                    !item.at("rating").is_number_integer()) {
+                    continue;
+                }
+                rating = item.at("rating").get<int>();
+                if (rating < 0 || rating > 5) continue;
+            }
+
             const std::string system = item.at("system").get<std::string>();
             const std::string media = normalize_game_profile_media(
                 item.at("media").get<std::string>());
@@ -95,13 +112,14 @@ bool GameLibraryStateStore::load(const fs::path& path, std::string* error) {
 
             const std::string key = make_game_profile_key(system, media);
             const bool favorite = item.at("favorite").get<bool>();
-            if (!favorite) {
+            const GameLibraryState state{favorite, rating};
+            if (state.empty()) {
                 m_records.erase(key);
                 continue;
             }
 
             m_records[key] = GameLibraryStateRecord{
-                system, media, GameLibraryState{true}};
+                system, media, state};
         }
     } catch (const std::exception& ex) {
         m_records.clear();
@@ -139,6 +157,7 @@ bool GameLibraryStateStore::save(const fs::path& path,
             {"system", record.system},
             {"media", record.media},
             {"favorite", record.state.favorite},
+            {"rating", record.state.rating},
         });
     }
 
@@ -188,13 +207,47 @@ void GameLibraryStateStore::set_favorite(const std::string& system,
                                          bool favorite) {
     const std::string normalized = normalize_game_profile_media(media);
     const std::string key = make_game_profile_key(system, normalized);
-    if (!favorite || !is_supported_system(system) || normalized.empty()) {
-        m_records.erase(key);
+    if (!is_supported_system(system) || normalized.empty()) {
         return;
     }
 
-    m_records[key] = GameLibraryStateRecord{
-        system, normalized, GameLibraryState{true}};
+    auto it = m_records.find(key);
+    if (it == m_records.end()) {
+        if (!favorite) return;
+        m_records[key] = GameLibraryStateRecord{
+            system, normalized, GameLibraryState{true, 0}};
+        return;
+    }
+
+    it->second.state.favorite = favorite;
+    if (it->second.state.empty()) m_records.erase(it);
+}
+
+int GameLibraryStateStore::rating(const std::string& system,
+                                  const std::string& media) const {
+    const GameLibraryState* state = find(system, media);
+    return state ? state->rating : 0;
+}
+
+void GameLibraryStateStore::set_rating(const std::string& system,
+                                       const std::string& media,
+                                       int rating) {
+    if (rating < 0 || rating > 5) return;
+
+    const std::string normalized = normalize_game_profile_media(media);
+    const std::string key = make_game_profile_key(system, normalized);
+    if (!is_supported_system(system) || normalized.empty()) return;
+
+    auto it = m_records.find(key);
+    if (it == m_records.end()) {
+        if (rating == 0) return;
+        m_records[key] = GameLibraryStateRecord{
+            system, normalized, GameLibraryState{false, rating}};
+        return;
+    }
+
+    it->second.state.rating = rating;
+    if (it->second.state.empty()) m_records.erase(it);
 }
 
 std::size_t GameLibraryStateStore::favorite_count(
@@ -203,6 +256,19 @@ std::size_t GameLibraryStateStore::favorite_count(
     for (const auto& [key, record] : m_records) {
         (void)key;
         if (record.state.favorite &&
+            (system.empty() || record.system == system)) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+std::size_t GameLibraryStateStore::rating_count(
+        const std::string& system) const {
+    std::size_t count = 0;
+    for (const auto& [key, record] : m_records) {
+        (void)key;
+        if (record.state.rating > 0 &&
             (system.empty() || record.system == system)) {
             ++count;
         }
