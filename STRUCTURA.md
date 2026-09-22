@@ -88,6 +88,8 @@ without constructing the main window:
 - SHA-1 and persistent hash cache;
 - filesystem discovery and long-path I/O helpers;
 - metadata parsers and Neo Geo CD verification;
+- bounded optional `command.dat` parsing and MAME-id lookup;
+- lossless `command.dat` marker tokenization for vector notation;
 - game-model validation;
 - exact-media profile/playtime/Favorites identity and safe save-data backup
   logic;
@@ -151,6 +153,8 @@ src/
 ├── game/
 │   ├── audio_export.hpp/.cpp
 │   ├── bios_verify.hpp/.cpp
+│   ├── command_dat.hpp/.cpp
+│   ├── command_notation.hpp/.cpp
 │   ├── db_scanner.hpp/.cpp
 │   ├── detached_process_tracker.hpp/.cpp
 │   ├── filesystem_io.hpp/.cpp
@@ -186,6 +190,7 @@ src/
     ├── about_dialog.hpp/.cpp
     ├── audio_export_dialog.hpp/.cpp
     ├── benchmark_dialog.hpp/.cpp
+    ├── command_dialog.hpp/.cpp
     ├── game_profile_dialog.hpp/.cpp
     ├── logging_dialog.hpp/.cpp
     ├── rescan_dialog.hpp/.cpp
@@ -198,6 +203,7 @@ src/
     │   ├── misc_tab.hpp/.cpp
     │   └── video_tab.hpp/.cpp
     └── widgets/
+        ├── command_notation_view.hpp/.cpp
         ├── controller_button.hpp/.cpp
         ├── game_input_mapping_widget.hpp/.cpp
         ├── input_panel_widgets.hpp/.cpp
@@ -288,6 +294,8 @@ launch-process context.
 | Module | Target | Responsibility |
 | --- | --- | --- |
 | `audio_export` | core | Sanitizes portable WAV suggestions, adds collision-free suffixes, and validates non-overwriting output targets. |
+| `command_dat` | core | Parses a bounded user-supplied command catalog and resolves exact-variant, clone, and parent MAME IDs. |
+| `command_notation` | core | Tokenizes supported command markers into lossless visual glyphs while preserving unknown notation verbatim. |
 | `game_model` | core | Defines `Game`/`Rom` and validates `games.json`. |
 | `game_library_state` | core | Validates and atomically persists exact-media Favorites and ratings independently from `games.json`. |
 | `game_playtime` | core | Validates, formats, and atomically persists exact-media playtime statistics. |
@@ -311,6 +319,8 @@ launch-process context.
 | `about_dialog` | app | Presents Goliath identity/build metadata, authorship, upstream acknowledgements, and verified external links. |
 | `audio_export_dialog` | app | Selects, probes, and confirms a new one-shot WAV destination without creating the requested target. |
 | `benchmark_dialog` | app | Supervises, times, cancels, logs, and reports a selected-media JGRF benchmark. |
+| `command_dialog` | app | Presents a titleless, compact, movable transparent command overlay with source-line search whose lifetime is associated with one tracked JGRF PID. |
+| `command_notation_view` | app | Draws and reflows resolution-independent directions, buttons, qualifiers, move categories, accented headings, and highlighted search results with raw-text fallback. |
 | `logging_dialog` | app | Owns session verbose launch state and guarded open/clear controls for both runtime logs. |
 | `save_data_dialog` | app | Presents exact-media save/state inventory, validated backups, guarded mutation, and folder access. |
 | `jollygood_bios` | app | Prepares the BIOS path layout expected by stock JGRF. |
@@ -573,13 +583,16 @@ Rating and Playtime sorts keep missing values last in both directions, rank a
 parent group by its best exact-media value, sort variants by their own values,
 and use the display name as a stable tie-break. The compact Filters menu
 combines Rating and Playtime predicates and persists both choices in
-`goliath.ini`. Exact matching variants remain visible through their parent
+`goliath.ini`. The persisted Show variants action is hosted in the same menu
+but remains independent from the Rating/Playtime clear operation. Exact
+matching variants remain visible through their parent
 container even when normal variants are hidden; container-only parents are not
 eligible selections. Parent expansion performed only to expose an exact filter
 match is tagged as temporary and excluded from the user expansion state carried
 across rebuilds. Random selects visible parents normally and exact media matching
 Search, Favorites, and all active personal filters in a restrictive view. The
-details panel presents Playtime and Sessions separately with complete tooltips.
+details panel presents Playtime and Sessions separately without duplicating
+their values in hover tooltips.
 The search line edit uses Qt's native trailing clear action;
 Escape is widget-scoped so it clears only a focused search field, while Ctrl+F
 focuses and selects the current query.
@@ -619,6 +632,34 @@ even when their operating-system dialog outlives the normal duration guard.
 Benchmark processes are managed by `benchmark_dialog` and never enter this
 tracking path. Observation remains non-owning and never signals or terminates
 the detached game.
+
+When `metadata/command.dat` exists, `MainWindow` parses it only after a
+successful normal gameplay launch and resolves the selected row's ordered
+MAME-id fallbacks. A match creates one parentless `command_dialog` associated
+with the same tracked PID when the persistent, default-on `UI/command_overlay`
+setting is enabled. Disabling it skips only future companion creation. This
+keeps the movable transparent overlay visible
+if the main window is hidden, allows the user to close it without touching
+JGRF, and guarantees it is destroyed when that process exits. The visual view
+tokenizes known markers into vector glyphs, reflows long visual rows without a
+horizontal scrollbar, preserves unknown notation, accents both standalone and
+two-column character headings, and offers the original raw text as an
+immediate fallback. Ctrl+F opens a compact source-line search shared by Visual
+and Raw modes; Enter/Shift+Enter cycle matching lines and Escape clears it.
+Transparent presentation selects a dedicated brighter heading accent, retains
+one-pixel outlined text, and uses a low-alpha result wash with a slim edge
+marker; themed non-transparent presentation continues to use its palette.
+The Visual renderer requests a minimum 10.5-point Medium-weight system fixed
+font; metric-driven row height and wrapping absorb the small size increase
+without changing the overlay window geometry.
+Its compact `ROM ID` strip owns native window
+dragging, while the **Keep above** transition restores the previous geometry
+after the window flag changes. No command data is forwarded to or rendered
+inside JGRF; benchmark and one-shot WAV sessions do not create companions.
+On Windows, verified Vulkan fullscreen remains DWM-compatible with this
+external companion. OpenGL Core, ES, and Compatibility cover external overlays
+while their fullscreen game owns focus, so continuous visibility there requires
+windowed presentation.
 
 `save_data_dialog` is opened for the exact selected row from Tools or the
 context menu. It displays both exact media and the upstream JGRF basename,
@@ -728,6 +769,8 @@ tests/
 ├── test_audio.cpp
 ├── test_audio_export.cpp
 ├── test_bios_verify.cpp
+├── test_command_dat.cpp
+├── test_command_notation.cpp
 ├── test_db_scanner.cpp
 ├── test_game_model.cpp
 ├── test_game_library_state.cpp
@@ -753,6 +796,8 @@ tests/
 | `test_main.cpp` | Catch2 test runner entry point. |
 | `test_audio.cpp` | Volume bounds, device snapshot state, and default config. |
 | `test_audio_export.cpp` | Portable names, `.wav` normalization, collision avoidance, non-destructive target validation, configured-writer conflicts, and final argument placement. |
+| `test_command_dat.cpp` | BOM/CRLF/DOS-EOF parsing, aliases, sentinel handling, missing/malformed files, and variant-to-parent lookup order. |
+| `test_command_notation.cpp` | Direction/button markers, legacy labels, move categories, select/follow-up semantics, and verbatim unknown-marker fallback. |
 | `test_bios_verify.cpp` | BIOS catalog, missing paths/archives/members, and optional CD sets. |
 | `test_db_scanner.cpp` | Grouping, metadata, CD verification, cache, path safety, and statistics. |
 | `test_game_model.cpp` | Required fields, invalid rows, `main_rom`, and optional metadata. |
@@ -830,6 +875,7 @@ The source tree and runtime tree have different ownership:
 | One-shot WAV captures | `data/goliath/audio_exports/*.wav` by default | Stock JGRF, selected and preflighted by Goliath |
 | Upstream config | `config/jollygood/*.ini` | `IniDocument` and stock JGRF/Geolith |
 | External metadata | `metadata/*.xml`, `*.ini`, Redump `.dat` | User-provided scanner input |
+| Optional command catalog | `metadata/command.dat` | User-provided launch-time companion input |
 | Generated database | `database/games.json` | `db_scanner` |
 | Generated hash state | `database/hash_cache.json` | `Sha1Cache` through `db_scanner` |
 | Application log | `goliath-qt-debug.log` | `DebugLogger`, with live clear through `logging_dialog` |
@@ -921,6 +967,9 @@ selected tree row
   -> detached JGRF process
        -> merge stdout/stderr, then append once to jollygood.log
        -> Windows session-volume retry
+       -> optional metadata/command.dat lookup
+            -> exact variant, clone, then parent MAME id
+            -> non-modal companion bound to the tracked PID
        -> exact-process playtime observation
             -> ignore sessions shorter than five seconds
             -> reject validated loader/early-start failures

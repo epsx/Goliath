@@ -26,6 +26,7 @@ AppPaths compute_app_paths(const Config& config) {
     p.config_dir = resolve_path(config, "config");
 
     p.json_file = resolve_path(config, "database") / "games.json";
+    p.metadata_dir = resolve_path(config, "metadata");
 
     p.jollygood_exe = resolve_path(config, "jollygood");
     p.jollygood_args = split_whitespace(config.get("Paths", "jollygood_args", "-c geolith"));

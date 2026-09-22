@@ -727,19 +727,15 @@ void MainWindow::updateSelection() {
     const GamePlaytimeRecord* playtime = playtimeMedia.has_value()
         ? m_gamePlaytime.find(game.system, *playtimeMedia)
         : nullptr;
+    m_infoLabels["playtime"]->setToolTip(QString());
+    m_infoLabels["sessions"]->setToolTip(QString());
     if (playtime) {
         const QString duration = QString::fromStdString(
             format_playtime_seconds(playtime->total_seconds));
         const QString sessions = QString::number(
             static_cast<qlonglong>(playtime->session_count));
         m_infoLabels["playtime"]->setText(duration);
-        m_infoLabels["playtime"]->setToolTip(
-            QString("Total playtime: %1").arg(duration));
         m_infoLabels["sessions"]->setText(sessions);
-        m_infoLabels["sessions"]->setToolTip(
-            QString("%1 recorded session%2")
-                .arg(sessions)
-                .arg(playtime->session_count == 1 ? "" : "s"));
 
         const QDateTime lastPlayed = QDateTime::fromSecsSinceEpoch(
             static_cast<qint64>(playtime->last_played_epoch)).toLocalTime();
@@ -749,9 +745,7 @@ void MainWindow::updateSelection() {
                 : QString("-"));
     } else {
         m_infoLabels["playtime"]->setText("Not played yet");
-        m_infoLabels["playtime"]->setToolTip("Not played yet");
         m_infoLabels["sessions"]->setText("0");
-        m_infoLabels["sessions"]->setToolTip("No recorded sessions");
         m_infoLabels["last_played"]->setText("-");
     }
 
@@ -916,7 +910,11 @@ void MainWindow::launchItem(QTreeWidgetItem* item) {
 
     const GameLaunchProfile* profile =
         m_gameProfiles.find(game.system, *media);
-    launchMedia(QString::fromStdString(*media), game.system, profile);
+    QString display = QString::fromStdString(game.display);
+    if (romIdx >= 0 && romIdx < static_cast<int>(game.roms.size()))
+        display = variantFullName(game.roms[romIdx]);
+    launchMedia(QString::fromStdString(*media), game.system, profile,
+                std::nullopt, command_dat_lookup_ids(game, romIdx), display);
 }
 
 void MainWindow::openGameSettings() {
@@ -1285,7 +1283,7 @@ void MainWindow::updateFiltersButton() {
         ? "Filters"
         : QString("Filters (%1)").arg(activeCount));
     m_filtersButton->setToolTip(activeCount == 0
-        ? "Filter the library by rating or playtime"
+        ? "Show variants or filter the library by rating or playtime"
         : descriptions.join("\n"));
     if (m_clearFiltersAction) {
         m_clearFiltersAction->setEnabled(activeCount > 0);
@@ -1299,6 +1297,14 @@ void MainWindow::onShowVariantsChanged(bool checked) {
     save_config(m_config);
 
     refreshLibraryView(true);
+}
+
+void MainWindow::onCommandOverlayChanged(bool checked) {
+    m_commandOverlayEnabled = checked;
+
+    m_config.set("UI", "command_overlay",
+                 m_commandOverlayEnabled ? "true" : "false");
+    save_config(m_config);
 }
 
 void MainWindow::onFavoritesOnlyChanged(bool checked) {

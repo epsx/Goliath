@@ -3,6 +3,7 @@
 #include "common/theme.hpp"
 #include "ui/widgets/title_bar.hpp"
 
+#include <QAction>
 #include <QActionGroup>
 #include <QCheckBox>
 #include <QColor>
@@ -222,6 +223,13 @@ void MainWindow::buildUi() {
     m_filtersButton->setMinimumWidth(90);
     auto* filtersMenu = new QMenu(m_filtersButton);
 
+    QAction* showVariantsAction = filtersMenu->addAction("Show variants");
+    showVariantsAction->setCheckable(true);
+    showVariantsAction->setChecked(m_showVariants);
+    connect(showVariantsAction, &QAction::toggled,
+            this, &MainWindow::onShowVariantsChanged);
+    filtersMenu->addSeparator();
+
     auto* ratingMenu = filtersMenu->addMenu("Rating");
     m_ratingFilterGroup = new QActionGroup(filtersMenu);
     m_ratingFilterGroup->setExclusive(true);
@@ -281,15 +289,20 @@ void MainWindow::buildUi() {
 
     filtersMenu->addSeparator();
     m_clearFiltersAction = filtersMenu->addAction(
-        "Clear filters", this, &MainWindow::clearLibraryFilters);
+        "Clear rating/playtime filters", this,
+        &MainWindow::clearLibraryFilters);
     m_filtersButton->setMenu(filtersMenu);
     toolbar->addWidget(m_filtersButton);
     updateFiltersButton();
 
-    auto* showVariantsCheckbox = new QCheckBox("Show variants");
-    showVariantsCheckbox->setChecked(m_showVariants);
-    connect(showVariantsCheckbox, &QCheckBox::toggled, this, &MainWindow::onShowVariantsChanged);
-    toolbar->addWidget(showVariantsCheckbox);
+    auto* commandOverlayCheckbox = new QCheckBox("Command overlay");
+    commandOverlayCheckbox->setChecked(m_commandOverlayEnabled);
+    commandOverlayCheckbox->setToolTip(
+        "Open matching command.dat overlays automatically for future game "
+        "launches");
+    connect(commandOverlayCheckbox, &QCheckBox::toggled,
+            this, &MainWindow::onCommandOverlayChanged);
+    toolbar->addWidget(commandOverlayCheckbox);
 
     auto* favoritesOnlyCheckbox = new QCheckBox(
         QString::fromUtf8("\xE2\x98\x85 Favorites only")); // ★
@@ -355,6 +368,8 @@ void MainWindow::buildUi() {
 
     // --- Splitter ---
     m_splitter = new QSplitter(Qt::Horizontal);
+    m_splitter->setObjectName("library_details_splitter");
+    m_splitter->setHandleWidth(6);
     mainLayout->addWidget(m_splitter, 1);
 
     // Left: Game List + Search

@@ -370,8 +370,36 @@ QScrollBar::handle:horizontal:hover {
     background-color: @accent@;
 }
 
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {
+    height: 0px;
+    border: none;
+    background: transparent;
+}
+
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal {
+    width: 0px;
+    border: none;
+    background: transparent;
+}
+
+QScrollBar::up-arrow:vertical,
+QScrollBar::down-arrow:vertical,
+QScrollBar::left-arrow:horizontal,
+QScrollBar::right-arrow:horizontal {
+    width: 0px;
+    height: 0px;
+    image: none;
+}
+
 QSplitter::handle {
     background-color: @border@;
+}
+
+QSplitter#library_details_splitter::handle {
+    background-color: transparent;
+    border: none;
 }
 
 QTabWidget::pane {

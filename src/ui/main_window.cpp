@@ -84,6 +84,8 @@ MainWindow::MainWindow(Config config, QWidget* parent)
         m_sortKey = "display";
     }
     m_showVariants = m_config.get_bool("UI", "show_variants", true);
+    m_commandOverlayEnabled =
+        m_config.get_bool("UI", "command_overlay", true);
     m_favoritesOnly = m_config.get_bool("UI", "favorites_only", false);
     m_ratingFilter = libraryRatingFilterFromKey(
         m_config.get("UI", "rating_filter", "any"));
@@ -182,7 +184,7 @@ void MainWindow::saveGamePlaytime() {
     }
 }
 
-void MainWindow::trackGameProcess(qint64 pid,
+bool MainWindow::trackGameProcess(qint64 pid,
                                   const std::string& system,
                                   const std::string& media) {
     auto tracker = std::make_unique<DetachedProcessTracker>(
@@ -193,12 +195,65 @@ void MainWindow::trackGameProcess(qint64 pid,
                     "playtime will not be recorded for %2")
                 .arg(pid)
                 .arg(QString::fromStdString(media)));
-        return;
+        return false;
     }
 
     m_trackedGameProcesses.push_back(std::move(tracker));
     if (m_playtimeTimer && !m_playtimeTimer->isActive())
         m_playtimeTimer->start();
+    return true;
+}
+
+void MainWindow::openCommandCompanion(
+        qint64 pid, const QString& gameTitle,
+        const std::vector<std::string>& lookupIds) {
+    if (pid <= 0 || lookupIds.empty()) return;
+
+    CommandDatCatalog catalog;
+    std::string error;
+    const fs::path path = m_paths.metadata_dir / "command.dat";
+    const CommandDatLoadStatus status = catalog.load(path, &error);
+    if (status == CommandDatLoadStatus::Missing) return;
+    if (status == CommandDatLoadStatus::Error) {
+        DebugLogger::logError(
+            QString("could not load optional command.dat: %1")
+                .arg(QString::fromStdString(error)));
+        return;
+    }
+
+    const CommandDatEntry* entry = nullptr;
+    std::string matchedId;
+    for (const std::string& id : lookupIds) {
+        entry = catalog.find(id);
+        if (entry) {
+            matchedId = id;
+            break;
+        }
+    }
+    if (!entry) return;
+
+    auto dialog = std::make_unique<CommandDialog>(
+        gameTitle.isEmpty() ? QString::fromStdString(matchedId) : gameTitle,
+        QString::fromStdString(matchedId),
+        QString::fromUtf8(entry->text.data(),
+                          static_cast<qsizetype>(entry->text.size())),
+        styleSheet());
+    dialog->placeBeside(
+        this, static_cast<int>(m_commandDialogs.size()));
+    dialog->show();
+    m_commandDialogs[static_cast<std::int64_t>(pid)] = std::move(dialog);
+
+    DebugLogger::logInfo(
+        QString("opened command.dat companion for MAME id %1 (PID %2)")
+            .arg(QString::fromStdString(matchedId))
+            .arg(pid));
+}
+
+void MainWindow::closeCommandCompanion(std::int64_t pid) {
+    const auto it = m_commandDialogs.find(pid);
+    if (it == m_commandDialogs.end()) return;
+    it->second->close();
+    m_commandDialogs.erase(it);
 }
 
 void MainWindow::pollTrackedGameProcesses() {
@@ -216,6 +271,7 @@ void MainWindow::pollTrackedGameProcesses() {
                 std::chrono::system_clock::now().time_since_epoch()).count();
         const std::int64_t seconds = tracker.elapsed_seconds();
         const std::optional<std::uint32_t> exitCode = tracker.exit_code();
+        closeCommandCompanion(tracker.pid());
         if (should_record_tracked_session(seconds, exitCode)) {
             changed |= m_gamePlaytime.add_session(
                 tracker.system(), tracker.media(), seconds, endedEpoch);
@@ -278,6 +334,11 @@ void MainWindow::finishTrackedGameSessions() {
         }
     }
     m_trackedGameProcesses.clear();
+    for (auto& [pid, dialog] : m_commandDialogs) {
+        (void)pid;
+        dialog->close();
+    }
+    m_commandDialogs.clear();
 
     if (changed) saveGamePlaytime();
 }
@@ -293,7 +354,9 @@ bool MainWindow::hasActiveTrackedGameProcess() const {
 
 void MainWindow::launchMedia(const QString& media, const std::string& system,
                              const GameLaunchProfile* profile,
-                             std::optional<fs::path> waveOutputPath) {
+                             std::optional<fs::path> waveOutputPath,
+                             std::vector<std::string> commandLookupIds,
+                             QString commandTitle) {
     const JollygoodLaunchPreparation preparation = prepare_jollygood_launch(
         m_paths, m_romDir, m_neocdDir, system, media.toStdString(), profile,
         m_verboseJgrfLogging, waveOutputPath);
@@ -430,7 +493,10 @@ void MainWindow::launchMedia(const QString& media, const std::string& system,
         return;
     }
 
-    trackGameProcess(pid, system, media.toStdString());
+    if (trackGameProcess(pid, system, media.toStdString()) &&
+        !waveOutputPath.has_value() && m_commandOverlayEnabled) {
+        openCommandCompanion(pid, commandTitle, commandLookupIds);
+    }
     apply_jollygood_audio_volume_with_retry(
         this, pid, m_config.get_int("Audio", "volume", 100));
 }

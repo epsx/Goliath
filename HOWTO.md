@@ -430,6 +430,66 @@ executable is required.
 Rescan after changing media, scanner-relevant metadata, or any path used by the
 scanner.
 
+### Optional command.dat companion
+
+Goliath does not distribute or download `command.dat`. If you have a copy you
+are entitled to use, place it directly in the metadata directory selected in
+**Settings -> Path**:
+
+```text
+metadata/command.dat
+```
+
+No rescan is required. On each successful game launch, Goliath checks that
+file and looks up the selected cartridge variant's MAME ID, then its clone and
+parent IDs as fallbacks. A match opens a separate, non-modal command-list
+window. It does not pass the file to JGRF and does not modify JGRF or Geolith.
+
+The toolbar's persistent **Command overlay** check box is enabled by default.
+Clear it to skip automatic companion creation on future launches; games still
+launch normally, and an already-open companion remains open until closed or
+until its associated JGRF process exits.
+
+The companion starts as a transparent overlay above the game without taking
+keyboard focus. It converts supported direction, button, qualifier, and move
+category markers to scalable vector glyphs. Clear **Visual notation** to see
+the original `command.dat` text at any time; unsupported markers are also kept
+visible verbatim. Adjust **Background** to change only the panel opacity, or
+clear **Transparent overlay** to restore the active Goliath theme.
+
+Drag the compact strip from **ROM ID** to move the titleless overlay and press
+Alt+F4 to close it. Clear **Keep above** to use it as a normal window; changing
+that option preserves its current position. Visual notation reflows long
+commands and uses only a slim vertical scrollbar. Raw mode retains the exact
+source layout and its horizontal scrollbar.
+
+After focusing the overlay, press **Ctrl+F** to open its compact search line in
+the upper-left corner. Search is case-insensitive and accepts a character name,
+move, or any other visible source text. **Enter** selects the next matching
+line, **Shift+Enter** selects the previous one, and **Escape** closes the search
+line and removes its highlight. Search follows the same source line in Visual
+and Raw modes. Character headings use the section accent color while adjacent
+team names and commands retain their normal text color.
+Transparent presentation uses a brighter heading accent and a restrained
+one-pixel text outline for readability over changing game imagery. The active
+search result uses a light tint and a slim left-edge marker instead of an
+opaque banner. The themed non-transparent presentation keeps its native accent.
+Visual notation uses a slightly larger Medium-weight fixed font. This can show
+marginally fewer rows at once, while automatic wrapping and scrolling remain
+unchanged.
+
+On Windows, use Vulkan when the companion must remain continuously visible in
+JGRF fullscreen. OpenGL Core, OpenGL ES, and OpenGL Compatibility keep the
+companion visible in windowed mode, but their fullscreen presentation covers
+external overlays while the game has focus. Switching focus can reveal the
+companion temporarily; it does not change this renderer limitation.
+
+Closing the overlay does not affect the game. If left open, Goliath closes it
+when the associated JGRF process ends. A missing entry, missing file, or
+malformed optional catalog never blocks game launch; malformed-file details
+are written only to the frontend log. The glyphs are drawn internally, so no
+bitmap legend or external icon pack is required or distributed.
+
 ### Search the library
 
 1. Type in **Search games...** to filter the current MVS/AES or Neo Geo CD

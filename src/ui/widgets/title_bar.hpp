@@ -63,12 +63,13 @@ private:
     bool m_overrideCursor = false;
 };
 
-// Makes a QDialog frameless, gives it a themed perimeter, a modern title bar,
-// and an all-side resize filter. Returns the content layout (with 16px margins)
-// where the caller should add its widgets.
+// Makes a QDialog frameless, gives it a themed perimeter, an optional modern
+// title bar, and an all-side resize filter. Returns the content layout (with
+// 16px margins) where the caller should add its widgets.
 void setupFramelessDialog(QDialog* dialog, const QString& title,
                           QVBoxLayout** contentLayout = nullptr,
-                          bool resizable = true, bool showMinMax = true);
+                          bool resizable = true, bool showMinMax = true,
+                          bool showTitleBar = true);
 
 // Apply the generated palette to both a combo's item view and the separate
 // native popup container created by Qt on Windows. The descendant overload is

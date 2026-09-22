@@ -44,6 +44,8 @@ Linux support is maintained where practical.
 - Parent and variant grouping for cartridge games.
 - Recursive Neo Geo CD discovery.
 - Optional local verification against MAME and Redump metadata.
+- Optional `command.dat` companion window for matching MAME game IDs. It is
+  tied to the launched JGRF session and requires no JGRF modification.
 - Search, persistent exact-media Favorites and 1–5-star ratings, name/year/
   rating/playtime sorting, compact personal filters, visible-only Random,
   snapshots, and history.
@@ -148,7 +150,9 @@ Unrated and unplayed entries remain last in either direction. A parent group is
 ranked by the best exact-media value it contains, while its variants use their
 own values. The compact **Filters** menu supports Rated, Unrated, minimum-star,
 Played, and Not played views; Rating and Playtime choices can be combined and
-cleared together. Matching variants remain visible through their parent
+cleared together. The existing persistent **Show variants** view toggle also
+lives in this menu but is not changed by clearing Rating/Playtime filters.
+Matching variants remain visible through their parent
 container; groups opened only to reveal such a match return to the user's
 previous expansion state when the filter changes or is cleared. Random chooses
 only exact media matching Search, Favorites, and the active personal filters.
@@ -156,8 +160,8 @@ Sort and filter choices persist across restarts.
 The Theme, Sort, and Settings combo popup containers use the active palette
 throughout, including their outer Windows frames.
 
-The details panel displays **Playtime** and **Sessions** on separate rows, with
-tooltips retaining the complete values even for unusually large counters.
+The details panel displays **Playtime** and **Sessions** on separate rows
+without duplicating their visible values in hover tooltips.
 
 Use **Tools** or a game's context menu for:
 
@@ -167,6 +171,38 @@ Use **Tools** or a game's context menu for:
 - WAV audio export;
 - diagnostics and log controls;
 - opening relevant media or configuration folders.
+
+If the user supplies `command.dat` in the configured metadata directory,
+launching a matching game also opens a non-modal command-list companion. The
+window follows the JGRF process lifetime, starts as a transparent overlay above
+the game without taking keyboard focus, and can be moved, resized, unpinned, or
+closed independently. Supported notation is drawn as scalable direction and
+arcade-button glyphs; **Visual notation** can be disabled to inspect the exact
+source text. The background opacity is adjustable without fading the glyphs or
+controls. Its compact titleless strip shows the matched **ROM ID** and is the
+drag handle; Alt+F4 closes the overlay. Long visual commands reflow without a
+horizontal scrollbar, while Raw mode keeps the catalog's exact layout.
+Character headings use the section accent color. With the overlay focused,
+Ctrl+F opens a compact case-insensitive source-line search; Enter and
+Shift+Enter cycle matches and Escape closes it. The same result is revealed in
+Visual and Raw modes. Transparent presentation brightens headings, reinforces
+the one-pixel text outline, and marks the active result with a soft tint and
+slim accent edge without adding opaque text panels. Goliath reads the catalog
+at launch. Visual notation uses a 10.5-point minimum Medium-weight fixed font
+to improve translucent-surface legibility while retaining automatic reflow
+and scrolling. Goliath neither bundles
+nor downloads it. No external icon pack is required or distributed.
+
+The default-on **Command overlay** toolbar check box controls automatic
+creation for future matching game launches and persists in `goliath.ini`.
+Clearing it does not close an overlay that is already open and never affects
+game launch, playtime tracking, benchmarks, or WAV export.
+
+On Windows, the external overlay remains continuously visible over JGRF
+fullscreen when Vulkan is selected. OpenGL Core, OpenGL ES, and OpenGL
+Compatibility keep it visible in windowed mode, but their fullscreen
+presentation covers external overlays while the game owns focus. This is a
+renderer presentation limitation; Goliath does not modify or inject into JGRF.
 
 Per-game profiles, playtime, Favorites, and ratings are stored separately from
 the generated game database, so rescanning does not remove them.

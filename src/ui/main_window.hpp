@@ -2,8 +2,9 @@
 // toolbar, game library (tree, search, exact-media personal filters, Favorites,
 // sort, show-variants), the details/snapshot panel, theme switching, launching
 // or benchmarking a ROM via
-// jollygood, exact-media playtime observation, safe save-data management,
-// one-shot WAV audio export, Settings, About, ROM rescan, and BIOS verification.
+// jollygood, an optional PID-bound command.dat companion, exact-media playtime
+// observation, safe save-data management, one-shot WAV audio export, Settings,
+// About, ROM rescan, and BIOS verification.
 
 #pragma once
 
@@ -23,6 +24,7 @@
 #include <vector>
 
 #include "game/detached_process_tracker.hpp"
+#include "game/command_dat.hpp"
 #include "game/game_library_state.hpp"
 #include "game/game_model.hpp"
 #include "game/game_playtime.hpp"
@@ -30,6 +32,7 @@
 #include "common/goliath_common.hpp"
 #include "common/paths.hpp"
 #include "ui/library_view_logic.hpp"
+#include "ui/command_dialog.hpp"
 
 class QCloseEvent;
 class QEvent;
@@ -66,6 +69,7 @@ protected:
 private slots:
     void onSortChanged();
     void onShowVariantsChanged(bool checked);
+    void onCommandOverlayChanged(bool checked);
     void onFavoritesOnlyChanged(bool checked);
     void toggleSelectedFavorite(bool favorite);
     void setSelectedRating(int rating);
@@ -127,8 +131,12 @@ private:
     void loadGamePlaytime();
     void loadGameLibraryState();
     void saveGamePlaytime();
-    void trackGameProcess(qint64 pid, const std::string& system,
+    bool trackGameProcess(qint64 pid, const std::string& system,
                           const std::string& media);
+    void openCommandCompanion(
+        qint64 pid, const QString& gameTitle,
+        const std::vector<std::string>& lookupIds);
+    void closeCommandCompanion(std::int64_t pid);
     void pollTrackedGameProcesses();
     void finishTrackedGameSessions();
     bool hasActiveTrackedGameProcess() const;
@@ -146,7 +154,9 @@ private:
     void launchMedia(const QString& mediaFile, const std::string& system,
                      const GameLaunchProfile* profile = nullptr,
                      std::optional<std::filesystem::path> waveOutputPath =
-                         std::nullopt);
+                         std::nullopt,
+                     std::vector<std::string> commandLookupIds = {},
+                     QString commandTitle = {});
     // Warn if the BIOS folder or expected archives are missing. The warning
     // is non-blocking; the user can still proceed.
     void warnIfBiosMissing();
@@ -166,11 +176,13 @@ private:
     bool m_verboseJgrfLogging = false;
     std::vector<std::unique_ptr<DetachedProcessTracker>>
         m_trackedGameProcesses;
+    std::map<std::int64_t, std::unique_ptr<CommandDialog>> m_commandDialogs;
     QTimer* m_playtimeTimer = nullptr;
     bool m_exitWhenTrackedProcessesFinish = false;
 
     QString m_sortKey = "display";
     bool m_showVariants = true;
+    bool m_commandOverlayEnabled = true;
     bool m_favoritesOnly = false;
     LibraryRatingFilter m_ratingFilter = LibraryRatingFilter::Any;
     LibraryPlaytimeFilter m_playtimeFilter = LibraryPlaytimeFilter::Any;

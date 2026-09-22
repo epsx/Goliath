@@ -38,6 +38,7 @@ private:
     QLabel* m_jgrfVersion = nullptr;
     QLabel* m_jgrfExecutable = nullptr;
     QLabel* m_vulkanRenderer = nullptr;
+    QLabel* m_esBgraRenderer = nullptr;
     QLabel* m_geolithVersion = nullptr;
     QLabel* m_coreLibrary = nullptr;
     QLabel* m_neocdFormats = nullptr;
@@ -52,6 +53,7 @@ private:
     bool m_corePending = false;
     bool m_jgrfProbeOk = false;
     bool m_coreProbeOk = false;
+    bool m_esBgraPairVerified = false;
     QString m_jgrfError;
     QString m_coreError;
 };

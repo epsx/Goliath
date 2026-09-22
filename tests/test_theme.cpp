@@ -203,6 +203,28 @@ TEST_CASE("frameless windows receive a theme-aware perimeter", "[theme]") {
     }
 }
 
+TEST_CASE("generated scrollbars omit directional line buttons",
+          "[theme][scrollbar]") {
+    for (const Theme& theme : all_themes()) {
+        INFO("theme=" << theme.key);
+        const std::string stylesheet = generate_theme_style(theme);
+        CHECK(stylesheet.find(
+                  "QScrollBar::add-line:vertical,\n"
+                  "QScrollBar::sub-line:vertical {\n"
+                  "    height: 0px;") != std::string::npos);
+        CHECK(stylesheet.find(
+                  "QScrollBar::add-line:horizontal,\n"
+                  "QScrollBar::sub-line:horizontal {\n"
+                  "    width: 0px;") != std::string::npos);
+        CHECK(stylesheet.find(
+                  "QScrollBar::up-arrow:vertical,\n"
+                  "QScrollBar::down-arrow:vertical,\n"
+                  "QScrollBar::left-arrow:horizontal,\n"
+                  "QScrollBar::right-arrow:horizontal") !=
+              std::string::npos);
+    }
+}
+
 TEST_CASE("input panels retain their theme-aware outer cards", "[theme]") {
     for (const Theme& theme : all_themes()) {
         INFO("theme=" << theme.key);

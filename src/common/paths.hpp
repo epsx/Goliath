@@ -17,6 +17,7 @@ struct AppPaths {
     std::filesystem::path base_dir;
     std::filesystem::path config_dir; // resolve_path(config, "config") - used as XDG_CONFIG_HOME
     std::filesystem::path json_file; // <database>/games.json
+    std::filesystem::path metadata_dir; // optional catalogs, including command.dat
 
     std::filesystem::path jollygood_exe;
     std::vector<std::string> jollygood_args;

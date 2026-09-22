@@ -7,13 +7,86 @@ Historical test counts are retained as checkpoint evidence. The current
 authoritative baseline is:
 
 ```text
-All tests passed (2500 assertions in 198 test cases)
+All tests passed (2505 assertions in 199 test cases)
 ```
 
 The preceding `1360/99` Feature 9 baseline passed its per-game mapping,
 isolation, and global-configuration regression checks. The `1239/88` runtime
 baseline passed manual MVS/AES, Neo Geo CD CUE, Neo Geo CD CHD, Settings, and
 visible-only Random smoke tests.
+
+---
+
+## Unreleased — optional command.dat companion candidate
+
+- Added an Info-tab OpenGL ES/BGRA indicator for the exact Windows JGRF and
+  libepoxy builds tested with MVS/AES and Neo Geo CD CHD. Other builds are
+  marked unverified; the indicator does not claim driver-level compatibility.
+- Advanced the development identity to version `0.32.12` and build `patch32l`.
+- Hid the visible main splitter handle beside the game-list scrollbar while
+  retaining a six-pixel drag target for resizing the two panels. The override
+  applies only to the library/details splitter.
+- Removed the unused per-entry copy of command.dat aliases after confirming
+  that the bounded lookup index is their sole runtime owner, reducing retained
+  catalog memory without changing exact-variant, clone, or parent matching.
+- Removed the parser's unused `<limits>` dependency after a complete symbol and
+  call-site audit found no orphaned overlay, search, renderer, or Patch32D code.
+- Raised the Visual notation minimum fixed-font size from 10 to 10.5 points
+  and selected Medium weight to improve translucent-surface legibility without
+  introducing heavier outlines or opaque text backing.
+- Brightened section and character headings only in transparent presentation,
+  strengthened the existing one-pixel free-text outline, and replaced the
+  broad search-result tint with a softer wash plus a slim accent marker.
+- Added a compact, normally hidden overlay search bar: Ctrl+F opens it,
+  typing jumps to the first case-insensitive matching source line, Enter and
+  Shift+Enter cycle forward and backward, and Escape closes it.
+- Highlighted character headings with the same accent used for section
+  headings, including two-column `character / team` rows without recoloring
+  the team name or ordinary move text.
+- Unified every colored arcade-button and colored button-group label to a
+  near-black foreground for a consistent visual legend.
+- Added a persistent, default-on **Command overlay** toolbar toggle that
+  controls automatic companion creation for future normal game launches.
+- Moved **Show variants** into the Filters menu without changing its persisted
+  state, visibility semantics, or the independent Rating/Playtime clear action.
+- Removed the redundant Playtime and Sessions value tooltips now that both
+  values have dedicated detail rows.
+- Removed directional arrow buttons from generated vertical and horizontal
+  scrollbars so their handles can reach clean end positions in every theme.
+- Added a restrained one-pixel translucent outline to free text in the visual
+  command overlay while leaving vector directions and colored buttons intact.
+- Documented the verified Windows renderer behavior: the external overlay
+  remains visible in Vulkan fullscreen, while all three OpenGL profiles require
+  windowed mode for continuous visibility when the game owns focus.
+- Replaced the overlay's full application title bar and diagnostic source line
+  with one compact draggable `ROM ID` control strip; Alt+F4 remains the close
+  path and the standard title bar remains unchanged for every other dialog.
+- Preserved the exact overlay geometry when **Keep above** recreates the native
+  window, including a deferred restoration after Windows processes the flag
+  change.
+- Reflowed long visual command rows into a stable name/notation layout, removed
+  the visual mode's horizontal scrollbar, and made its vertical scrollbar slim
+  and translucent; Raw mode remains lossless and horizontally scrollable.
+- Advanced the companion to a transparent, independently movable overlay with
+  adjustable background opacity, a visual/raw notation switch, and fully
+  opaque text and controls.
+- Rendered directions, colored arcade buttons, button groups, qualifiers, and
+  move-category markers as resolution-independent vector glyphs while keeping
+  every unknown marker visible verbatim.
+- Kept the two legacy bitmap legends as development references only; no icon
+  sheet or other third-party visual asset is bundled or required at runtime.
+- Added a bounded, fail-closed `command.dat` parser with UTF-8 BOM, CRLF, DOS
+  EOF, alias, and canonical empty-sentinel support.
+- Matched the exact selected variant first, followed by clone and parent MAME
+  IDs, without adding command data to `games.json` or the scanner.
+- Opened an automatic non-modal, non-activating command-list companion only
+  after a successful tracked normal-game JGRF launch and closed it with that
+  exact PID; benchmark and one-shot WAV sessions remain unaffected.
+- Kept the companion entirely in Goliath; JGRF, JG, and Geolith remain
+  unmodified, and the external catalog is neither bundled nor downloaded.
+- Added focused parser and lookup regression coverage. The supplied 0.273
+  catalog was accepted as 231 command entries and 857 unique IDs.
+- Advanced the development identity to version `0.32.11` and build `patch32k`.
 
 ---
 

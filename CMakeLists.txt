@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 # Development versioning follows Patch NN[A-Z] -> 0.NN.letter-index.
-project(goliath-qt VERSION 0.31.4 LANGUAGES CXX C)
+project(goliath-qt VERSION 0.32.12 LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -25,7 +25,7 @@ set(GOLIATH_LICENSE_URL "https://www.gnu.org/licenses/gpl-3.0.html" CACHE STRING
     "Published Goliath license URL shown by About Goliath")
 
 if(NOT GOLIATH_BUILD_REVISION)
-    set(GOLIATH_BUILD_REVISION "patch31d")
+    set(GOLIATH_BUILD_REVISION "patch32l")
     find_package(Git QUIET)
     if(Git_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
         execute_process(
@@ -52,6 +52,8 @@ endfunction()
 
 add_library(goliath-core STATIC
     src/game/audio_export.cpp
+    src/game/command_dat.cpp
+    src/game/command_notation.cpp
     src/game/game_model.cpp
     src/game/game_library_state.cpp
     src/game/game_playtime.cpp
@@ -124,9 +126,11 @@ add_executable(goliath-qt
     assets/app_icon.qrc
     src/main.cpp
     src/ui/about_dialog.cpp
+    src/ui/command_dialog.cpp
     src/ui/main_window.cpp
     src/ui/main_window_ui.cpp
     src/ui/main_window_library.cpp
+    src/ui/widgets/command_notation_view.cpp
     src/ui/widgets/title_bar.cpp
     src/common/theme.cpp
     src/common/paths.cpp
@@ -251,6 +255,8 @@ if(BUILD_TESTS)
         tests/test_input_maps.cpp
         tests/test_audio.cpp
         tests/test_audio_export.cpp
+        tests/test_command_dat.cpp
+        tests/test_command_notation.cpp
         tests/test_jollygood_benchmark.cpp
         tests/test_jollygood_bios.cpp
         tests/test_settings_fields.cpp

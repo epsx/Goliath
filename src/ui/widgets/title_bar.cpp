@@ -333,7 +333,7 @@ void ResizeFilter::updateCursor() {
 
 void setupFramelessDialog(QDialog* dialog, const QString& title,
                           QVBoxLayout** contentLayout, bool resizable,
-                          bool showMinMax) {
+                          bool showMinMax, bool showTitleBar) {
     if (!dialog) return;
 
     dialog->setWindowTitle(title);
@@ -348,7 +348,8 @@ void setupFramelessDialog(QDialog* dialog, const QString& title,
     outerLayout->setContentsMargins(1, 1, 1, 1);
     outerLayout->setSpacing(0);
 
-    outerLayout->addWidget(new TitleBar(dialog, showMinMax));
+    if (showTitleBar)
+        outerLayout->addWidget(new TitleBar(dialog, showMinMax));
 
     auto* content = new QWidget(dialog);
     content->setObjectName("dialog_content");

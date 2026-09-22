@@ -4,6 +4,8 @@
 #include "game/jollygood_executable.hpp"
 #include "game/geolith_capabilities.hpp"
 
+#include <QCryptographicHash>
+#include <QFile>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QLabel>
@@ -31,6 +33,26 @@ QLabel* valueLabel(const QString& initial = "Not checked") {
     return label;
 }
 
+#if defined(_WIN32)
+// These hashes identify the Windows JGRF/libepoxy pair validated with
+// OpenGL ES on MVS/AES and Neo Geo CD CHD. --help alone cannot report the
+// runtime BGRA fix; a different build remains unverified.
+bool matchesSha256(const fs::path& path, const char* expected) {
+    QFile file(QString::fromStdString(path.string()));
+    if (!file.open(QIODevice::ReadOnly)) return false;
+    QCryptographicHash hash(QCryptographicHash::Sha256);
+    return hash.addData(&file) && hash.result().toHex() == expected;
+}
+
+bool hasVerifiedEsBgraPair(const fs::path& jgrfExe) {
+    return !jgrfExe.empty() &&
+           matchesSha256(jgrfExe,
+                         "af010059dac1696873e9f9c5dd46554c924ffe8b80f9ee43218c689640732011") &&
+           matchesSha256(jgrfExe.parent_path() / "libepoxy-0.dll",
+                         "50ff6e67ccc5d76bd3bc157eb26a7fbe1a15743574b3f0fa1de50eb997c79da3");
+}
+#endif
+
 } // namespace
 
 InfoTab::InfoTab(fs::path jollygoodExe, QWidget* parent)
@@ -46,9 +68,14 @@ void InfoTab::setupUi() {
     m_jgrfVersion = valueLabel();
     m_jgrfExecutable = valueLabel();
     m_vulkanRenderer = valueLabel();
+    m_esBgraRenderer = valueLabel();
+    m_esBgraRenderer->setToolTip(
+        "Checks the exact Windows JGRF and libepoxy builds tested with OpenGL ES. "
+        "Other builds require a game test; file identity alone cannot verify a PC's graphics driver.");
     jgrfForm->addRow("Version:", m_jgrfVersion);
     jgrfForm->addRow("Executable:", m_jgrfExecutable);
     jgrfForm->addRow("Vulkan Renderer:", m_vulkanRenderer);
+    jgrfForm->addRow("OpenGL ES/BGRA:", m_esBgraRenderer);
     layout->addWidget(jgrfGroup);
 
     auto* coreGroup = new QGroupBox("Geolith Core");
@@ -94,6 +121,7 @@ void InfoTab::refresh() {
     m_jgrfVersion->setText("Detecting...");
     m_jgrfExecutable->setText("Detecting...");
     m_vulkanRenderer->setText("Detecting...");
+    m_esBgraRenderer->setText("Detecting...");
     m_geolithVersion->setText("Detecting...");
     m_coreLibrary->setText("Detecting...");
     m_neocdFormats->setText("Detecting...");
@@ -102,6 +130,7 @@ void InfoTab::refresh() {
     m_status->setText("Reading installed JGRF / Geolith information...");
     m_jgrfProbeOk = false;
     m_coreProbeOk = false;
+    m_esBgraPairVerified = false;
     m_jgrfError.clear();
     m_coreError.clear();
 
@@ -116,6 +145,7 @@ void InfoTab::startJgrfProbe() {
         m_jgrfVersion->setText("Unavailable");
         m_jgrfExecutable->setText(QString::fromStdString(m_jollygoodExe.string()));
         m_vulkanRenderer->setText("Unknown");
+        m_esBgraRenderer->setText("Unavailable");
         m_jgrfError = "Configured JGRF executable was not found.";
         return;
     }
@@ -190,14 +220,21 @@ void InfoTab::startCoreProbe() {
 
     m_corePending = true;
     auto result = std::make_shared<GeolithCapabilities>();
+    auto verifiedEsBgra = std::make_shared<bool>(false);
     QThread* worker = QThread::create(
-        [result, configured = m_jollygoodExe]() {
+        [result, verifiedEsBgra, configured = m_jollygoodExe, exe]() {
             *result = probe_geolith_capabilities(configured);
+#if defined(_WIN32)
+            *verifiedEsBgra = hasVerifiedEsBgraPair(exe);
+#else
+            (void)exe;
+#endif
         });
 
     // finished() is queued to this tab. Qt removes the connection if the tab
     // is destroyed first, so the worker never dereferences UI state directly.
-    connect(worker, &QThread::finished, this, [this, result]() {
+    connect(worker, &QThread::finished, this, [this, result, verifiedEsBgra]() {
+        m_esBgraPairVerified = *verifiedEsBgra;
         if (result->success) {
             m_geolithVersion->setText(QString::fromStdString(result->version));
             m_jgApiVersion->setText(QString::fromStdString(result->api_version));
@@ -242,6 +279,15 @@ void InfoTab::updateRefreshState() {
     if (m_refreshButton) m_refreshButton->setEnabled(!busy);
 
     if (!busy) {
+#if defined(_WIN32)
+        m_esBgraRenderer->setText(!m_jgrfProbeOk
+                                      ? "Unknown"
+                                      : m_esBgraPairVerified
+                                            ? "Compatible (verified build)"
+                                            : "Unverified build");
+#else
+        m_esBgraRenderer->setText("Windows fix not applicable");
+#endif
         if (m_jgrfProbeOk && m_coreProbeOk) {
             m_status->setText(
                 "Information was read from the installed components. Use Refresh after replacing JGRF or Geolith files.");
