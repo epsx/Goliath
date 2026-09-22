@@ -5,9 +5,9 @@ source tree or redistributed in the audited Windows portable build. Each
 component remains under its own license. Nothing in Goliath's GPL license
 relicenses these components.
 
-The exact license texts and Qt SPDX SBOM are under `licenses/`. The portable
-package must retain this document, `LICENSE`, and the complete `licenses/`
-directory.
+The license texts from the audited source and installed runtime packages are
+under `licenses/`. The portable package must retain this document, `LICENSE`,
+and the complete `licenses/` directory.
 
 ## Source dependencies
 
@@ -75,35 +75,35 @@ project author's direction. It is not derived from the Jolly Good icon.
 
 ## Windows runtime packages
 
-The audited portable build uses the following MSYS2 UCRT64 packages. The
-complete installed license directory for every listed package is retained
-under `licenses/msys2/`; alternative license texts are preserved where an
-upstream package supplies more than one option.
+The Windows frontend audited from GitHub Actions run `35733913007` uses the
+following MSYS2 UCRT64 runtime packages. CI checks these package versions
+before staging subsequent Windows archives.
+The staged Windows archive contains the installed license directories of its
+runtime DLL packages under `licenses/msys2/`; alternative license texts are
+preserved where an upstream package supplies more than one option.
 
 | Component | Audited package version | Selected/disclosed license |
 | --- | --- | --- |
-| Qt Base | 6.11.1-1 | LGPL-3.0-only for the redistributed Qt DLLs and plugins; Qt's bundled third-party material retains the licenses in its SBOM |
-| SDL3 | 3.4.12-1 | Zlib |
+| Qt Base | 6.11.2-2 | LGPL-3.0-only for the redistributed Qt DLLs and plugins; Qt's bundled third-party material retains its own license terms |
+| SDL3 | 3.4.16-1 | Zlib |
 | libb2 | 0.98.1-3 | CC0-1.0 |
 | Brotli | 1.2.0-1 | MIT |
-| bzip2 | 1.0.8-3 | bzip2 license |
+| bzip2 | 1.0.8-4 | bzip2 license |
 | double-conversion | 3.4.0-1 | BSD-3-Clause |
-| libepoxy | 1.5.10-7 | MIT |
-| libffi | 3.7.1-1 | MIT |
+| libffi | 3.8.0-1 | MIT |
 | FreeType | 2.14.3-1 | FreeType License selected from its FTL/GPL dual license |
-| GCC runtime libraries | 16.1.0-5 | GPL-3.0-or-later WITH GCC-exception-3.1 and applicable LGPL terms |
-| GLib | 2.88.2-1 | LGPL-2.1-or-later |
+| GCC runtime libraries (libgcc, libstdc++) | 16.2.0-4 | GPL-3.0-or-later WITH GCC-exception-3.1 and applicable LGPL terms |
+| GLib | 2.90.0-1 | LGPL-2.1-or-later |
 | Graphite2 | 1.3.15-1 | LGPL-2.1-or-later |
-| HarfBuzz | 14.2.1-1 | MIT |
+| HarfBuzz | 14.5.0-1 | MIT |
 | GNU libiconv/libcharset | 1.19-1 | LGPL-2.1-or-later; package documentation retains its separate terms |
 | libjpeg-turbo | 3.2.0-1 | BSD-style terms with the complete IJG and other upstream notices retained |
-| ICU | 78.3-3 | ICU license |
+| ICU | 78.3-4 | ICU license |
 | gettext runtime | 1.0-1 | LGPL-2.1-or-later for the runtime library; all package notices are retained |
 | md4c | 0.5.3-1 | MIT |
-| PCRE2 | 10.47-1 | BSD-3-Clause with the package's binary-like-packages exception where applicable |
+| PCRE2 | 10.48-3 | BSD-3-Clause with the package's binary-like-packages exception where applicable |
 | libpng | 1.6.58-1 | libpng license |
-| SpeexDSP | 1.2.1-1 | BSD-style license |
-| winpthreads | 14.0.0.r220.gd999af622-1 | MIT and BSD-3-Clause-Clear |
+| libwinpthread | 14.0.0.r420.g61d40c4c0-1 | MIT and BSD-3-Clause-Clear |
 | zstd | 1.5.7-2 | BSD-3-Clause selected from its BSD/GPL dual license |
 | zlib | 1.3.2-2 | Zlib |
 
@@ -111,9 +111,11 @@ The audited Qt deployment contains `Qt6Core.dll`, `Qt6Gui.dll`,
 `Qt6Network.dll`, `Qt6Widgets.dll`, and the plugins selected by
 `windeployqt6.exe` under `generic/`, `imageformats/`, `networkinformation/`,
 `platforms/`, `styles/`, and `tls/`. They are dynamically linked and may be
-replaced by the user with interface-compatible builds. The Qt Base 6.11.1
-SPDX document and its full installed license set are in
-`licenses/msys2/qt6-base/`.
+replaced by the user with interface-compatible builds. The Qt Base 6.11.2-2
+package's full installed license set is in `licenses/msys2/qt6-base/`. This
+package does not install an SPDX document. The corresponding Qt Base upstream
+source, MSYS2 recipe, and patches are available in
+`mingw-w64-qt6-base-6.11.2-2.src.tar.zst` alongside the release.
 
 Goliath's Windows build statically links eligible GCC runtime and winpthreads
 code under their runtime-library exceptions and license terms. JGRF and

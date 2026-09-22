@@ -19,6 +19,11 @@ visible-only Random smoke tests.
 
 ## Unreleased — optional command.dat companion candidate
 
+- Audited the Windows CI artifact against the exact Qt Base 6.11.2-2 package:
+  `Qt6Core.dll` matches by SHA-256. Replaced the obsolete Qt 6.11.1 SPDX
+  reference with the installed 6.11.2 license set, refreshed the MSYS2 runtime
+  versions in the notices, and require the staging job to take DLL license
+  directories from its installed packages before regenerating their checksums.
 - Updated Windows CI staging for MSYS2's split GCC runtime packages: preserve
   the installed `libgcc` and `libstdc++` license directories and hash every
   copied notice while keeping the missing-license check for other DLLs.
