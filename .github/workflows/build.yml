@@ -94,6 +94,35 @@ jobs:
             sha256sum -c SHA256SUMS
           )
 
+          # MSYS2 split the GCC runtime DLLs out of gcc-libs. Copy the exact
+          # installed license directories for those two split packages, then
+          # add every copied file to the staged hash manifest. Older MSYS2
+          # installations continue to use the bundled gcc-libs directory.
+          for split in libgcc 'libstdc++'; do
+            installed_licenses="/ucrt64/share/licenses/$split"
+            if [ ! -d "$installed_licenses" ]; then
+              continue
+            fi
+            for notice in COPYING.RUNTIME COPYING3; do
+              test -f "$installed_licenses/$notice" || {
+                echo "Missing $notice in $installed_licenses" >&2
+                exit 1
+              }
+            done
+            test ! -e "$stage/licenses/msys2/$split"
+            cp -R "$installed_licenses" "$stage/licenses/msys2/$split"
+            (
+              cd "$stage/licenses"
+              while IFS= read -r -d '' notice_file; do
+                sha256sum -- "$notice_file" >> SHA256SUMS
+              done < <(find "./msys2/$split" -type f -print0 | sort -z)
+            )
+          done
+          (
+            cd "$stage/licenses"
+            sha256sum -c SHA256SUMS
+          )
+
           missing_license=0
           while IFS= read -r -d '' runtime; do
             filename=$(basename "$runtime")

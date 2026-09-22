@@ -19,6 +19,9 @@ visible-only Random smoke tests.
 
 ## Unreleased — optional command.dat companion candidate
 
+- Updated Windows CI staging for MSYS2's split GCC runtime packages: preserve
+  the installed `libgcc` and `libstdc++` license directories and hash every
+  copied notice while keeping the missing-license check for other DLLs.
 - Added an Info-tab OpenGL ES/BGRA indicator for the exact Windows JGRF and
   libepoxy builds tested with MVS/AES and Neo Geo CD CHD. Other builds are
   marked unverified; the indicator does not claim driver-level compatibility.
