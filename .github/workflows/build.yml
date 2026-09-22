@@ -143,6 +143,20 @@ jobs:
               -mindepth 1 -maxdepth 1 -type d \
               -iname "$license_dir" -print -quit)
             if [ -z "$installed_licenses" ]; then
+              # ICU installs its license with the data files, outside the
+              # common MSYS2 license tree. Confirm the exact audited package
+              # owns that file before refreshing the staged ICU notice.
+              if [ "$package" = 'mingw-w64-ucrt-x86_64-icu' ]; then
+                icu_license='/ucrt64/share/icu/78.3/LICENSE'
+                if [ ! -f "$icu_license" ] || \
+                    [ "$(pacman -Qoq "$icu_license")" != "$package" ]; then
+                  printf 'Missing package-owned ICU license: %s\n' \
+                    "$icu_license" >&2
+                  exit 1
+                fi
+                cp -- "$icu_license" "$stage/licenses/msys2/icu/LICENSE"
+                continue
+              fi
               printf 'Missing installed licenses for %s (%s)\n' \
                 "$filename" "$package" >&2
               exit 1

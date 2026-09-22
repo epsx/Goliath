@@ -19,6 +19,9 @@ visible-only Random smoke tests.
 
 ## Unreleased — optional command.dat companion candidate
 
+- Corrected the Windows CI license staging for ICU 78.3-4: MSYS2 installs its
+  package-owned notice in `/ucrt64/share/icu/78.3/LICENSE`, outside the
+  common license directory. The build verifies ownership before copying it.
 - Audited the Windows CI artifact against the exact Qt Base 6.11.2-2 package:
   `Qt6Core.dll` matches by SHA-256. Replaced the obsolete Qt 6.11.1 SPDX
   reference with the installed 6.11.2 license set, refreshed the MSYS2 runtime
