@@ -9,11 +9,13 @@
 #include "ui/game_profile_dialog.hpp"
 #include "ui/library_view_logic.hpp"
 #include "ui/save_data_dialog.hpp"
+#include "ui/recording_id.hpp"
 
 #include <QAction>
 #include <QActionGroup>
 #include <QAbstractItemView>
 #include <QComboBox>
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QDesktopServices>
 #include <QFileInfo>
@@ -340,6 +342,7 @@ std::vector<int> MainWindow::sortedGameOrder() const {
 }
 
 void MainWindow::populateTree() {
+    refreshCommandCatalog();
     // Column 1 exists only for Neo Geo CD verification badges.  Hiding it for
     // MVS/AES keeps the cartridge library visually single-column instead of
     // leaving an empty CD badge section/seam in every row.
@@ -358,15 +361,16 @@ void MainWindow::populateTree() {
             m_gameLibraryState.is_favorite(game.system, *parentMedia);
         if (parentFavorite) {
             parentText.prepend(QString::fromUtf8("\xE2\x98\x85 ")); // ★
-            parentTooltip = "This exact media item is in Favorites.";
         }
         if (game.main_rom.has_value() &&
             m_gameProfiles.find(game.system, *game.main_rom)) {
             parentText += QString::fromUtf8(" \xE2\x9A\x99");
-            if (!parentTooltip.isEmpty()) parentTooltip += "\n\n";
             parentTooltip +=
                 "A per-game launch profile is active for this media. "
                 "Right-click and choose Game settings to inspect or reset it.";
+        }
+        if (hasCommands(game, -1)) {
+            parentText += QString::fromUtf8(" \xF0\x9F\x91\x8A"); // 👊
         }
         parentItem->setText(0, parentText);
         if (!parentTooltip.isEmpty()) parentItem->setToolTip(0, parentTooltip);
@@ -397,8 +401,6 @@ void MainWindow::populateTree() {
             QString childTooltip = variantFullName(rom);
             if (m_gameLibraryState.is_favorite(game.system, rom.file)) {
                 childText.prepend(QString::fromUtf8("\xE2\x98\x85 ")); // ★
-                if (!childTooltip.isEmpty()) childTooltip += "\n\n";
-                childTooltip += "This exact variant is in Favorites.";
             }
             if (m_gameProfiles.find(game.system, rom.file)) {
                 childText += QString::fromUtf8(" \xE2\x9A\x99");
@@ -406,6 +408,9 @@ void MainWindow::populateTree() {
                 childTooltip +=
                     "A per-game launch profile is active for this variant. "
                     "Right-click and choose Game settings to inspect or reset it.";
+            }
+            if (hasCommands(game, romIdx)) {
+                childText += QString::fromUtf8(" \xF0\x9F\x91\x8A"); // 👊
             }
             childItem->setText(0, childText);
             childItem->setToolTip(0, childTooltip);
@@ -588,8 +593,6 @@ void MainWindow::clearDetailsForNoSelection(bool filtered) {
         m_favoriteButton->setChecked(false);
         m_favoriteButton->setText(
             QString::fromUtf8("\xE2\x98\x86 Favorite")); // ☆
-        m_favoriteButton->setToolTip(
-            "Select a parent, variant, CUE, or CHD to add it to Favorites");
     }
     updateRatingButtons(0, false);
 
@@ -671,9 +674,6 @@ void MainWindow::updateSelection() {
         m_favoriteButton->setText(favorite
             ? QString::fromUtf8("\xE2\x98\x85 Favorite")
             : QString::fromUtf8("\xE2\x98\x86 Favorite"));
-        m_favoriteButton->setToolTip(favorite
-            ? "Remove the selected exact media item from Favorites"
-            : "Add the selected exact media item to Favorites");
     }
     updateRatingButtons(rating, playtimeMedia.has_value());
 
@@ -760,7 +760,9 @@ void MainWindow::updateSelection() {
 
         loadSnapshotFor(
             game.snapshot.has_value() ? QString::fromStdString(*game.snapshot) : QString(),
-            game.short_name);
+            game.short_name,
+            game.system == "neogeocd"
+                ? selected_launch_media(game, -1).value_or("") : "");
 
         m_historyText->setText(
             game.history.has_value() ? QString::fromStdString(*game.history) : QString());
@@ -776,7 +778,8 @@ void MainWindow::updateSelection() {
         QStringLiteral("Selected variant: ") + fullName);
     m_variantLabel->setToolTip(fullName);
 
-    loadSnapshotFor(resolveSnapshot(rom.mame, game.short_name));
+    loadSnapshotFor(resolveSnapshot(rom.mame, game.short_name), rom.mame,
+                    game.system == "neogeocd" ? rom.file : "");
     m_historyText->setText(
         game.history.has_value() ? QString::fromStdString(*game.history) : QString());
     finishDetailsUpdate();
@@ -793,7 +796,8 @@ QString MainWindow::resolveSnapshot(const std::string& shortName, const std::str
     return QString();
 }
 
-void MainWindow::loadSnapshotFor(QString path, const std::string& shortFallback) {
+void MainWindow::loadSnapshotFor(QString path, const std::string& shortFallback,
+                                 const std::string& recordingMedia) {
     bool pathValid = !path.isEmpty() && fs::exists(path.toStdString());
     if (!pathValid && !shortFallback.empty()) {
         fs::path fallback = m_snapDir / (shortFallback + ".png");
@@ -804,17 +808,27 @@ void MainWindow::loadSnapshotFor(QString path, const std::string& shortFallback)
             pathValid = false;
         }
     }
+    if (!pathValid) path.clear();
+    const QString romId = QString::fromStdString(shortFallback);
+    const QString recordingId = recordingMedia.empty() ? QString()
+        : recordingIdForMedia(QString::fromStdString(recordingMedia));
+    if (!romId.isEmpty() && romId == m_galleryRomId &&
+        path == m_gallerySnapshotPath &&
+        recordingId == m_galleryRecordingId) return;
+    stopGalleryMovie();
+    m_galleryRomId = romId;
+    m_galleryRecordingId = recordingId;
+    m_gallerySnapshotPath = path;
+    m_gallerySnapshot = QPixmap();
     if (pathValid) {
         QPixmap pixmap(path);
         if (!pixmap.isNull()) {
-            pixmap = pixmap.scaled(500, 370, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-            m_snapshotLabel->setPixmap(pixmap);
-            m_snapshotLabel->setText("");
-            return;
+            m_gallerySnapshot = pixmap.scaled(m_snapshotLabel->size(),
+                                              Qt::KeepAspectRatio,
+                                              Qt::SmoothTransformation);
         }
     }
-    m_snapshotLabel->setPixmap(QPixmap());
-    m_snapshotLabel->setText("No snapshot available");
+    refreshGameGallery();
 }
 
 void MainWindow::filterGames(const QString& text) {
@@ -1282,6 +1296,9 @@ void MainWindow::updateFiltersButton() {
     m_filtersButton->setText(activeCount == 0
         ? "Filters"
         : QString("Filters (%1)").arg(activeCount));
+#if defined(GOLIATH_X11_CAPTURE)
+    m_filtersButton->setText(m_filtersButton->text() + QString::fromUtf8(" \xE2\x96\xBC"));
+#endif
     m_filtersButton->setToolTip(activeCount == 0
         ? "Show variants or filter the library by rating or playtime"
         : descriptions.join("\n"));
@@ -1661,7 +1678,7 @@ void MainWindow::showTreeContextMenu(const QPoint& pos) {
     menu.addAction("Export audio WAV...", this,
                    &MainWindow::exportSelectedAudio);
     menu.addAction("Game settings...", this, &MainWindow::openGameSettings);
-    menu.addAction("Manage save data...", this, &MainWindow::manageSaveData);
+    menu.addAction("Save Data Manager...", this, &MainWindow::manageSaveData);
     menu.addAction("Benchmark...", this, &MainWindow::benchmarkSelected);
     menu.addSeparator();
     menu.addAction("Open ROM folder", this, &MainWindow::openRomFolder);
@@ -1670,6 +1687,22 @@ void MainWindow::showTreeContextMenu(const QPoint& pos) {
     if (gameIdx >= 0 && gameIdx < static_cast<int>(m_games.size())) {
         const Game& game = m_games[gameIdx];
         const auto media = selected_launch_media(game, romIdx);
+        const QString romId = QString::fromStdString(
+            romIdx >= 0 && romIdx < static_cast<int>(game.roms.size())
+                ? game.roms[romIdx].mame : game.short_name);
+        const QString recordingId = game.system == "neogeocd" && media.has_value()
+            ? recordingIdForMedia(QString::fromStdString(*media)) : romId;
+        QString gifFolder = recordingFolderWithGifs(
+            QCoreApplication::applicationDirPath(), recordingId);
+        if (gifFolder.isEmpty()) {
+            gifFolder = legacyGifFolder(QString::fromStdWString(
+                (m_paths.data_dir / "goliath" / "screenshots").wstring()), romId);
+        }
+        if (!gifFolder.isEmpty()) {
+            menu.addAction("Open GIF folder", this, [this, gifFolder]() {
+                revealInExplorer(gifFolder);
+            });
+        }
         if (media.has_value() && m_gameProfiles.find(game.system, *media)) {
             menu.addAction("Open per-game config folder", this,
                            &MainWindow::openGameConfigFolder);
@@ -1760,7 +1793,7 @@ void MainWindow::updateStatus() {
     if (visible != count) {
         message += QString("  (showing %1 of %2)").arg(visible).arg(count);
     }
-    statusBar()->showMessage(message);
+    m_libraryStatusLabel->setText(message);
 }
 
 void MainWindow::restoreSelection(const QString& preferredRom) {

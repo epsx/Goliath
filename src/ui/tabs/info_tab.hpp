@@ -13,10 +13,13 @@ class QPushButton;
 
 namespace goliath {
 
+class Config;
+
 class InfoTab : public QWidget {
     Q_OBJECT
 public:
-    explicit InfoTab(std::filesystem::path jollygoodExe, QWidget* parent = nullptr);
+    InfoTab(std::filesystem::path jollygoodExe, const Config& config,
+            QWidget* parent = nullptr);
 
     // Called when the tab becomes visible. The first activation probes the
     // installed components; later activations reuse the result until Refresh.
@@ -29,11 +32,15 @@ private:
     void setupUi();
     void startJgrfProbe();
     void startCoreProbe();
+    void startLithogenProbe();
+    void probeLithogenVersion(const QString& argument);
     void finishJgrfProbe();
     void finishCoreProbe();
+    void finishLithogenProbe();
     void updateRefreshState();
 
     std::filesystem::path m_jollygoodExe;
+    const Config& m_config;
 
     QLabel* m_jgrfVersion = nullptr;
     QLabel* m_jgrfExecutable = nullptr;
@@ -44,13 +51,18 @@ private:
     QLabel* m_neocdFormats = nullptr;
     QLabel* m_chdSupport = nullptr;
     QLabel* m_jgApiVersion = nullptr;
+    QLabel* m_lithogenVersion = nullptr;
+    QLabel* m_lithogenExecutable = nullptr;
+    QLabel* m_lithogenAvailability = nullptr;
     QLabel* m_status = nullptr;
     QPushButton* m_refreshButton = nullptr;
 
     QProcess* m_jgrfProcess = nullptr;
+    QProcess* m_lithogenProcess = nullptr;
     bool m_activated = false;
     bool m_jgrfPending = false;
     bool m_corePending = false;
+    bool m_lithogenPending = false;
     bool m_jgrfProbeOk = false;
     bool m_coreProbeOk = false;
     bool m_esBgraPairVerified = false;

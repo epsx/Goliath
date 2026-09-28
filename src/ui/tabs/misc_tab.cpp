@@ -58,7 +58,7 @@ void MiscTab::setupUi() {
     connect(saveBtn, &QPushButton::clicked, this, &MiscTab::save);
     buttonRow->addWidget(saveBtn);
 
-    auto* resetBtn = new QPushButton(QString::fromUtf8("\xE2\x86\xBB Reset to Defaults"));
+    auto* resetBtn = new QPushButton("Reset to Defaults");
     connect(resetBtn, &QPushButton::clicked, this, &MiscTab::resetDefaults);
     buttonRow->addWidget(resetBtn);
     layout->addLayout(buttonRow);

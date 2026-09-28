@@ -50,6 +50,8 @@ const std::vector<Theme>& all_themes() {
     static const std::vector<Theme> themes = {
         {"Dark Modern", "#121212", "#1a1a1a", "#1e1e1e", "#2a2a2a",
          "#3daee9", "#50b8e8", "#28a745", "#dc3545", "#e0e0e0", "#c0c0c0", "#333333", 8},
+        {"AMOLED Black", "#000000", "#090909", "#141414", "#1f1f1f",
+         "#d8aa45", "#f0c264", "#4caf50", "#ef5350", "#f5f1e8", "#bdb6a6", "#303030", 8},
         {"Dracula", "#282a36", "#44475a", "#6272a4", "#44475a",
          "#bd93f9", "#caa9fa", "#50fa7b", "#ff5555", "#f8f8f2", "#bfbfbf", "#6272a4", 10},
         {"Tokyo Night", "#1a1b26", "#16161e", "#2a2b3d", "#363b54",
@@ -428,6 +430,25 @@ QTabBar::tab:hover:!selected {
     background-color: @bg_hover@;
 }
 
+QPushButton#gallery_mode_button {
+    color: @text_primary@;
+    background-color: @bg_secondary@;
+    border: 1px solid @border@;
+    border-radius: 6px;
+    font-weight: 600;
+    padding: 0;
+}
+
+QPushButton#gallery_mode_button:hover:!checked {
+    background-color: @bg_hover@;
+}
+
+QPushButton#gallery_mode_button:checked {
+    color: @on_accent@;
+    background-color: @accent@;
+    border-color: @accent@;
+}
+
 QGroupBox {
     color: @text_primary@;
     font-weight: bold;
@@ -525,12 +546,6 @@ QDialog {
     background-color: @bg_primary@;
 }
 
-/* The one-pixel top-level contents margin exposes this themed perimeter. */
-QMainWindow#frameless_window,
-QDialog#frameless_window {
-    background-color: @border@;
-}
-
 QStatusBar {
     color: @text_secondary@;
     background-color: @bg_secondary@;
@@ -539,6 +554,10 @@ QStatusBar {
 
 QStatusBar::item {
     border: none;
+}
+
+QLabel#library_status {
+    color: @text_secondary@;
 }
 
 /* Custom Title Bar */
@@ -653,11 +672,11 @@ QLabel#variant_label {
     font-size: 11px;
 }
 
-QFrame#details_separator {
-    color: @border@;
-    background-color: @border@;
-    border: none;
-    max-height: 1px;
+QFrame#details_header_card,
+QFrame#details_info_card {
+    background-color: @bg_secondary@;
+    border: 1px solid @border@;
+    border-radius: @border_radius@px;
 }
 
 QFrame#snapshot_card {

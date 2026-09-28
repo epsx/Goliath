@@ -124,6 +124,7 @@ bool preserves_branch_tokens(const std::string& stylesheet) {
 TEST_CASE("theme catalog exposes balanced dark and light palettes", "[theme]") {
     const std::vector<std::string> expected_keys = {
         "Dark Modern",
+        "AMOLED Black",
         "Dracula",
         "Tokyo Night",
         "Nord",
@@ -147,6 +148,24 @@ TEST_CASE("theme catalog exposes balanced dark and light palettes", "[theme]") {
         CHECK(valid_theme(themes[index]));
         CHECK((themes[index].border_radius >= 4 &&
                themes[index].border_radius <= 10));
+    }
+}
+
+TEST_CASE("details header and information use theme-aware cards",
+          "[theme][details]") {
+    for (const Theme& theme : all_themes()) {
+        INFO("theme=" << theme.key);
+        const std::string stylesheet = generate_theme_style(theme);
+        CHECK(stylesheet.find("QFrame#details_header_card") !=
+              std::string::npos);
+        CHECK(stylesheet.find("QFrame#details_info_card") !=
+              std::string::npos);
+        const std::string card_style =
+            "    background-color: " + theme.bg_secondary + ";\n"
+            "    border: 1px solid " + theme.border + ";\n"
+            "    border-radius: " + std::to_string(theme.border_radius) +
+            "px;";
+        CHECK(stylesheet.find(card_style) != std::string::npos);
     }
 }
 
@@ -190,15 +209,13 @@ TEST_CASE("disabled Launch button uses inactive theme colors", "[theme][launch]"
     }
 }
 
-TEST_CASE("frameless windows receive a theme-aware perimeter", "[theme]") {
+TEST_CASE("frameless windows do not add an outer theme perimeter", "[theme]") {
     for (const Theme& theme : all_themes()) {
         INFO("theme=" << theme.key);
-        const std::string expected_rule =
-            "QMainWindow#frameless_window,\n"
-            "QDialog#frameless_window {\n"
-            "    background-color: " + theme.border + ";\n"
-            "}";
-        CHECK(generate_theme_style(theme).find(expected_rule) !=
+        const std::string stylesheet = generate_theme_style(theme);
+        CHECK(stylesheet.find("QMainWindow#frameless_window") ==
+              std::string::npos);
+        CHECK(stylesheet.find("QDialog#frameless_window") ==
               std::string::npos);
     }
 }

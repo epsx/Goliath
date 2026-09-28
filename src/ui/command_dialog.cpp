@@ -1,22 +1,32 @@
 #include "ui/command_dialog.hpp"
 
+#include "common/debug_logger.hpp"
 #include "ui/widgets/command_notation_view.hpp"
 #include "ui/widgets/title_bar.hpp"
 
 #include <QCheckBox>
+#include <QCloseEvent>
+#include <QCryptographicHash>
 #include <QEvent>
+#include <QDir>
+#include <QFileInfo>
 #include <QFontDatabase>
 #include <QGuiApplication>
 #include <QHBoxLayout>
+#include <QHideEvent>
 #include <QKeyEvent>
 #include <QKeySequence>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMouseEvent>
 #include <QPlainTextEdit>
+#include <QPoint>
 #include <QScreen>
+#include <QScrollBar>
+#include <QSettings>
 #include <QShortcut>
 #include <QSlider>
+#include <QShowEvent>
 #include <QStackedWidget>
 #include <QTextBlock>
 #include <QTextCursor>
@@ -33,10 +43,15 @@ namespace goliath {
 CommandDialog::CommandDialog(const QString& gameTitle,
                              const QString& matchedMameId,
                              const QString& commandText,
-                             const QString& inheritedStyleSheet)
+                             const QString& inheritedStyleSheet,
+                             const QString& positionFile,
+                             const QString& exactMediaKey)
     : QDialog(nullptr),
       m_inheritedStyleSheet(inheritedStyleSheet),
-      m_commandLines(commandText.split('\n', Qt::KeepEmptyParts)) {
+      m_commandLines(commandText.split('\n', Qt::KeepEmptyParts)),
+      m_positionFile(positionFile),
+      m_positionKey(QString::fromLatin1(QCryptographicHash::hash(
+          exactMediaKey.toUtf8(), QCryptographicHash::Sha256).toHex())) {
     setStyleSheet(inheritedStyleSheet);
     setAttribute(Qt::WA_ShowWithoutActivating);
     setAttribute(Qt::WA_TranslucentBackground);
@@ -80,6 +95,11 @@ CommandDialog::CommandDialog(const QString& gameTitle,
 
     auto* keepAbove = new QCheckBox("Keep above", controlBar);
     keepAbove->setChecked(true);
+    if (QGuiApplication::platformName() == "wayland") {
+        keepAbove->setToolTip(
+            "The Wayland compositor controls window stacking and may ignore "
+            "this setting. The overlay stays open when you change it.");
+    }
     controls->addWidget(keepAbove);
 
     m_backgroundLabel = new QLabel("72%", controlBar);
@@ -140,8 +160,12 @@ CommandDialog::CommandDialog(const QString& gameTitle,
 
     connect(visualNotation, &QCheckBox::toggled, this,
             [this](bool enabled) {
+                const int line = currentSourceLine();
                 m_viewStack->setCurrentIndex(enabled ? 0 : 1);
-                if (m_findMatchIndex >= 0) revealFindMatch();
+                if (m_findMatchIndex >= 0)
+                    revealFindMatch();
+                else
+                    scrollToSourceLine(line);
             });
 
     connect(m_findEdit, &QLineEdit::textChanged, this,
@@ -166,6 +190,14 @@ CommandDialog::CommandDialog(const QString& gameTitle,
             });
 
     connect(keepAbove, &QCheckBox::toggled, this, [this](bool enabled) {
+        if (QGuiApplication::platformName() == "wayland") {
+            // QWidget::setWindowFlag hides and recreates this dialog. On
+            // Wayland that loses the placement chosen by the compositor.
+            // Update the native window hint without hiding the widget.
+            if (QWindow* handle = windowHandle())
+                handle->setFlag(Qt::WindowStaysOnTopHint, enabled);
+            return;
+        }
         const QRect oldGeometry = geometry();
         setWindowFlag(Qt::WindowStaysOnTopHint, enabled);
         show();
@@ -178,6 +210,96 @@ CommandDialog::CommandDialog(const QString& gameTitle,
     applyPresentation();
     setMinimumSize(600, 420);
     resize(680, 760);
+    QTimer::singleShot(0, this, [this]() { restorePosition(); });
+}
+
+int CommandDialog::currentSourceLine() const {
+    if (m_viewStack->currentWidget() == m_rawView)
+        return std::max(0, m_rawView->cursorForPosition(QPoint(2, 2))
+                               .blockNumber());
+    return m_visualView->firstVisibleSourceLine();
+}
+
+void CommandDialog::scrollToSourceLine(int sourceLine) {
+    if (m_commandLines.isEmpty()) return;
+    const int line = std::clamp(sourceLine, 0,
+                                static_cast<int>(m_commandLines.size()) - 1);
+    m_visualView->scrollToSourceLine(line);
+    const QTextBlock block = m_rawView->document()->findBlockByNumber(line);
+    if (block.isValid()) {
+        QTextCursor cursor(m_rawView->document());
+        cursor.setPosition(block.position());
+        m_rawView->setTextCursor(cursor);
+        m_rawView->ensureCursorVisible();
+        m_rawView->verticalScrollBar()->setValue(line);
+    }
+}
+
+void CommandDialog::restorePosition() {
+    if (m_positionFile.isEmpty() || m_commandLines.isEmpty()) return;
+    QSettings settings(m_positionFile, QSettings::IniFormat);
+    settings.beginGroup(m_positionKey);
+    const int savedLine = settings.value("source_line", 0).toInt();
+    const QString savedText = settings.value("line_text").toString();
+    settings.endGroup();
+    int line = std::clamp(savedLine, 0,
+                          static_cast<int>(m_commandLines.size()) - 1);
+    if (!savedText.isEmpty() && m_commandLines[line] != savedText) {
+        const int found = m_commandLines.indexOf(savedText);
+        if (found >= 0) line = found;
+    }
+    scrollToSourceLine(line);
+    DebugLogger::logInfo(QString("restored command position from %1: line=%2")
+                             .arg(m_positionFile).arg(line));
+}
+
+void CommandDialog::savePosition() {
+    if (m_savedForThisDisplay || m_positionFile.isEmpty() ||
+        m_commandLines.isEmpty()) return;
+    const int line = std::clamp(currentSourceLine(), 0,
+                    static_cast<int>(m_commandLines.size()) - 1);
+    if (!QDir().mkpath(QFileInfo(m_positionFile).absolutePath())) {
+        DebugLogger::logError(QString("could not create command position folder: %1")
+                                  .arg(m_positionFile));
+        return;
+    }
+    QSettings settings(m_positionFile, QSettings::IniFormat);
+    settings.beginGroup(m_positionKey);
+    settings.setValue("source_line", line);
+    settings.setValue("line_text", m_commandLines[line]);
+    settings.endGroup();
+    settings.beginGroup("overlay");
+    // XDG Shell does not report usable top-level coordinates to Qt. Do not
+    // overwrite the real X11 geometry with Wayland's placeholder (0, 0).
+    if (QGuiApplication::platformName() != "wayland")
+        settings.setValue("geometry", saveGeometry());
+    settings.endGroup();
+    settings.sync();
+    if (settings.status() != QSettings::NoError) {
+        DebugLogger::logError(QString("could not save command position to %1: status=%2")
+                                  .arg(m_positionFile)
+                                  .arg(static_cast<int>(settings.status())));
+        return;
+    }
+    m_savedForThisDisplay = true;
+    DebugLogger::logInfo(QString("saved command position to %1: line=%2")
+                             .arg(m_positionFile).arg(line));
+}
+
+void CommandDialog::closeEvent(QCloseEvent* event) {
+    savePosition();
+    QDialog::closeEvent(event);
+}
+
+void CommandDialog::hideEvent(QHideEvent* event) {
+    // Esc/reject() can hide a QDialog without passing through closeEvent.
+    savePosition();
+    QDialog::hideEvent(event);
+}
+
+void CommandDialog::showEvent(QShowEvent* event) {
+    m_savedForThisDisplay = false;
+    QDialog::showEvent(event);
 }
 
 bool CommandDialog::eventFilter(QObject* watched, QEvent* event) {
@@ -316,7 +438,6 @@ void CommandDialog::applyPresentation() {
     const QString overlayStyle = QString(R"(
 QDialog#frameless_window {
     background-color: transparent;
-    border: 1px solid rgba(216, 224, 255, 150);
 }
 QWidget#dialog_content {
     background-color: rgba(8, 10, 22, %2);
@@ -409,6 +530,20 @@ QSlider#command_opacity_slider::handle:horizontal {
 }
 
 void CommandDialog::placeBeside(const QWidget* reference, int cascadeIndex) {
+    // DialogGeometryGuard handles every dialog but must not center this
+    // overlay after its explicitly restored or game-anchored placement.
+    setProperty("dialog_geometry_prepositioned", true);
+    if (!m_positionFile.isEmpty() && QGuiApplication::platformName() != "wayland") {
+        QSettings settings(m_positionFile, QSettings::IniFormat);
+        settings.beginGroup("overlay");
+        const QByteArray savedGeometry =
+            settings.value("geometry").toByteArray();
+        settings.endGroup();
+        // Qt restores onto a visible screen even when the monitor layout
+        // changed. Until a position is saved, retain the original placement.
+        if (!savedGeometry.isEmpty() && restoreGeometry(savedGeometry)) return;
+    }
+
     QScreen* targetScreen = reference ? reference->screen() : nullptr;
     if (!targetScreen) targetScreen = QGuiApplication::primaryScreen();
     if (!targetScreen) return;

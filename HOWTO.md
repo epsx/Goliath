@@ -65,16 +65,68 @@ compiler, Qt, SDL3, and Ninja toolchain.
 
 ### Linux
 
-Package names vary by distribution. A typical Debian-family setup is:
+Package names vary by distribution. When SDL3 development packages are
+available, a typical Debian-family setup is:
 
 ```bash
-sudo apt install \
-  build-essential \
-  cmake \
-  ninja-build \
-  qt6-base-dev \
-  libsdl3-dev
+sudo apt install build-essential cmake ninja-build qt6-base-dev libsdl3-dev
 ```
+
+Linux Mint 22.3 does not provide `libsdl3-dev` in its standard repositories.
+Install the build and X11 dependencies, then build SDL3 locally from the
+Goliath source directory:
+
+```bash
+sudo apt install git build-essential cmake ninja-build pkg-config \
+  qt6-base-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev \
+  libxfixes-dev libxi-dev libxss-dev libxtst-dev libxkbcommon-dev
+git clone --depth 1 --branch release-3.4.12 \
+  https://github.com/libsdl-org/SDL.git deps/SDL-release-3.4.12
+cmake -S deps/SDL-release-3.4.12 -B deps/sdl-build -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_INSTALL_PREFIX="$PWD/deps/sdl-local" \
+  -DCMAKE_INSTALL_LIBDIR=lib \
+  -DSDL_TEST_LIBRARY=OFF
+cmake --build deps/sdl-build -j4
+cmake --install deps/sdl-build
+```
+
+Configure, build, and test Goliath against that local SDL3 installation:
+
+```bash
+cmake -S . -B build -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DBUILD_TESTS=ON \
+  -DGOLIATH_REQUIRE_X11_CAPTURE=ON \
+  -DCMAKE_PREFIX_PATH="$PWD/deps/sdl-local"
+cmake --build build -j4
+LD_LIBRARY_PATH="$PWD/deps/sdl-local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+  ctest --test-dir build --output-on-failure
+```
+
+The current source supports the Qt 6.4 package shipped by Mint. Older source
+snapshots that call `QKeySequenceEdit::setMaximumSequenceLength()` require a
+newer Qt release.
+On Mint Cinnamon X11, regular dialogs such as **Settings** may have a shadow
+provided by the desktop compositor. This does not change Goliath's theme or
+imply that the same native shadow behavior is available on Windows.
+
+For one Linux binary that compiles both X11 and Wayland GIF capture, also
+install the Qt 6 D-Bus and PipeWire development files (`libpipewire-0.3-dev`
+on Debian-family distributions), then configure with both feature checks:
+
+```bash
+cmake -S . -B build -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DBUILD_TESTS=ON \
+  -DGOLIATH_REQUIRE_X11_CAPTURE=ON \
+  -DGOLIATH_REQUIRE_WAYLAND_CAPTURE=ON \
+  -DCMAKE_PREFIX_PATH="$PWD/deps/sdl-local"
+```
+
+Wayland recording additionally requires a working desktop portal and
+PipeWire service at runtime. The same executable chooses the X11 or Wayland
+capture path from Qt's active platform plugin.
 
 ---
 
@@ -292,12 +344,96 @@ database/hash_cache.json
 Goliath targets stock/upstream JGRF, JG, and Geolith. No private source patch is
 required.
 
+### Linux Mint 22.3: local JGRF and Geolith used for the X11 GIF test
+
+Run the commands below from the Goliath source directory after completing the
+local SDL3 build above. Build JG first:
+
+```bash
+sudo apt install git make pkg-config libspeexdsp-dev libepoxy-dev \
+  autoconf automake libtool glslang-tools
+export PKG_CONFIG_PATH="$PWD/deps/sdl-local/lib/pkgconfig:$HOME/.local/share/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+pkg-config --modversion sdl3
+mkdir -p externals
+git clone https://gitlab.com/jgemu/jg.git externals/jg
+make -C externals/jg install PREFIX="$HOME/.local"
+pkg-config --modversion jg
+```
+
+JG installs API headers and `jg.pc` into the user's home directory; its
+`jg.pc` goes in `~/.local/share/pkgconfig/`. To build JGRF with the already
+built SDL3, then build the Geolith core with basic CUE support:
+
+```bash
+git clone https://gitlab.com/jgemu/jgrf.git externals/jgrf
+make -C externals/jgrf -j4
+git clone https://gitlab.com/jgemu/geolith.git externals/geolith
+make -C externals/geolith -j4
+```
+
+The `PKG_CONFIG_PATH` export applies only to the current terminal; set it
+again in a new terminal before rebuilding. First confirm the build outputs:
+
+```bash
+test -x externals/jgrf/jollygood
+test -f externals/geolith/geolith/geolith.so
+```
+
+Install the executable beside Goliath and keep the core in JGRF's local core
+directory:
+
+```bash
+cp externals/jgrf/jollygood build/jollygood
+mkdir -p build/cores
+cp -a externals/geolith/geolith build/cores/
+```
+
+Preserve JGRF's other required runtime files, including its `shaders/`
+directory when present. Run Goliath with the local SDL3 library, then open
+**Settings -> Info -> Refresh Information**:
+
+```bash
+LD_LIBRARY_PATH="$PWD/deps/sdl-local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+  ./build/goliath-qt
+```
+
+On the tested Mint machine, the basic build reported JGRF 2.0.1, Geolith
+0.5.0, JG API 2.0.0, Neo Geo CD format `CUE`, and CHD support `Not compiled`.
+A CUE-only result is expected
+until libchdr and both CHD flags are used below.
+
+### Linux Mint 22.3: Lithogen (optional ZIP to .neo conversion)
+
+Lithogen is a separately installed converter; Goliath calls its executable
+without embedding or modifying Lithogen's code. From the same bundle directory:
+
+```bash
+git clone https://github.com/carmiker/lithogen.git externals/lithogen
+cd externals/lithogen
+autoreconf -fi
+./configure
+make -j4
+cd ../..
+```
+
+In **Tools -> Converter .zip to .neo (Lithogen)**, select
+`externals/lithogen/lithogen` with **Browse**. Choose a ZIP or a folder of ZIPs,
+then a separate output directory. The Mint test converted 44 of 44 ZIPs and
+Goliath recognized the generated `.neo` files after rescan. If **Settings ->
+Info** shows Lithogen as `Available` but its version as `Unknown (not reported
+by executable)`, the executable runs; the version probe simply found no
+parseable version string. This does not indicate a conversion failure.
+
+The upstream source trees remain separate from Goliath. JG, JGRF, Geolith,
+and Lithogen are not included in the Goliath source distribution.
+
 ### JGRF with Vulkan
 
 From the JGRF source tree, build the Vulkan renderer with:
 
 ```bash
-make ENABLE_VULKAN=1
+make clean
+make ENABLE_VULKAN=1 -j$(nproc)
 ```
 
 Deploy the resulting executable together with the generated
@@ -321,6 +457,9 @@ The flags have separate purposes:
 
 A core can contain CHD code but still advertise only CUE if the second flag was
 omitted. Goliath deliberately blocks CHD launch in that case.
+
+The Mint test used the basic CUE-only build; CHD also requires a compatible
+libchdr development installation before rebuilding with both flags.
 
 Install the core at JGRF's local core path:
 
@@ -444,6 +583,9 @@ No rescan is required. On each successful game launch, Goliath checks that
 file and looks up the selected cartridge variant's MAME ID, then its clone and
 parent IDs as fallbacks. A match opens a separate, non-modal command-list
 window. It does not pass the file to JGRF and does not modify JGRF or Geolith.
+Games and variants with matching commands show a small punch indicator in the
+library tree. Refresh the library view after changing `command.dat` to update
+the markers.
 
 The toolbar's persistent **Command overlay** check box is enabled by default.
 Clear it to skip automatic companion creation on future launches; games still
@@ -469,7 +611,11 @@ move, or any other visible source text. **Enter** selects the next matching
 line, **Shift+Enter** selects the previous one, and **Escape** closes the search
 line and removes its highlight. Search follows the same source line in Visual
 and Raw modes. Character headings use the section accent color while adjacent
-team names and commands retain their normal text color.
+team names and commands retain their normal text color. Closing the overlay
+remembers the current reading line for this exact game in
+`config/command_positions.ini`; each game maintains its own position. The
+overlay's position and size are shared across games. Closing the overlay
+before its game ends keeps the saved reading position.
 Transparent presentation uses a brighter heading accent and a restrained
 one-pixel text outline for readability over changing game imagery. The active
 search result uses a light tint and a slim left-edge marker instead of an
@@ -742,6 +888,76 @@ useful for repeatable regressions and renderer/shader comparisons, not for
 audio quality, input latency, stutter, cross-game rankings, or a pure Geolith
 CPU score. If Vulkan cannot use immediate presentation, FIFO may cap the run;
 OpenGL is the safer baseline for uncapped comparisons.
+
+### Record a game GIF or take a screenshot
+
+Before publishing a build, use the compact manual and automated acceptance
+matrix in [docs/CAPTURE_VALIDATION.md](docs/CAPTURE_VALIDATION.md). It covers
+MVS/AES and Neo Geo CD, all three durations, windowed/fullscreen rendering,
+the two launch paths, and the Snaps/GIFs gallery without requiring a complete
+Cartesian product of every combination.
+
+On Windows, open **Settings -> Hotkeys** to change Goliath's capture shortcuts. The GIF
+defaults to Ctrl+Alt+F12, and the PNG starts unassigned. Press a combination
+in either field, use its clear button to disable that shortcut, then choose
+**Save hotkeys**. Choose a GIF duration of 5, 7 (default), or 10 seconds in the
+same tab. Single letters, numbers, `;`, `,`, `.` and other common
+punctuation are accepted without modifiers; they become active only when the
+tracked game has focus and are consumed instead of reaching that game. Goliath
+checks Windows registration and retains the old bindings if unavailable. A note identifies keys also used
+by JGRF and names its corresponding action. On Linux X11, the GIF shortcut
+also works while the Goliath-launched game window has focus; it starts the
+recording immediately, without the Tools countdown. Single keys (including
+`;`, `,`, and `.`) are consumed only while the tracked game is focused, and
+keys held down do not start repeated recordings. Another program's X11 grab
+may prevent a shortcut from working; choose another key or use the Tools
+action in that case. You can still use **Tools -> Record game GIF (3s)...**
+and return to the game before the countdown ends. Linux PNG capture is not
+available in this build.
+
+On a Wayland session with the GNOME desktop portal and PipeWire, Goliath uses
+ScreenCast to record the window selected in the desktop permission dialog.
+The picker appears each time recording starts, including from **Tools**. The
+GIF shortcut is registered through the GlobalShortcuts portal when the desktop
+supports it. The active desktop shortcut shown in **Settings -> Hotkeys** is
+authoritative. Choose **Open Desktop Shortcut Settings...** to change an
+existing binding. Goliath permits editing its initial preference only while no
+desktop shortcut is assigned. It uses portal v2 `ConfigureShortcuts` when
+available and opens GNOME's Applications settings when the active v1 backend
+does not implement that method.
+Ctrl+Alt+function keys may belong to the
+system. The PNG action remains Windows-only. Keep the game window selected
+throughout the recording; this feature does not depend on the JGRF renderer.
+
+Launch a game through Goliath. Press the GIF shortcut
+(**Ctrl+Alt+F12** by default) while it is visible to
+record a 5-, 7-, or 10-second looping GIF (eight frames per second, maximum 640 pixels
+on each side). Goliath automatically creates and saves the recording beside
+its running executable at `recordings/<media>/<YYYY-MM-DD>/<HH-mm-ss>.gif`;
+for example, `recordings/rbff1/2026-09-24/16-30-42.gif`. A matching filename
+gets a numbered suffix so an older GIF is preserved. Goliath shows the saved
+path in the status bar. On Windows and X11 the shortcut records the foreground
+tracked game when several games are running; on Wayland, select the game window in the desktop
+picker. Pressing the shortcut again during capture has no effect.
+
+On Windows, for a still PNG, choose **Tools -> Capture game screenshot (3s)...**, switch
+back to the game during the countdown, then review the PNG before saving.
+If another application owns the global shortcut, the Tools PNG action remains
+available. Always check the PNG preview before saving it. GIFs have a 256-color
+palette per frame and contain no audio. Windowed Windows recording first reads
+the tracked game client area and falls back to its visible desktop pixels when
+needed. Fullscreen recording uses Windows Desktop Duplication and requires the
+game to remain focused. On X11, Goliath selects the tracked JGRF window by its
+process ID when recording begins, then calls `QScreen::grabWindow()` for that
+window eight times per second. Qt reads visible screen pixels. If you move
+another window over the game, the GIF can contain that other window; moving
+the game window or dragging a window over it during capture can also produce
+unexpected frames. The Mint test showed the file manager and command overlay
+inside a CD game's GIF when they covered the game's screen area. Keep the game
+stationary, focused, and unobscured for the entire 5-, 7-, or 10-second capture.
+This X11 behavior does not mean Goliath switched to a different game; it still
+stores the recording under the selected game's folder. GIF capture does not
+alter JGRF or Geolith.
 
 ### Export selected game audio to WAV
 

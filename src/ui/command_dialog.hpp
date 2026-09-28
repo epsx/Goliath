@@ -8,11 +8,14 @@
 #include <vector>
 
 class QCheckBox;
+class QCloseEvent;
 class QEvent;
+class QHideEvent;
 class QLabel;
 class QLineEdit;
 class QPlainTextEdit;
 class QSlider;
+class QShowEvent;
 class QStackedWidget;
 class QWidget;
 
@@ -25,12 +28,17 @@ public:
     CommandDialog(const QString& gameTitle,
                   const QString& matchedMameId,
                   const QString& commandText,
-                  const QString& inheritedStyleSheet);
+                  const QString& inheritedStyleSheet,
+                  const QString& positionFile,
+                  const QString& exactMediaKey);
 
     void placeBeside(const QWidget* reference, int cascadeIndex = 0);
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
+    void closeEvent(QCloseEvent* event) override;
+    void hideEvent(QHideEvent* event) override;
+    void showEvent(QShowEvent* event) override;
 
 private:
     void applyPresentation();
@@ -39,9 +47,16 @@ private:
     void rebuildFindMatches();
     void findNext(bool backwards);
     void revealFindMatch();
+    void scrollToSourceLine(int sourceLine);
+    int currentSourceLine() const;
+    void restorePosition();
+    void savePosition();
 
     QString m_inheritedStyleSheet;
     QStringList m_commandLines;
+    QString m_positionFile;
+    QString m_positionKey;
+    bool m_savedForThisDisplay = true;
     std::vector<int> m_findMatches;
     int m_findMatchIndex = -1;
     QCheckBox* m_overlayMode = nullptr;

@@ -7,9 +7,11 @@
 #pragma once
 
 #include <QDialog>
+#include <QKeySequence>
 #include <QString>
 #include <QStringList>
 
+#include <functional>
 #include <map>
 #include <string>
 #include <utility>
@@ -27,6 +29,8 @@ class QComboBox;
 class QKeyEvent;
 class QTabWidget;
 class QSpinBox;
+class QKeySequenceEdit;
+class QLabel;
 
 namespace goliath {
 
@@ -40,7 +44,12 @@ public:
     // config is the *live* app config (same object MainWindow holds) - Path
     // tab edits are only persisted via save_config() when its "Save Path
     // Settings" button is clicked (matches the Video/Audio/Core tabs).
-    SettingsDialog(Config& config, AppPaths paths, QWidget* parent = nullptr);
+    using HotkeyApply = std::function<bool(const QKeySequence& gif,
+                                            const QKeySequence& png, QString* error)>;
+    using WaylandHotkeyDescription = std::function<QString()>;
+    SettingsDialog(Config& config, AppPaths paths, HotkeyApply applyHotkeys,
+                   WaylandHotkeyDescription waylandHotkeyDescription,
+                   QWidget* parent = nullptr);
     ~SettingsDialog() override;
 
 protected:
@@ -62,6 +71,10 @@ private slots:
 private:
     void buildInputTab(QWidget* inputWidget);
     void buildPathTab(QWidget* pathWidget);
+    void buildHotkeysTab(QWidget* hotkeyWidget);
+    void saveHotkeys();
+    void manageWaylandHotkey();
+    void updateHotkeyWarnings();
     void loadJgrfInputSettings();
     void persistJgrfInputSettings(int deadzone);
 
@@ -100,6 +113,8 @@ private:
 
     Config& m_config;
     AppPaths m_paths;
+    HotkeyApply m_applyHotkeys;
+    WaylandHotkeyDescription m_waylandHotkeyDescription;
 
     QTabWidget* m_tabs = nullptr;
     InfoTab* m_infoTab = nullptr;
@@ -107,6 +122,15 @@ private:
     QWidget* m_inputContainer = nullptr;
     QComboBox* m_inputDeviceCombo = nullptr;
     QSpinBox* m_axisDeadzoneSpin = nullptr;
+    QKeySequenceEdit* m_gifHotkeyEdit = nullptr;
+    QComboBox* m_gifDurationCombo = nullptr;
+    QKeySequenceEdit* m_pngHotkeyEdit = nullptr;
+    QLabel* m_gifHotkeyLabel = nullptr;
+    QLabel* m_gifHotkeyWarning = nullptr;
+    QLabel* m_pngHotkeyWarning = nullptr;
+    QPushButton* m_hotkeySaveButton = nullptr;
+    QPushButton* m_hotkeyResetButton = nullptr;
+    QPushButton* m_waylandHotkeyButton = nullptr;
 
     struct InputRow {
         QString section;

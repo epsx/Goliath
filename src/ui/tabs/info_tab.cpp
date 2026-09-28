@@ -3,15 +3,18 @@
 #include "game/jollygood_capabilities.hpp"
 #include "game/jollygood_executable.hpp"
 #include "game/geolith_capabilities.hpp"
+#include "common/goliath_common.hpp"
 
 #include <QCryptographicHash>
 #include <QFile>
+#include <QFileInfo>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QLabel>
 #include <QLibrary>
 #include <QProcess>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QThread>
 #include <QStringList>
 #include <QTimer>
@@ -55,8 +58,9 @@ bool hasVerifiedEsBgraPair(const fs::path& jgrfExe) {
 
 } // namespace
 
-InfoTab::InfoTab(fs::path jollygoodExe, QWidget* parent)
-    : QWidget(parent), m_jollygoodExe(std::move(jollygoodExe)) {
+InfoTab::InfoTab(fs::path jollygoodExe, const Config& config, QWidget* parent)
+    : QWidget(parent), m_jollygoodExe(std::move(jollygoodExe)),
+      m_config(config) {
     setupUi();
 }
 
@@ -96,6 +100,16 @@ void InfoTab::setupUi() {
     apiForm->addRow("API Version:", m_jgApiVersion);
     layout->addWidget(apiGroup);
 
+    auto* lithogenGroup = new QGroupBox("Lithogen (external ZIP to .neo converter)");
+    auto* lithogenForm = new QFormLayout(lithogenGroup);
+    m_lithogenExecutable = valueLabel();
+    m_lithogenAvailability = valueLabel();
+    m_lithogenVersion = valueLabel();
+    lithogenForm->addRow("Executable:", m_lithogenExecutable);
+    lithogenForm->addRow("Availability:", m_lithogenAvailability);
+    lithogenForm->addRow("Version:", m_lithogenVersion);
+    layout->addWidget(lithogenGroup);
+
     m_status = new QLabel(
         "Information is read from the JGRF executable and Geolith core installed for this Goliath setup.");
     m_status->setWordWrap(true);
@@ -116,7 +130,7 @@ void InfoTab::activate() {
 }
 
 void InfoTab::refresh() {
-    if (m_jgrfPending || m_corePending) return;
+    if (m_jgrfPending || m_corePending || m_lithogenPending) return;
 
     m_jgrfVersion->setText("Detecting...");
     m_jgrfExecutable->setText("Detecting...");
@@ -127,6 +141,8 @@ void InfoTab::refresh() {
     m_neocdFormats->setText("Detecting...");
     m_chdSupport->setText("Detecting...");
     m_jgApiVersion->setText("Detecting...");
+    m_lithogenVersion->setText("Detecting...");
+    m_lithogenAvailability->setText("Detecting...");
     m_status->setText("Reading installed JGRF / Geolith information...");
     m_jgrfProbeOk = false;
     m_coreProbeOk = false;
@@ -136,6 +152,80 @@ void InfoTab::refresh() {
 
     startJgrfProbe();
     startCoreProbe();
+    startLithogenProbe();
+    updateRefreshState();
+}
+
+void InfoTab::startLithogenProbe() {
+    // Read the live config on each Refresh: the converter may have saved a
+    // different executable since this Settings dialog was opened.
+    const QString configured = QString::fromStdString(
+        m_config.get("Tools", "lithogen_executable", "")).trimmed();
+    m_lithogenExecutable->setText(configured.isEmpty() ? "Not configured" : configured);
+    if (configured.isEmpty()) {
+        m_lithogenAvailability->setText("Not configured");
+        m_lithogenVersion->setText("Unknown");
+        return;
+    }
+    const QFileInfo exe(configured);
+    if (!exe.isFile() || !exe.isExecutable()) {
+        m_lithogenAvailability->setText("Unavailable");
+        m_lithogenVersion->setText("Unknown");
+        return;
+    }
+    m_lithogenAvailability->setText("Available");
+    m_lithogenExecutable->setText(exe.absoluteFilePath());
+    m_lithogenPending = true;
+    probeLithogenVersion("--version");
+}
+
+void InfoTab::probeLithogenVersion(const QString& argument) {
+    auto* process = new QProcess(this);
+    auto timedOut = std::make_shared<bool>(false);
+    m_lithogenProcess = process;
+    process->setProcessChannelMode(QProcess::MergedChannels);
+    connect(process, &QProcess::finished, this,
+            [this, process, argument, timedOut](int, QProcess::ExitStatus) {
+        if (m_lithogenProcess != process) return;
+        const QString output = QString::fromLocal8Bit(process->readAll().left(4096));
+        const QRegularExpression version(
+            R"(\blithogen(?:\s+version)?\s+v?(\d+(?:\.\d+){1,3})\b)",
+            QRegularExpression::CaseInsensitiveOption);
+        const auto match = version.match(output);
+        m_lithogenProcess = nullptr;
+        process->deleteLater();
+        if (*timedOut) {
+            m_lithogenVersion->setText("Timed out");
+            finishLithogenProbe();
+        } else if (match.hasMatch()) {
+            m_lithogenVersion->setText(match.captured(1));
+            finishLithogenProbe();
+        } else if (argument == "--version") {
+            probeLithogenVersion("--help");
+        } else {
+            m_lithogenVersion->setText("Unknown (not reported by executable)");
+            finishLithogenProbe();
+        }
+    });
+    connect(process, &QProcess::errorOccurred, this,
+            [this, process](QProcess::ProcessError error) {
+        if (error != QProcess::FailedToStart || m_lithogenProcess != process) return;
+        m_lithogenProcess = nullptr;
+        m_lithogenAvailability->setText("Could not start");
+        m_lithogenVersion->setText("Unknown");
+        finishLithogenProbe();
+        process->deleteLater();
+    });
+    process->start(m_lithogenExecutable->text(), {argument});
+    QTimer::singleShot(3000, process, [process, timedOut]() {
+        if (process->state() == QProcess::NotRunning) return;
+        *timedOut = true;
+        process->kill();
+    });
+}
+
+void InfoTab::finishLithogenProbe() {
+    m_lithogenPending = false;
     updateRefreshState();
 }
 
@@ -275,7 +365,7 @@ void InfoTab::finishCoreProbe() {
 }
 
 void InfoTab::updateRefreshState() {
-    const bool busy = m_jgrfPending || m_corePending;
+    const bool busy = m_jgrfPending || m_corePending || m_lithogenPending;
     if (m_refreshButton) m_refreshButton->setEnabled(!busy);
 
     if (!busy) {

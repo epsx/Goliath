@@ -1,6 +1,9 @@
 #include <QApplication>
 #include <QIcon>
 #include <QMessageBox>
+#if defined(GOLIATH_WAYLAND_CAPTURE)
+#include <QGuiApplication>
+#endif
 
 #include "common/debug_logger.hpp"
 #include "common/goliath_common.hpp"
@@ -8,6 +11,10 @@
 
 int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
+#if defined(GOLIATH_WAYLAND_CAPTURE)
+    if (QGuiApplication::platformName() == "wayland")
+        app.setDesktopFileName("io.github.epsx.Goliath");
+#endif
     // MainWindow explicitly decides when the application may exit. If a game
     // is still active, closing the visible window leaves the event loop alive
     // until the detached-process observer has finalized the full session.

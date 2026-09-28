@@ -63,9 +63,9 @@ private:
     bool m_overrideCursor = false;
 };
 
-// Makes a QDialog frameless, gives it a themed perimeter, an optional modern
-// title bar, and an all-side resize filter. Returns the content layout (with
-// 16px margins) where the caller should add its widgets.
+// Makes a QDialog frameless, gives it an optional modern title bar and an
+// all-side resize filter. Returns the content layout (with 16px margins) where
+// the caller should add its widgets.
 void setupFramelessDialog(QDialog* dialog, const QString& title,
                           QVBoxLayout** contentLayout = nullptr,
                           bool resizable = true, bool showMinMax = true,

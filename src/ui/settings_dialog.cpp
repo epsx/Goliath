@@ -1,4 +1,6 @@
 #include "ui/settings_dialog.hpp"
+#include "ui/application_shortcuts.hpp"
+#include "ui/capture_hotkeys.hpp"
 
 #include "common/goliath_common.hpp"
 #include "common/theme.hpp"
@@ -18,9 +20,12 @@
 #include <QComboBox>
 #include <QFileDialog>
 #include <QFormLayout>
+#include <QGuiApplication>
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QKeySequence>
+#include <QKeySequenceEdit>
 #include <QLabel>
 #include <QGroupBox>
 #include <QLineEdit>
@@ -29,9 +34,11 @@
 #include <QScrollArea>
 #include <QSpinBox>
 #include <QTabWidget>
+#include <QTimer>
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <utility>
@@ -108,8 +115,13 @@ QString inputMappingTooltip(const QString& stored) {
 }
 } // namespace
 
-SettingsDialog::SettingsDialog(Config& config, AppPaths paths, QWidget* parent)
-    : QDialog(parent), m_config(config), m_paths(std::move(paths)) {
+SettingsDialog::SettingsDialog(Config& config, AppPaths paths,
+                               HotkeyApply applyHotkeys,
+                               WaylandHotkeyDescription waylandHotkeyDescription,
+                               QWidget* parent)
+    : QDialog(parent), m_config(config), m_paths(std::move(paths)),
+      m_applyHotkeys(std::move(applyHotkeys)),
+      m_waylandHotkeyDescription(std::move(waylandHotkeyDescription)) {
     resize(900, 730);
 
     QVBoxLayout* layout = nullptr;
@@ -137,11 +149,15 @@ SettingsDialog::SettingsDialog(Config& config, AppPaths paths, QWidget* parent)
     m_tabs->addTab(inputWidget, "Input");
     buildInputTab(inputWidget);
 
+    auto* hotkeyWidget = new QWidget();
+    m_tabs->addTab(hotkeyWidget, "Hotkeys");
+    buildHotkeysTab(hotkeyWidget);
+
     auto* pathWidget = new QWidget();
     m_tabs->addTab(pathWidget, "Path");
     buildPathTab(pathWidget);
 
-    m_infoTab = new InfoTab(m_paths.jollygood_exe, this);
+    m_infoTab = new InfoTab(m_paths.jollygood_exe, m_config, this);
     m_tabs->addTab(m_infoTab, "Info");
 
     const std::string themeKey =
@@ -156,9 +172,332 @@ SettingsDialog::~SettingsDialog() {
     cancelListening();
 }
 
+void SettingsDialog::buildHotkeysTab(QWidget* widget) {
+    auto* layout = new QVBoxLayout(widget);
+    layout->setContentsMargins(16, 16, 16, 16);
+
+    auto* applicationGroup = new QGroupBox("Goliath shortcuts", widget);
+    auto* applicationLayout = new QVBoxLayout(applicationGroup);
+    auto* applicationInfo = new QLabel(
+        "These fixed shortcuts are active only while the Goliath window has "
+        "focus. They do not register global keys or interfere with a running game.",
+        applicationGroup);
+    applicationInfo->setWordWrap(true);
+    applicationInfo->setObjectName("themed_note");
+    applicationLayout->addWidget(applicationInfo);
+    auto* applicationGrid = new QGridLayout();
+    for (std::size_t index = 0; index < kApplicationShortcuts.size(); ++index) {
+        const auto& shortcut = kApplicationShortcuts[index];
+        const int row = static_cast<int>(index / 2);
+        const int column = static_cast<int>(index % 2) * 2;
+        auto* action = new QLabel(
+            QString::fromUtf8(shortcut.action) + QStringLiteral(":"),
+            applicationGroup);
+        auto* value = new QLabel(
+            QKeySequence(shortcut.sequence).toString(QKeySequence::NativeText),
+            applicationGroup);
+        applicationGrid->addWidget(action, row, column);
+        applicationGrid->addWidget(value, row, column + 1);
+    }
+    applicationGrid->setColumnStretch(1, 1);
+    applicationGrid->setColumnStretch(3, 1);
+    applicationLayout->addLayout(applicationGrid);
+    layout->addWidget(applicationGroup);
+
+    auto* captureGroup = new QGroupBox("In-game capture", widget);
+    auto* captureLayout = new QVBoxLayout(captureGroup);
+    auto* info = new QLabel(
+        "Goliath capture shortcuts work while a game is running. "
+        "Use a letter, number, function key or punctuation, with or without "
+        "Ctrl/Alt/Shift. Single keys are active only while the game has focus "
+        "and will not also reach the game. Clear a field "
+        "to disable its shortcut. The PNG capture still has a Tools button. "
+        "GIF recording is experimental and can behave differently across "
+        "renderers and desktop sessions.");
+    info->setWordWrap(true);
+    info->setObjectName("themed_note");
+    captureLayout->addWidget(info);
+
+    auto* form = new QFormLayout();
+    m_gifHotkeyEdit = new QKeySequenceEdit(captureGroup);
+    m_pngHotkeyEdit = new QKeySequenceEdit(captureGroup);
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
+    m_gifHotkeyEdit->setMaximumSequenceLength(1);
+    m_pngHotkeyEdit->setMaximumSequenceLength(1);
+#endif
+    m_gifHotkeyEdit->setClearButtonEnabled(true);
+    m_pngHotkeyEdit->setClearButtonEnabled(true);
+    const char* gifDefault = "Ctrl+Alt+F12";
+#if defined(GOLIATH_WAYLAND_CAPTURE)
+    if (QGuiApplication::platformName() == "wayland") gifDefault = "";
+#endif
+    m_gifHotkeyEdit->setKeySequence(QKeySequence(
+        QString::fromStdString(m_config.get("Hotkeys", "gif", gifDefault)),
+        QKeySequence::PortableText));
+    m_pngHotkeyEdit->setKeySequence(QKeySequence(
+        QString::fromStdString(m_config.get("Hotkeys", "png", "")),
+        QKeySequence::PortableText));
+    m_gifHotkeyLabel = new QLabel("Record GIF (Experimental):", captureGroup);
+    form->addRow(m_gifHotkeyLabel, m_gifHotkeyEdit);
+    m_gifHotkeyWarning = new QLabel(captureGroup);
+    m_gifHotkeyWarning->setWordWrap(true);
+    m_gifHotkeyWarning->setObjectName("themed_note");
+    form->addRow("", m_gifHotkeyWarning);
+    m_gifDurationCombo = new QComboBox(captureGroup);
+    m_gifDurationCombo->addItem("5 seconds", 5);
+    m_gifDurationCombo->addItem("7 seconds", 7);
+    m_gifDurationCombo->addItem("10 seconds", 10);
+    const QString savedDuration = QString::fromStdString(
+        m_config.get("Hotkeys", "gif_duration_seconds", "7"));
+    const int durationIndex = m_gifDurationCombo->findData(savedDuration.toInt());
+    m_gifDurationCombo->setCurrentIndex(durationIndex < 0 ? 1 : durationIndex);
+    form->addRow("GIF duration:", m_gifDurationCombo);
+    form->addRow("Capture PNG:", m_pngHotkeyEdit);
+    m_pngHotkeyWarning = new QLabel(captureGroup);
+    m_pngHotkeyWarning->setWordWrap(true);
+    m_pngHotkeyWarning->setObjectName("themed_note");
+    form->addRow("", m_pngHotkeyWarning);
+    captureLayout->addLayout(form);
+
+    connect(m_gifHotkeyEdit, &QKeySequenceEdit::keySequenceChanged,
+            this, [this]() { updateHotkeyWarnings(); });
+    connect(m_pngHotkeyEdit, &QKeySequenceEdit::keySequenceChanged,
+            this, [this]() { updateHotkeyWarnings(); });
+    auto* buttons = new QHBoxLayout();
+    m_hotkeySaveButton = new QPushButton("Save Hotkeys", captureGroup);
+#if defined(_WIN32) || defined(GOLIATH_X11_CAPTURE) || defined(GOLIATH_WAYLAND_CAPTURE)
+    connect(m_hotkeySaveButton, &QPushButton::clicked, this, [this]() {
+        saveHotkeys();
+    });
+#endif
+    buttons->addWidget(m_hotkeySaveButton);
+
+#if defined(GOLIATH_WAYLAND_CAPTURE)
+    m_waylandHotkeyButton = new QPushButton(
+        "Open Desktop Shortcut Settings...", captureGroup);
+    m_waylandHotkeyButton->setVisible(false);
+    connect(m_waylandHotkeyButton, &QPushButton::clicked,
+            this, &SettingsDialog::manageWaylandHotkey);
+    buttons->addWidget(m_waylandHotkeyButton);
+#endif
+
+    m_hotkeyResetButton = new QPushButton("Reset to Defaults", captureGroup);
+    connect(m_hotkeyResetButton, &QPushButton::clicked, this, [this, gifDefault]() {
+#if defined(GOLIATH_WAYLAND_CAPTURE)
+        if (QGuiApplication::platformName() == "wayland" &&
+            m_waylandHotkeyDescription &&
+            !m_waylandHotkeyDescription().isEmpty()) {
+            m_gifDurationCombo->setCurrentIndex(1);
+            updateHotkeyWarnings();
+            return;
+        }
+#endif
+        m_gifHotkeyEdit->setKeySequence(QKeySequence(gifDefault,
+                                                  QKeySequence::PortableText));
+        m_pngHotkeyEdit->clear();
+        m_gifDurationCombo->setCurrentIndex(1);
+        updateHotkeyWarnings();
+    });
+    buttons->addWidget(m_hotkeyResetButton);
+    buttons->addStretch();
+    captureLayout->addLayout(buttons);
+    layout->addWidget(captureGroup);
+    layout->addStretch();
+#if !defined(_WIN32)
+    m_pngHotkeyEdit->setEnabled(false);
+#if defined(GOLIATH_X11_CAPTURE)
+    const bool x11 = QGuiApplication::platformName() == "xcb";
+#if defined(GOLIATH_WAYLAND_CAPTURE)
+    const bool wayland = QGuiApplication::platformName() == "wayland";
+#else
+    const bool wayland = false;
+#endif
+    m_gifHotkeyEdit->setEnabled(x11 || wayland);
+    m_gifDurationCombo->setEnabled(x11 || wayland);
+    m_hotkeyResetButton->setEnabled(x11 || wayland);
+    m_hotkeySaveButton->setEnabled(x11 || wayland);
+    if (wayland) {
+        info->setText("On Wayland, the desktop asks you to approve a GIF shortcut. "
+                      "Before the first approval, the key below is only a preference. "
+                      "After approval, the desktop owns the active shortcut; change it "
+                      "through the desktop's application shortcut settings. "
+                      "While one Goliath game is running, pressing it opens the game-window "
+                      "picker. You can also use Tools > Record game GIF. "
+                      "PNG capture remains Windows-only.");
+        m_hotkeySaveButton->setText("Save GIF Duration");
+        m_waylandHotkeyButton->setVisible(true);
+        auto* assignedTimer = new QTimer(captureGroup);
+        assignedTimer->setInterval(500);
+        connect(assignedTimer, &QTimer::timeout,
+                this, &SettingsDialog::updateHotkeyWarnings);
+        assignedTimer->start();
+    } else {
+        info->setText(x11
+            ? "On X11, a GIF shortcut works while a Goliath-launched game has focus. "
+              "Set a key and duration below, then choose Save hotkeys. Single keys "
+              "are consumed by Goliath while playing. Tools > Record game GIF (3s) "
+              "is also available. PNG capture remains Windows-only."
+            : "Game GIF capture currently requires an X11 desktop session.");
+    }
+#elif defined(GOLIATH_WAYLAND_CAPTURE)
+    const bool wayland = QGuiApplication::platformName() == "wayland";
+    m_gifHotkeyEdit->setEnabled(wayland);
+    m_gifDurationCombo->setEnabled(wayland);
+    m_hotkeyResetButton->setEnabled(wayland);
+    m_hotkeySaveButton->setEnabled(wayland);
+    m_waylandHotkeyButton->setVisible(wayland);
+    info->setText(wayland
+        ? "Choose a GIF shortcut in the desktop's permission dialog. With a "
+          "game running, the shortcut opens the window picker. The desktop "
+          "may assign a different key. PNG capture remains Windows-only."
+        : "GIF capture requires a Wayland or X11 desktop session.");
+#else
+    m_gifHotkeyEdit->setEnabled(false);
+    m_gifDurationCombo->setEnabled(false);
+    m_hotkeyResetButton->setEnabled(false);
+    m_hotkeySaveButton->setEnabled(false);
+    info->setText("Goliath's global capture shortcuts are currently available on Windows only.");
+#endif
+#endif
+    updateHotkeyWarnings();
+#if !defined(_WIN32)
+#if !defined(GOLIATH_X11_CAPTURE)
+    m_gifHotkeyWarning->clear();
+#endif
+    m_pngHotkeyWarning->clear();
+#endif
+}
+
+void SettingsDialog::updateHotkeyWarnings() {
+#if defined(GOLIATH_WAYLAND_CAPTURE)
+    if (QGuiApplication::platformName() == "wayland") {
+        const QString assigned = m_waylandHotkeyDescription
+            ? m_waylandHotkeyDescription() : QString();
+        const bool desktopManaged = !assigned.isEmpty();
+        m_gifHotkeyEdit->setEnabled(!desktopManaged);
+        m_gifHotkeyLabel->setText(desktopManaged
+            ? QStringLiteral("Initial preference (desktop-managed):")
+            : QStringLiteral("Preferred GIF shortcut:"));
+        m_hotkeySaveButton->setText("Save GIF Duration");
+        m_hotkeyResetButton->setText(desktopManaged
+            ? QStringLiteral("Reset GIF Duration")
+            : QStringLiteral("Reset to Defaults"));
+        if (m_waylandHotkeyButton) {
+            m_waylandHotkeyButton->setText(desktopManaged
+                ? QStringLiteral("Open Desktop Shortcut Settings...")
+                : QStringLiteral("Request Wayland Shortcut..."));
+        }
+        QString error;
+        parseCaptureHotkey(m_gifHotkeyEdit->keySequence(), &error);
+        QString shown;
+        if (!desktopManaged) {
+            shown = error.isEmpty()
+                ? jgrfWarningForHotkey(m_gifHotkeyEdit->keySequence()) : error;
+            if (!shown.isEmpty()) shown += " ";
+        }
+        shown += desktopManaged
+            ? QString("Active desktop shortcut: %1.").arg(assigned)
+            : QStringLiteral(
+                  "Active desktop shortcut: unassigned. Choose a preference, "
+                  "then request desktop approval.");
+        m_gifHotkeyWarning->setText(shown);
+        m_pngHotkeyWarning->clear();
+        return;
+    }
+#endif
+    const auto update = [](QKeySequenceEdit* edit, QLabel* label) {
+        QString error;
+        parseCaptureHotkey(edit->keySequence(), &error);
+        const QString note = jgrfWarningForHotkey(edit->keySequence());
+        QString shown = error.isEmpty() ? note : error;
+        if (error.isEmpty() && !edit->keySequence().isEmpty() &&
+            edit->keySequence()[0].keyboardModifiers() == Qt::NoModifier) {
+            if (!shown.isEmpty()) shown += " ";
+            shown += "This single key will be consumed while the tracked game has focus.";
+        }
+        label->setText(shown);
+    };
+    update(m_gifHotkeyEdit, m_gifHotkeyWarning);
+#if defined(GOLIATH_X11_CAPTURE)
+    m_pngHotkeyWarning->clear();
+    return;
+#endif
+    update(m_pngHotkeyEdit, m_pngHotkeyWarning);
+    const auto gif = parseCaptureHotkey(m_gifHotkeyEdit->keySequence());
+    const auto png = parseCaptureHotkey(m_pngHotkeyEdit->keySequence());
+    if (gif && png && gif->virtualKey &&
+        gif->virtualKey == png->virtualKey && gif->modifiers == png->modifiers) {
+        m_gifHotkeyWarning->setText("GIF and PNG cannot use the same shortcut.");
+        m_pngHotkeyWarning->setText("GIF and PNG cannot use the same shortcut.");
+    }
+}
+
+void SettingsDialog::saveHotkeys() {
+    const QKeySequence gif = m_gifHotkeyEdit->keySequence();
+    const QKeySequence png = m_pngHotkeyEdit->keySequence();
+#if defined(GOLIATH_WAYLAND_CAPTURE)
+    if (QGuiApplication::platformName() == "wayland") {
+        m_config.set("Hotkeys", "gif_duration_seconds",
+                     std::to_string(m_gifDurationCombo->currentData().toInt()));
+        save_config(m_config);
+        QMessageBox::information(
+            this, "Hotkeys",
+            "The GIF duration was saved. The active Wayland shortcut is "
+            "managed by the desktop.");
+        return;
+    }
+#endif
+    QString error;
+    if (!m_applyHotkeys(gif, png, &error)) {
+        QMessageBox::warning(this, "Hotkeys", error);
+        return;
+    }
+    m_config.set("Hotkeys", "gif", gif.toString(QKeySequence::PortableText).toStdString());
+    m_config.set("Hotkeys", "png", png.toString(QKeySequence::PortableText).toStdString());
+    m_config.set("Hotkeys", "gif_duration_seconds",
+                 std::to_string(m_gifDurationCombo->currentData().toInt()));
+    save_config(m_config);
+    QMessageBox::information(this, "Hotkeys", "Capture shortcuts updated.");
+}
+
+void SettingsDialog::manageWaylandHotkey() {
+#if defined(GOLIATH_WAYLAND_CAPTURE)
+    if (QGuiApplication::platformName() != "wayland") return;
+    const QKeySequence gif = m_gifHotkeyEdit->keySequence();
+    if (gif.isEmpty()) {
+        QMessageBox::warning(
+            this, "Hotkeys",
+            "Choose a preferred GIF shortcut before requesting desktop approval.");
+        return;
+    }
+    const bool alreadyAssigned = m_waylandHotkeyDescription &&
+                                 !m_waylandHotkeyDescription().isEmpty();
+    QString error;
+    if (!m_applyHotkeys(gif, {}, &error)) {
+        QMessageBox::warning(this, "Hotkeys", error);
+        return;
+    }
+    m_config.set("Hotkeys", "gif",
+                 gif.toString(QKeySequence::PortableText).toStdString());
+    m_config.set("Hotkeys", "gif_duration_seconds",
+                 std::to_string(m_gifDurationCombo->currentData().toInt()));
+    save_config(m_config);
+    updateHotkeyWarnings();
+    const QString assigned = m_waylandHotkeyDescription
+        ? m_waylandHotkeyDescription() : QString();
+    QMessageBox::information(
+        this, "Hotkeys",
+        alreadyAssigned
+            ? QStringLiteral(
+                  "The desktop shortcut settings were opened. Changes made there "
+                  "are authoritative and will update Goliath automatically.")
+            : QString("The desktop assigned the active shortcut: %1.")
+                  .arg(assigned.isEmpty() ? QStringLiteral("unassigned") : assigned));
+#endif
+}
+
 void SettingsDialog::buildInputTab(QWidget* inputWidget) {
     auto* pageLayout = new QVBoxLayout(inputWidget);
-    pageLayout->setContentsMargins(0, 0, 0, 0);
 
     auto* pageScroll = new QScrollArea();
     pageScroll->setObjectName("input_tab_scroll");
@@ -234,14 +573,15 @@ void SettingsDialog::buildInputTab(QWidget* inputWidget) {
     layout->addWidget(m_inputContainer);
 
     auto* inputBtnRow = new QHBoxLayout();
-    auto* saveBtn = new QPushButton(QString::fromUtf8("\xF0\x9F\x92\xBE Save Input Config"));
+    auto* saveBtn = new QPushButton("Save Input Config");
     connect(saveBtn, &QPushButton::clicked, this, &SettingsDialog::saveInputConfig);
     inputBtnRow->addWidget(saveBtn);
 
-    auto* resetBtn = new QPushButton(QString::fromUtf8("\xE2\x86\xBB Reset to Defaults")); // ↻ Reset to Defaults
+    auto* resetBtn = new QPushButton("Reset to Defaults");
     connect(resetBtn, &QPushButton::clicked, this, &SettingsDialog::resetInputConfig);
     inputBtnRow->addWidget(resetBtn);
-    layout->addLayout(inputBtnRow);
+    // Keep actions visible while the controller mapping list scrolls.
+    pageLayout->addLayout(inputBtnRow);
 
     int storedDevice = storedInputProfile();
     int idx = m_inputDeviceCombo->findData(storedDevice);
@@ -281,7 +621,7 @@ void SettingsDialog::buildPathTab(QWidget* pathWidget) {
 
     pathLayout->addStretch();
 
-    auto* saveBtn = new QPushButton(QString::fromUtf8("\xF0\x9F\x92\xBE Save Path Settings"));
+    auto* saveBtn = new QPushButton("Save Path Settings");
     connect(saveBtn, &QPushButton::clicked, this, &SettingsDialog::savePathConfig);
     pathLayout->addWidget(saveBtn);
 
@@ -590,7 +930,6 @@ void SettingsDialog::loadInputConfig() {
 
     m_inputLayout->addStretch();
     m_lastInputDevice = device;
-    qDebug() << "loadInputConfig done";
 }
 
 void SettingsDialog::refreshJoystickList() {

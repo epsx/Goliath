@@ -217,7 +217,10 @@ jobs:
           sudo apt-get install --yes \
             build-essential \
             cmake \
+            libpipewire-0.3-dev \
+            libx11-dev \
             ninja-build \
+            pkg-config \
             qt6-base-dev
 
       - name: Build and cache SDL3
@@ -233,6 +236,8 @@ jobs:
           cmake -S . -B build-ci -G Ninja
           -DCMAKE_BUILD_TYPE=Release
           -DBUILD_TESTS=ON
+          -DGOLIATH_REQUIRE_X11_CAPTURE=ON
+          -DGOLIATH_REQUIRE_WAYLAND_CAPTURE=ON
           -DCMAKE_PREFIX_PATH="${{ steps.sdl.outputs.prefix }}"
 
       - name: Build

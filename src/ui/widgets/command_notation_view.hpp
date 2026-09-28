@@ -25,6 +25,8 @@ public:
     void setCommandText(const QString& text);
     void setOverlayPresentation(bool enabled);
     void revealSourceLine(int sourceLine);
+    void scrollToSourceLine(int sourceLine);
+    int firstVisibleSourceLine() const;
     void clearFindHighlight();
 
 protected:

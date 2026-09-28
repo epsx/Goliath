@@ -1,6 +1,11 @@
 #include "ui/library_view_logic.hpp"
+#include "ui/recording_id.hpp"
 
 #include <catch2/catch.hpp>
+
+#include <QDir>
+#include <QFile>
+#include <QTemporaryDir>
 
 using goliath::VisibleSelectionDecision;
 using goliath::LibraryPlaytimeFilter;
@@ -20,6 +25,46 @@ using goliath::libraryVariantAllowed;
 using goliath::treeItemHasExpandableChildren;
 using goliath::visibleSelectionDecision;
 using goliath::visibleSelectionShouldBeRevealed;
+
+TEST_CASE("recording folders follow exact media filenames for Neo Geo CD",
+          "[library-view][gallery]") {
+    CHECK(goliath::recordingIdForMedia(
+        "2020 Super Baseball (Japan) (En,Ja).cue") ==
+          "2020_Super_Baseball__Japan___En_Ja_");
+    CHECK(goliath::recordingIdForMedia(
+        "3 count bout (1995) (snk) (jp-us) (fire suplex).chd") ==
+          "3_count_bout__1995___snk___jp-us___fire_suplex_");
+    CHECK(goliath::recordingIdForMedia("rbff1.neo") == "rbff1");
+    CHECK(goliath::recordingIdForMedia("") == "game");
+}
+
+TEST_CASE("GIF folder action targets only games with recordings",
+          "[library-view][gallery]") {
+    QTemporaryDir temp;
+    REQUIRE(temp.isValid());
+    const QString id = goliath::recordingIdForMedia(
+        "2020 Super Baseball (Japan) (En,Ja).cue");
+    const QString gameFolder = QDir(temp.path()).filePath("recordings/" + id);
+    const QString dateFolder = QDir(gameFolder).filePath("2026-09-26");
+    REQUIRE(QDir().mkpath(dateFolder));
+    CHECK(goliath::recordingFolderWithGifs(temp.path(), id).isEmpty());
+    QFile gif(QDir(dateFolder).filePath("16-30-42.gif"));
+    REQUIRE(gif.open(QIODevice::WriteOnly));
+    gif.write("GIF89a", 6);
+    gif.close();
+    CHECK(goliath::recordingFolderWithGifs(temp.path(), id) ==
+          QDir(gameFolder).absolutePath());
+    CHECK(goliath::recordingFolderWithGifs(temp.path(), "other-game").isEmpty());
+
+    const QString legacy = QDir(temp.path()).filePath("screenshots");
+    REQUIRE(QDir().mkpath(legacy));
+    QFile oldGif(QDir(legacy).filePath("rbff1-20260926.gif"));
+    REQUIRE(oldGif.open(QIODevice::WriteOnly));
+    oldGif.write("GIF89a", 6);
+    oldGif.close();
+    CHECK(goliath::legacyGifFolder(legacy, "rbff1") == QDir(legacy).absolutePath());
+    CHECK(goliath::legacyGifFolder(legacy, "rbff2").isEmpty());
+}
 
 TEST_CASE("visible library selections remain stable", "[library-view]") {
     CHECK(visibleSelectionDecision(true, true) ==

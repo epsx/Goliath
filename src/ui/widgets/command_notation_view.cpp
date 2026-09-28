@@ -262,6 +262,23 @@ void CommandNotationView::revealSourceLine(int sourceLine) {
     viewport()->update();
 }
 
+void CommandNotationView::scrollToSourceLine(int sourceLine) {
+    for (std::size_t index = 0; index < m_renderRows.size(); ++index) {
+        if (m_renderRows[index].sourceLine != sourceLine) continue;
+        verticalScrollBar()->setValue(
+            m_margin + static_cast<int>(index) * m_lineHeight);
+        return;
+    }
+}
+
+int CommandNotationView::firstVisibleSourceLine() const {
+    if (m_renderRows.empty() || m_lineHeight <= 0) return 0;
+    const int index = std::clamp(
+        (verticalScrollBar()->value() - m_margin) / m_lineHeight,
+        0, static_cast<int>(m_renderRows.size()) - 1);
+    return std::max(0, m_renderRows[static_cast<std::size_t>(index)].sourceLine);
+}
+
 void CommandNotationView::clearFindHighlight() {
     m_highlightedSourceLine = -1;
     viewport()->update();

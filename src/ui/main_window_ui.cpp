@@ -1,10 +1,14 @@
 #include "ui/main_window.hpp"
+#include "ui/application_shortcuts.hpp"
+#include "ui/gallery_frame.hpp"
 
 #include "common/theme.hpp"
 #include "ui/widgets/title_bar.hpp"
+#include "ui/lithogen_dialog.hpp"
 
 #include <QAction>
 #include <QActionGroup>
+#include <QButtonGroup>
 #include <QCheckBox>
 #include <QColor>
 #include <QComboBox>
@@ -19,10 +23,12 @@
 #include <QLineEdit>
 #include <QMenu>
 #include <QModelIndex>
+#include <QMovie>
 #include <QPainter>
 #include <QPixmap>
 #include <QPushButton>
 #include <QPolygon>
+#include <QPoint>
 #include <QScrollArea>
 #include <QShortcut>
 #include <QSize>
@@ -291,7 +297,16 @@ void MainWindow::buildUi() {
     m_clearFiltersAction = filtersMenu->addAction(
         "Clear rating/playtime filters", this,
         &MainWindow::clearLibraryFilters);
+#if defined(GOLIATH_X11_CAPTURE)
+    // Qt's native menu indicator sits at the lower edge of styled buttons
+    // on this X11 theme. Open the same menu from a plain themed button.
+    connect(m_filtersButton, &QPushButton::clicked, this, [this, filtersMenu]() {
+        filtersMenu->popup(m_filtersButton->mapToGlobal(
+            QPoint(0, m_filtersButton->height())));
+    });
+#else
     m_filtersButton->setMenu(filtersMenu);
+#endif
     toolbar->addWidget(m_filtersButton);
     updateFiltersButton();
 
@@ -307,8 +322,6 @@ void MainWindow::buildUi() {
     auto* favoritesOnlyCheckbox = new QCheckBox(
         QString::fromUtf8("\xE2\x98\x85 Favorites only")); // ★
     favoritesOnlyCheckbox->setChecked(m_favoritesOnly);
-    favoritesOnlyCheckbox->setToolTip(
-        "Show only favorite games in the current Neo Geo library");
     connect(favoritesOnlyCheckbox, &QCheckBox::toggled,
             this, &MainWindow::onFavoritesOnlyChanged);
     toolbar->addWidget(favoritesOnlyCheckbox);
@@ -317,7 +330,8 @@ void MainWindow::buildUi() {
 
     auto* randomBtn = new QPushButton(QString::fromUtf8("\xF0\x9F\x8E\xB2 Random")); // 🎲 Random
     randomBtn->setObjectName("random_btn");
-    randomBtn->setToolTip("Launch random game (Ctrl+R)");
+    randomBtn->setToolTip(QString("Launch random game (%1)").arg(
+        QKeySequence(kRandomGameShortcut).toString(QKeySequence::NativeText)));
     connect(randomBtn, &QPushButton::clicked, this, &MainWindow::launchRandomGame);
     toolbar->addWidget(randomBtn);
 
@@ -331,7 +345,7 @@ void MainWindow::buildUi() {
         QString::fromUtf8("\xE2\x9A\x99 Per-game Settings..."),
         this, &MainWindow::openGameSettings));
     m_selectionActions.push_back(toolsMenu->addAction(
-        QString::fromUtf8("\xF0\x9F\x92\xBE Manage Save Data..."),
+        QString::fromUtf8("\xF0\x9F\x92\xBE Save Data Manager..."),
         this, &MainWindow::manageSaveData));
     m_selectionActions.push_back(toolsMenu->addAction(
         QString::fromUtf8("\xE2\x8F\xB1 Benchmark Selected Game..."),
@@ -339,15 +353,37 @@ void MainWindow::buildUi() {
     m_selectionActions.push_back(toolsMenu->addAction(
         QString::fromUtf8("\xF0\x9F\x8E\xB5 Export Selected Audio WAV..."),
         this, &MainWindow::exportSelectedAudio));
+    m_screenshotAction = toolsMenu->addAction(
+        "Capture game screenshot (3s)...", this,
+        &MainWindow::captureGameScreenshot);
+#if defined(GOLIATH_X11_CAPTURE)
+    m_gifAction = toolsMenu->addAction(
+        "Record game GIF (3s)...", this, [this]() { recordGameGifAfter(3000); });
+#endif
+    updateScreenshotAction();
+    toolsMenu->addAction(QString::fromUtf8(
+        "\xF0\x9F\x94\x81 Convertor .zip to .neo (Lithogen)"), this, [this]() {
+        LithogenDialog dialog(m_config, QString::fromStdString(m_romDir.string()), this);
+        if (dialog.exec() == QDialog::Accepted) rescanRoms();
+    });
     toolsMenu->addSeparator();
-    m_rescanAction = toolsMenu->addAction(QString::fromUtf8("\xF0\x9F\x94\x84 Rescan ROMs (F5)"), this, &MainWindow::rescanRoms);
+    m_rescanAction = toolsMenu->addAction(
+        QString::fromUtf8("\xF0\x9F\x94\x84 Rescan ROMs (%1)").arg(
+            QKeySequence(kRescanRomsShortcut).toString(QKeySequence::NativeText)),
+        this, &MainWindow::rescanRoms);
     toolsMenu->addAction(QString::fromUtf8("\xF0\x9F\x94\x8D Verify BIOS"),
                          this, &MainWindow::verifyBios); // 🔍
     toolsMenu->addSeparator();
     toolsMenu->addAction(QString::fromUtf8(
                              "\xF0\x9F\xA9\xBA Diagnostics & Logs..."), // 🩺
                          this, &MainWindow::openLogging);
+#if defined(GOLIATH_X11_CAPTURE)
+    connect(toolsBtn, &QPushButton::clicked, this, [toolsBtn, toolsMenu]() {
+        toolsMenu->popup(toolsBtn->mapToGlobal(QPoint(0, toolsBtn->height())));
+    });
+#else
     toolsBtn->setMenu(toolsMenu);
+#endif
     toolbar->addWidget(toolsBtn);
 
     auto* settingsBtn = new QPushButton(QString::fromUtf8("\xE2\x9A\x99 Settings")); // ⚙ Settings
@@ -360,7 +396,6 @@ void MainWindow::buildUi() {
     aboutBtn->setIcon(aboutBtn->style()->standardIcon(
         QStyle::SP_MessageBoxInformation, nullptr, aboutBtn));
     aboutBtn->setIconSize(QSize(16, 16));
-    aboutBtn->setToolTip("About Goliath");
     connect(aboutBtn, &QPushButton::clicked, this, &MainWindow::openAbout);
     toolbar->addWidget(aboutBtn);
 
@@ -389,7 +424,6 @@ void MainWindow::buildUi() {
     m_mvsAesButton->setCheckable(true);
     m_mvsAesButton->setAutoExclusive(true);
     m_mvsAesButton->setChecked(m_librarySystem == "neogeo");
-    m_mvsAesButton->setToolTip("Show Neo Geo cartridge games (MVS / AES)");
     connect(m_mvsAesButton, &QPushButton::clicked, this, [this] {
         setLibrarySystem("neogeo");
     });
@@ -400,7 +434,6 @@ void MainWindow::buildUi() {
     m_cdButton->setCheckable(true);
     m_cdButton->setAutoExclusive(true);
     m_cdButton->setChecked(m_librarySystem == "neogeocd");
-    m_cdButton->setToolTip("Show Neo Geo CD games (CD / CDZ modes use the same game library)");
     connect(m_cdButton, &QPushButton::clicked, this, [this] {
         setLibrarySystem("neogeocd");
     });
@@ -437,13 +470,15 @@ void MainWindow::buildUi() {
     m_searchEntry = new QLineEdit();
     m_searchEntry->setPlaceholderText(QString::fromUtf8("\xF0\x9F\x94\x8D Search games...")); // 🔍
     m_searchEntry->setClearButtonEnabled(true);
-    m_searchEntry->setToolTip(
-        "Filter the current library. Use the clear button or press Escape "
-        "to restore the complete list. Ctrl+F focuses and selects the current query.");
+    m_searchEntry->setToolTip(QString(
+        "Filter the current library. Use the clear button or press %1 "
+        "to restore the complete list. %2 focuses and selects the current query.")
+        .arg(QKeySequence(kClearSearchShortcut).toString(QKeySequence::NativeText),
+             QKeySequence(kFocusSearchShortcut).toString(QKeySequence::NativeText)));
     connect(m_searchEntry, &QLineEdit::textChanged, this, &MainWindow::filterGames);
 
     auto* clearSearchShortcut =
-        new QShortcut(QKeySequence(Qt::Key_Escape), m_searchEntry);
+        new QShortcut(QKeySequence(kClearSearchShortcut), m_searchEntry);
     clearSearchShortcut->setContext(Qt::WidgetShortcut);
     connect(clearSearchShortcut, &QShortcut::activated,
             m_searchEntry, &QLineEdit::clear);
@@ -455,7 +490,7 @@ void MainWindow::buildUi() {
     auto* rightWidget = new QWidget();
     rightWidget->setMinimumWidth(720);
     auto* rightLayout = new QVBoxLayout(rightWidget);
-    rightLayout->setContentsMargins(4, 4, 4, 4);
+    rightLayout->setContentsMargins(4, 0, 4, 4);
     rightLayout->setSpacing(14);
 
     m_detailsScroll = new QScrollArea();
@@ -464,11 +499,13 @@ void MainWindow::buildUi() {
 
     auto* detailsWidget = new QWidget();
     auto* detailsLayout = new QVBoxLayout(detailsWidget);
-    detailsLayout->setContentsMargins(8, 8, 8, 8);
+    detailsLayout->setContentsMargins(8, 0, 8, 8);
     detailsLayout->setSpacing(6);
 
-    auto* detailsHeaderLayout = new QVBoxLayout();
-    detailsHeaderLayout->setContentsMargins(0, 0, 0, 0);
+    auto* detailsHeaderCard = new QFrame();
+    detailsHeaderCard->setObjectName("details_header_card");
+    auto* detailsHeaderLayout = new QVBoxLayout(detailsHeaderCard);
+    detailsHeaderLayout->setContentsMargins(14, 10, 14, 10);
     detailsHeaderLayout->setSpacing(0);
 
     auto* detailsTitleRow = new QHBoxLayout();
@@ -486,8 +523,6 @@ void MainWindow::buildUi() {
     m_favoriteButton->setObjectName("favorite_btn");
     m_favoriteButton->setCheckable(true);
     m_favoriteButton->setEnabled(false);
-    m_favoriteButton->setToolTip(
-        "Add the selected parent, variant, CUE, or CHD to Favorites");
     connect(m_favoriteButton, &QPushButton::toggled,
             this, &MainWindow::toggleSelectedFavorite);
     detailsTitleRow->addWidget(m_favoriteButton, 0, Qt::AlignTop);
@@ -528,22 +563,18 @@ void MainWindow::buildUi() {
     }
     detailsVariantRow->addLayout(ratingRow);
     detailsHeaderLayout->addLayout(detailsVariantRow);
-    detailsLayout->addLayout(detailsHeaderLayout);
-
-    auto* separator = new QFrame();
-    separator->setFrameShape(QFrame::HLine);
-    separator->setFrameShadow(QFrame::Plain);
-    separator->setObjectName("details_separator");
-    detailsLayout->addWidget(separator);
+    detailsLayout->addWidget(detailsHeaderCard);
+    detailsLayout->addSpacing(12);
 
     auto* mediaRow = new QHBoxLayout();
     mediaRow->setSpacing(8);
     mediaRow->setContentsMargins(0, 0, 0, 0);
 
     auto* infoGrid = new QFrame();
+    infoGrid->setObjectName("details_info_card");
     auto* infoGridLayout = new QFormLayout(infoGrid);
 
-    infoGridLayout->setContentsMargins(0, 2, 0, 4);
+    infoGridLayout->setContentsMargins(16, 14, 16, 14);
     infoGridLayout->setSpacing(4);
     infoGridLayout->setHorizontalSpacing(14);
     infoGridLayout->setLabelAlignment(Qt::AlignRight);
@@ -600,7 +631,114 @@ void MainWindow::buildUi() {
         Qt::AlignTop | Qt::AlignHCenter
     );
 
-    mediaRow->addWidget(snapshotFrame, 0, Qt::AlignTop);
+    // Keep the original image area. The gallery controls live next to the
+    // card, so they take no height from either the image or Description.
+    auto* galleryRail = new QWidget();
+    galleryRail->setFixedSize(92, 390);
+    auto* galleryControls = new QVBoxLayout(galleryRail);
+    galleryControls->setContentsMargins(4, 8, 4, 8);
+    galleryControls->setSpacing(6);
+    auto* galleryModes = new QButtonGroup(this);
+    galleryModes->setExclusive(true);
+    m_gallerySnaps = new QPushButton("Snaps", galleryRail);
+    m_galleryGifs = new QPushButton("GIFs (0)", galleryRail);
+    for (QPushButton* mode : {m_gallerySnaps, m_galleryGifs}) {
+        mode->setObjectName("gallery_mode_button");
+        mode->setCheckable(true);
+        mode->setFixedSize(84, 32);
+        galleryModes->addButton(mode);
+        galleryControls->addWidget(mode, 0, Qt::AlignHCenter);
+    }
+    m_gallerySnaps->setChecked(true);
+    galleryControls->addSpacing(6);
+    m_galleryPrevious = new QPushButton(galleryRail);
+    m_galleryPlay = new QPushButton(galleryRail);
+    m_galleryNext = new QPushButton(galleryRail);
+    m_galleryCountLabel = new QLabel(galleryRail);
+    m_galleryPrevious->setIcon(m_galleryPrevious->style()->standardIcon(
+        QStyle::SP_ArrowUp, nullptr, m_galleryPrevious));
+    m_galleryPrevious->setAccessibleName("Previous GIF");
+    m_galleryPlay->setIcon(m_galleryPlay->style()->standardIcon(
+        QStyle::SP_MediaPlay, nullptr, m_galleryPlay));
+    m_galleryPlay->setAccessibleName("Play GIF");
+    m_galleryNext->setIcon(m_galleryNext->style()->standardIcon(
+        QStyle::SP_ArrowDown, nullptr, m_galleryNext));
+    m_galleryNext->setAccessibleName("Next GIF");
+    for (QPushButton* button : {m_galleryPrevious, m_galleryPlay, m_galleryNext}) {
+        button->setFixedSize(34, 30);
+        button->setIconSize(QSize(16, 16));
+    }
+    m_galleryCountLabel->setFixedWidth(54);
+    m_galleryCountLabel->setAlignment(Qt::AlignCenter);
+    galleryControls->addWidget(m_galleryPrevious, 0, Qt::AlignHCenter);
+    galleryControls->addWidget(m_galleryCountLabel, 0, Qt::AlignHCenter);
+    galleryControls->addWidget(m_galleryNext, 0, Qt::AlignHCenter);
+    galleryControls->addWidget(m_galleryPlay, 0, Qt::AlignHCenter);
+    galleryControls->addStretch();
+    for (QPushButton* mode : {m_gallerySnaps, m_galleryGifs}) {
+        connect(mode, &QPushButton::toggled, this,
+                [this](bool selected) {
+                    if (selected) refreshGameGallery();
+                });
+    }
+    connect(m_galleryPrevious, &QPushButton::clicked, this, [this]() {
+        stopGalleryMovie();
+        if (m_galleryIndex > 0) --m_galleryIndex;
+        showGalleryItem();
+    });
+    connect(m_galleryNext, &QPushButton::clicked, this, [this]() {
+        stopGalleryMovie();
+        if (m_galleryIndex + 1 < static_cast<int>(m_galleryGifPaths.size()))
+            ++m_galleryIndex;
+        showGalleryItem();
+    });
+    connect(m_galleryPlay, &QPushButton::clicked, this, [this]() {
+        if (!m_galleryMovie) {
+            if (!m_galleryGifs->isChecked() || m_galleryGifPaths.isEmpty()) return;
+            const QString path = m_galleryGifPaths.at(m_galleryIndex);
+            auto* movie = new QMovie(path, QByteArray("gif"), this);
+            if (!movie->isValid()) {
+                delete movie;
+                m_snapshotLabel->setPixmap(QPixmap());
+                m_snapshotLabel->setText("Could not play GIF");
+                return;
+            }
+            m_galleryMovie = movie;
+            connect(movie, &QMovie::frameChanged, this, [this, movie](int) {
+                if (m_galleryMovie != movie) return;
+                m_snapshotLabel->setPixmap(galleryGifFrame(
+                    movie->currentImage(), m_snapshotLabel->size()));
+            });
+            m_galleryPlay->setIcon(m_galleryPlay->style()->standardIcon(
+                QStyle::SP_MediaPause, nullptr, m_galleryPlay));
+            m_galleryPlay->setAccessibleName("Pause GIF");
+            connect(movie, &QMovie::finished, this, [this, movie]() {
+                if (m_galleryMovie != movie) return;
+                stopGalleryMovie();
+                showGalleryItem();
+            });
+            movie->start();
+        } else if (m_galleryMovie->state() == QMovie::Running) {
+            m_galleryMovie->setPaused(true);
+            m_galleryPlay->setIcon(m_galleryPlay->style()->standardIcon(
+                QStyle::SP_MediaPlay, nullptr, m_galleryPlay));
+            m_galleryPlay->setAccessibleName("Resume GIF");
+        } else {
+            m_galleryMovie->setPaused(false);
+            m_galleryPlay->setIcon(m_galleryPlay->style()->standardIcon(
+                QStyle::SP_MediaPause, nullptr, m_galleryPlay));
+            m_galleryPlay->setAccessibleName("Pause GIF");
+        }
+    });
+
+    auto* galleryPanel = new QWidget();
+    galleryPanel->setFixedSize(612, 390);
+    auto* galleryPanelLayout = new QHBoxLayout(galleryPanel);
+    galleryPanelLayout->setContentsMargins(0, 0, 0, 0);
+    galleryPanelLayout->setSpacing(0);
+    galleryPanelLayout->addWidget(galleryRail, 0, Qt::AlignTop);
+    galleryPanelLayout->addWidget(snapshotFrame, 0, Qt::AlignTop);
+    mediaRow->addWidget(galleryPanel, 0, Qt::AlignTop);
     detailsLayout->addLayout(mediaRow);
 
     auto* historyLabel = new QLabel("Description");
@@ -637,22 +775,33 @@ void MainWindow::buildUi() {
     // ResizeFilter already provides all-edge resizing for this frameless
     // window, so the native QSizeGrip would only add a stray corner square.
     statusBar_->setSizeGripEnabled(false);
+    m_libraryStatusLabel = new QLabel(statusBar_);
+    m_libraryStatusLabel->setObjectName("library_status");
+    m_libraryStatusLabel->setContentsMargins(4, 0, 0, 0);
+    statusBar_->addWidget(m_libraryStatusLabel, 1);
     m_launchButton = new QPushButton(QString::fromUtf8("\xE2\x96\xB6 Launch")); // ▶ Launch
     m_launchButton->setObjectName("launch_btn");
-    m_launchButton->setToolTip("Launch selected game (Enter)");
+    m_launchButton->setToolTip(QString("Launch selected game (%1)").arg(
+        QKeySequence(kLaunchSelectedShortcut).toString(QKeySequence::NativeText)));
     connect(m_launchButton, &QPushButton::clicked,
             this, &MainWindow::launchSelected);
     statusBar_->addPermanentWidget(m_launchButton);
     setSelectionActionsEnabled(false);
 
     // Keyboard shortcuts
-    connect(new QShortcut(QKeySequence("F5"), this), &QShortcut::activated, this, &MainWindow::rescanRoms);
-    connect(new QShortcut(QKeySequence("Ctrl+F"), this), &QShortcut::activated, this, &MainWindow::focusSearch);
-    connect(new QShortcut(QKeySequence("Ctrl+R"), this), &QShortcut::activated, this, &MainWindow::launchRandomGame);
-    connect(new QShortcut(QKeySequence("Ctrl+Shift+E"), this), &QShortcut::activated, this, &MainWindow::expandAll);
-    connect(new QShortcut(QKeySequence("Ctrl+Shift+C"), this), &QShortcut::activated, this, &MainWindow::collapseAll);
+    connect(new QShortcut(QKeySequence(kRescanRomsShortcut), this),
+            &QShortcut::activated, this, &MainWindow::rescanRoms);
+    connect(new QShortcut(QKeySequence(kFocusSearchShortcut), this),
+            &QShortcut::activated, this, &MainWindow::focusSearch);
+    connect(new QShortcut(QKeySequence(kRandomGameShortcut), this),
+            &QShortcut::activated, this, &MainWindow::launchRandomGame);
+    connect(new QShortcut(QKeySequence(kExpandAllShortcut), this),
+            &QShortcut::activated, this, &MainWindow::expandAll);
+    connect(new QShortcut(QKeySequence(kCollapseAllShortcut), this),
+            &QShortcut::activated, this, &MainWindow::collapseAll);
 
-    auto* launchShortcut = new QShortcut(QKeySequence("Return"), m_tree);
+    auto* launchShortcut =
+        new QShortcut(QKeySequence(kLaunchSelectedShortcut), m_tree);
     launchShortcut->setContext(Qt::WidgetWithChildrenShortcut);
     connect(launchShortcut, &QShortcut::activated, this, &MainWindow::launchSelected);
 }

@@ -31,11 +31,11 @@ Linux support is maintained where practical.
 
 ## Screenshots
 
-[![Goliath main window using the Gruvbox Dark theme](Screenshots/goliath-main-dark.png)](Screenshots/goliath-main-dark.png)
+[![Goliath main window using the AMOLED Black theme](Screenshots/goliath-main-dark.png)](Screenshots/goliath-main-dark.png)
 
-| Input configuration | About Goliath |
-| --- | --- |
-| [![Goliath input configuration](Screenshots/goliath-input-settings.png)](Screenshots/goliath-input-settings.png) | [![About Goliath](Screenshots/goliath-about.png)](Screenshots/goliath-about.png) |
+| Neo Geo Classic library view | Input configuration | About Goliath |
+| --- | --- | --- |
+| [![Goliath Neo Geo Classic library view](Screenshots/goliath-main-no-info.png)](Screenshots/goliath-main-no-info.png) | [![Goliath input configuration](Screenshots/goliath-input-settings.png)](Screenshots/goliath-input-settings.png) | [![About Goliath](Screenshots/goliath-about.png)](Screenshots/goliath-about.png) |
 
 ## Main features
 
@@ -49,6 +49,9 @@ Linux support is maintained where practical.
 - Search, persistent exact-media Favorites and 1–5-star ratings, name/year/
   rating/playtime sorting, compact personal filters, visible-only Random,
   snapshots, and history.
+- Integrated Snaps/GIFs gallery, Windows game-window PNG capture, and
+  experimental 5-, 7-, or 10-second GIF recording on Windows, X11, and
+  portal-enabled Wayland desktops.
 - Per-game BIOS, video, input, and core settings without changing global
   configuration.
 - BIOS verification and safe JGRF BIOS preparation.
@@ -58,7 +61,7 @@ Linux support is maintained where practical.
 - Selected-game performance benchmark and one-shot WAV export.
 - Frontend and JGRF diagnostics with guarded log controls.
 - SDL3 controller mapping and asynchronous audio-device discovery.
-- Twelve contrast-checked light and dark themes.
+- Thirteen contrast-checked light and dark themes, including AMOLED Black.
 
 ## Getting started
 
@@ -104,7 +107,18 @@ authoritative launch file.
 To convert legally obtained Neo Geo ROM data from a compatible MAME ROM-set
 archive (`.zip`) to the TerraOnion `.neo` format, use
 [Lithogen](https://github.com/carmiker/lithogen) and follow its upstream
-instructions. Goliath does not download ROMs or perform this conversion.
+instructions. You can also choose **Tools → Convert ZIP to .neo (Lithogen)**,
+point Goliath to a separately installed Lithogen executable, and select one
+ZIP and output folder. Goliath shows the converter log and offers **Rescan
+ROMs** when the output is in its MVS/AES ROM directory. For split clones,
+keep the parent ZIP beside the selected ZIP. Goliath does not include
+Lithogen's code or download ROMs.
+
+For a group of games, choose **All ZIPs in a folder** in that dialog. Goliath
+checks each ZIP in sequence, shows its outcome, and skips files whose output
+`.neo` already exists. Enable **Advanced options** only if you need strict
+CRC checks, to change the automatic parent lookup, or to specify an extra
+parent ZIP or set ID for a single conversion.
 
 ### Neo Geo CD
 
@@ -169,6 +183,15 @@ Use **Tools** or a game's context menu for:
 - save-data management;
 - performance benchmarking;
 - WAV audio export;
+- game-window PNG capture on Windows and GIF capture on Windows, X11 Linux,
+  and portal-enabled Wayland desktops; recordings are saved under
+  `recordings/<media>/<date>/`. Choose 5, 7, or 10 seconds in Settings >
+  Hotkeys. On X11, Tools starts after a three-second return-to-game delay.
+  On Wayland, the desktop asks which game window to capture for each recording;
+  a GIF shortcut requires desktop approval and existing bindings are changed
+  through **Open Desktop Shortcut Settings...**. The portal-reported active
+  shortcut is authoritative; Goliath's preference is used only before the
+  first approval. PNG capture remains Windows-only;
 - diagnostics and log controls;
 - opening relevant media or configuration folders.
 
@@ -191,7 +214,12 @@ slim accent edge without adding opaque text panels. Goliath reads the catalog
 at launch. Visual notation uses a 10.5-point minimum Medium-weight fixed font
 to improve translucent-surface legibility while retaining automatic reflow
 and scrolling. Goliath neither bundles
-nor downloads it. No external icon pack is required or distributed.
+nor downloads it. No external icon pack is required or distributed. Games with
+matching commands show a punch indicator, and each game remembers its reading
+line when the overlay closes.
+
+In **About Goliath**, a build identifier that names a committed GitHub revision
+opens that commit; local uncommitted builds retain a plain development label.
 
 The default-on **Command overlay** toolbar check box controls automatic
 creation for future matching game launches and persists in `goliath.ini`.
@@ -201,8 +229,11 @@ game launch, playtime tracking, benchmarks, or WAV export.
 On Windows, the external overlay remains continuously visible over JGRF
 fullscreen when Vulkan is selected. OpenGL Core, OpenGL ES, and OpenGL
 Compatibility keep it visible in windowed mode, but their fullscreen
-presentation covers external overlays while the game owns focus. This is a
-renderer presentation limitation; Goliath does not modify or inject into JGRF.
+presentation covers external overlays while the game owns focus. On GNOME
+Wayland, window stacking is controlled by the compositor: a separate
+`command.dat` window may stay behind a fullscreen game even with Vulkan, and
+its desktop position cannot reliably be restored by Goliath. Goliath does not
+modify or inject into JGRF.
 
 Per-game profiles, playtime, Favorites, and ratings are stored separately from
 the generated game database, so rescanning does not remove them.
@@ -252,19 +283,22 @@ Debian or Ubuntu:
 
 ```bash
 sudo apt update
-sudo apt install build-essential cmake ninja-build qt6-base-dev libsdl3-dev
+sudo apt install build-essential cmake ninja-build pkg-config qt6-base-dev \
+  libsdl3-dev libx11-dev libpipewire-0.3-dev
 ```
 
 Fedora:
 
 ```bash
-sudo dnf install gcc-c++ cmake ninja-build qt6-qtbase-devel SDL3-devel
+sudo dnf install gcc-c++ cmake ninja-build pkgconf-pkg-config \
+  qt6-qtbase-devel SDL3-devel libX11-devel pipewire-devel
 ```
 
 Arch Linux:
 
 ```bash
-sudo pacman -S --needed base-devel cmake ninja qt6-base sdl3
+sudo pacman -S --needed base-devel cmake ninja pkgconf qt6-base sdl3 \
+  libx11 pipewire
 ```
 
 Then configure and build Goliath:
@@ -272,7 +306,9 @@ Then configure and build Goliath:
 ```bash
 cmake -S . -B build -G Ninja \
   -DCMAKE_BUILD_TYPE=Release \
-  -DBUILD_TESTS=OFF
+  -DBUILD_TESTS=OFF \
+  -DGOLIATH_REQUIRE_X11_CAPTURE=ON \
+  -DGOLIATH_REQUIRE_WAYLAND_CAPTURE=ON
 cmake --build build -j$(nproc)
 ```
 
@@ -289,8 +325,9 @@ Run it from the repository root with:
 ```
 
 Package names can vary on older distribution releases. CMake must be able to
-locate both Qt 6 Widgets and the SDL3 CMake package before configuration can
-complete.
+locate Qt 6 Widgets and D-Bus, SDL3, X11, and PipeWire before the full capture
+build can complete. Either `GOLIATH_REQUIRE_*_CAPTURE` option may be omitted
+for a deliberately reduced build without that Linux capture backend.
 
 Tests are disabled by default. Developers and CI builds can enable them with
 `-DBUILD_TESTS=ON` as shown below.
@@ -430,6 +467,12 @@ Detailed Windows deployment instructions are in
 - The validated Windows OpenGL ES runtime uses the documented compatibility
   fix described in
   [WINDOWS_OPENGL_ES_WGL_RUNTIME_FIX.md](docs/WINDOWS_OPENGL_ES_WGL_RUNTIME_FIX.md).
+- GIF recording remains experimental. X11 captures visible window pixels, so
+  overlapping or moving windows can appear in a recording. Wayland asks the
+  user to choose a window through the desktop portal for every recording.
+  Still PNG capture is currently Windows-only.
+- The final cross-platform capture acceptance checks are maintained in
+  [CAPTURE_VALIDATION.md](docs/CAPTURE_VALIDATION.md).
 
 ## Project documentation
 
@@ -440,7 +483,9 @@ Detailed Windows deployment instructions are in
 - [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) — dependency and license
   inventory;
 - [RELEASE_COMPLIANCE.md](docs/RELEASE_COMPLIANCE.md) — source and licensing
-  checklist for public releases.
+  checklist for public releases;
+- [CAPTURE_VALIDATION.md](docs/CAPTURE_VALIDATION.md) — compact Windows, X11,
+  and Wayland GIF/screenshot release matrix.
 
 ## Credits
 

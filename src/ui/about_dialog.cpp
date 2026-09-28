@@ -11,6 +11,7 @@
 #include <QLabel>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QScrollArea>
 #include <QSize>
 #include <QUrl>
@@ -80,6 +81,10 @@ QPushButton* makeExternalLinkButton(const QString& label,
 
 AboutDialog::AboutDialog(QWidget* parent)
     : QDialog(parent) {
+    const QString configuredProjectUrl = QString::fromUtf8(GOLIATH_PROJECT_URL);
+    const QString projectUrl = configuredProjectUrl.isEmpty()
+        ? QString::fromUtf8(kProjectUrl.data())
+        : configuredProjectUrl;
     // Give the complete project and license summary room at the normal
     // desktop DPI while retaining scrolling as a fallback on smaller screens.
     resize(960, 680);
@@ -136,15 +141,35 @@ AboutDialog::AboutDialog(QWidget* parent)
     version->setTextInteractionFlags(Qt::TextSelectableByMouse);
     identityLayout->addWidget(version);
 
-    auto* build = new QLabel(
-        QString("Build: %1\nDate: %2")
-            .arg(QString::fromUtf8(GOLIATH_BUILD_REVISION),
-                 QString::fromUtf8(GOLIATH_BUILD_DATE)),
-        identityCard);
+    const QString revision = QString::fromUtf8(GOLIATH_BUILD_REVISION);
+    auto* build = new QLabel(identityCard);
     build->setObjectName("about_build");
     build->setAlignment(Qt::AlignCenter);
     build->setWordWrap(true);
-    build->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    static const QRegularExpression gitRevision("^[0-9a-fA-F]{12,40}$");
+    if (gitRevision.match(revision).hasMatch() &&
+        projectUrl.startsWith("https://github.com/")) {
+        const QUrl url(projectUrl + "/commit/" + revision);
+        build->setText(QString("Build: <a href=\"%1\" style=\"color:inherit; text-decoration:underline\">%2</a><br>Date: %3")
+                           .arg(url.toString(QUrl::FullyEncoded).toHtmlEscaped(),
+                                revision.toHtmlEscaped(),
+                                QString::fromUtf8(GOLIATH_BUILD_DATE).toHtmlEscaped()));
+        build->setTextFormat(Qt::RichText);
+        build->setTextInteractionFlags(Qt::TextBrowserInteraction);
+        build->setOpenExternalLinks(false);
+        build->setCursor(Qt::PointingHandCursor);
+        build->setToolTip("Open this build's source commit on GitHub");
+        connect(build, &QLabel::linkActivated, this,
+                [this](const QString& link) {
+            if (QDesktopServices::openUrl(QUrl(link))) return;
+            QMessageBox::warning(this, "Open Link",
+                "Goliath could not open the build commit in the default browser.");
+        });
+    } else {
+        build->setText(QString("Build: %1\nDate: %2")
+                           .arg(revision, QString::fromUtf8(GOLIATH_BUILD_DATE)));
+        build->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    }
     identityLayout->addWidget(build);
 
     cardsLayout->addWidget(identityCard);
@@ -174,6 +199,11 @@ AboutDialog::AboutDialog(QWidget* parent)
         "the Jolly Good API (JG), JGRF, and Geolith.",
         "about_body", informationCard);
     informationLayout->addWidget(upstreamCredit);
+    auto* lithogenCredit = makeWrappedLabel(
+        "Thanks to carmiker for Lithogen, the separately installed "
+        "ZIP to .neo converter.",
+        "about_body", informationCard);
+    informationLayout->addWidget(lithogenCredit);
 
     auto* upstreamLinks = new QGridLayout();
     upstreamLinks->setHorizontalSpacing(8);
@@ -188,6 +218,9 @@ AboutDialog::AboutDialog(QWidget* parent)
     upstreamLinks->addWidget(makeExternalLinkButton(
         "Geolith", "https://gitlab.com/jgemu/geolith", {}, informationCard),
         1, 1);
+    upstreamLinks->addWidget(makeExternalLinkButton(
+        "Lithogen", "https://github.com/carmiker/lithogen", {}, informationCard),
+        2, 0);
     informationLayout->addLayout(upstreamLinks);
 
     auto* projectHeading = new QLabel("Goliath project", informationCard);
@@ -197,10 +230,6 @@ AboutDialog::AboutDialog(QWidget* parent)
     auto* projectLinks = new QGridLayout();
     projectLinks->setHorizontalSpacing(8);
     projectLinks->setVerticalSpacing(8);
-    const QString configuredProjectUrl = QString::fromUtf8(GOLIATH_PROJECT_URL);
-    const QString projectUrl = configuredProjectUrl.isEmpty()
-        ? QString::fromUtf8(kProjectUrl.data())
-        : configuredProjectUrl;
     const QString configuredLicenseUrl = QString::fromUtf8(GOLIATH_LICENSE_URL);
     const QString licenseUrl = configuredLicenseUrl.isEmpty()
         ? QString::fromUtf8(kProjectLicenseUrl.data())

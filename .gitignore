@@ -45,6 +45,7 @@
 /neocd/
 /roms/
 /snaps/
+/recordings/
 
 # Local patch, archive, editor-backup, and rejection artifacts.
 /*.patch

@@ -47,7 +47,7 @@ protected:
             if (auto* layout = m_dialog->layout()) layout->activate();
             connectWindowHandle();
             setScreen(initialScreen());
-            fitToScreen(true);
+            fitToScreen(!m_dialog->property("dialog_geometry_prepositioned").toBool());
             scheduleFit(false);
         } else if ((event->type() == QEvent::LayoutRequest ||
                     event->type() == QEvent::Resize) &&
@@ -345,7 +345,7 @@ void setupFramelessDialog(QDialog* dialog, const QString& title,
         dialog->setStyleSheet(pw->styleSheet());
 
     auto* outerLayout = new QVBoxLayout(dialog);
-    outerLayout->setContentsMargins(1, 1, 1, 1);
+    outerLayout->setContentsMargins(0, 0, 0, 0);
     outerLayout->setSpacing(0);
 
     if (showTitleBar)

@@ -3,8 +3,9 @@
 This document records the major implementation, validation, refactoring, and
 repository-cleanup milestones of `goliath-qt-cpp`. Entries are newest first.
 
-Historical test counts are retained as checkpoint evidence. The current
-authoritative baseline is:
+Historical test counts are retained as checkpoint evidence. The following
+checkpoint predates the newer candidate patches; run the current test suite
+for the present count:
 
 ```text
 All tests passed (2505 assertions in 199 test cases)
@@ -14,6 +15,270 @@ The preceding `1360/99` Feature 9 baseline passed its per-game mapping,
 isolation, and global-configuration regression checks. The `1239/88` runtime
 baseline passed manual MVS/AES, Neo Geo CD CUE, Neo Geo CD CHD, Settings, and
 visible-only Random smoke tests.
+
+---
+
+## 2026-09-28 — Patch 32BA3: Wayland shortcut ownership clarity (candidate)
+
+- Separated the desktop-owned Wayland GIF shortcut from Goliath's saved GIF
+  duration so Settings no longer presents the initial preference as active.
+- Disabled direct preference editing after the desktop assigns a shortcut and
+  labeled the portal-reported binding as the active shortcut.
+- Kept portal v2 `ConfigureShortcuts` support and opened GNOME's Applications
+  settings when the installed v1 backend does not implement that method.
+
+---
+
+## 2026-09-27 — Patch 32BA2: Wayland shortcut build repair (candidate)
+
+- Renamed the internal portal-trigger extraction helper so it is not hidden by
+  the `WaylandGifHotkey::assignedTrigger()` accessor during C++ member lookup.
+- Kept the Patch 32BA1 portal behavior unchanged.
+
+---
+
+## 2026-09-27 — Patch 32BA1: Wayland shortcut reconfiguration (candidate)
+
+- Reused the active GlobalShortcuts session and opened the portal v2
+  configuration UI when Settings requests a shortcut change, instead of
+  recreating a session that merely restored GNOME's persisted binding.
+- Tracked the portal's `ShortcutsChanged` signal and displayed/logged the
+  desktop-assigned trigger, which is authoritative on Wayland.
+- Kept initial `preferred_trigger` support and detected `ConfigureShortcuts`
+  directly, including distributions that backport the method without changing
+  the reported GlobalShortcuts interface version.
+
+---
+
+## 2026-09-27 — Patch 32AY: capture release matrix and GitHub preparation (candidate)
+
+- Added a compact final validation matrix for Windows, X11, and Wayland GIF
+  recording, Windows PNG capture, and the integrated Snaps/GIFs gallery.
+- Required the Linux GitHub Actions job to compile both optional capture
+  backends instead of silently producing a build without X11 or Wayland
+  recording support.
+- Refreshed the public, content-free screenshots for the current cards,
+  controls, Settings layout, About dialog, and AMOLED Black theme.
+- Corrected the documented theme count and consolidated the accepted capture
+  limitations without changing application runtime behavior.
+
+---
+
+## 2026-09-27 — Patch 32AX1: viewport-fix build repair (candidate)
+
+- Included the complete `QTreeWidget` definition required by the 32AX
+  viewport-restoration calls and their QObject-backed timer contexts.
+- No runtime behavior from 32AX was changed.
+
+---
+
+## 2026-09-27 — Patch 32AX: Settings-close library viewport stability (candidate)
+
+- Preserved the game tree's vertical and horizontal viewport while Settings
+  reloads runtime paths, profiles, playtime, and personal library state.
+- Restored the saved viewport immediately and after queued Qt layout passes,
+  preventing Expanded All from pulling the retained selection to the bottom
+  of the list when Settings closes.
+- Kept selection, expansion state, filtering, sorting, and Settings reload
+  behavior unchanged.
+
+---
+
+## 2026-09-27 — Patch 32AW: borderless frameless-window edges (candidate)
+
+- Removed the one-pixel themed perimeter from the main window, every dialog
+  built through the shared frameless-window helper, and the command overlay.
+- Kept the custom title-bar separator, themed cards/control borders, and
+  all-side resize filter unchanged.
+- Replaced the former perimeter regression with an all-theme assertion that no
+  top-level frameless-window border rule is generated.
+
+---
+
+## 2026-09-27 — Patch 32AV1: details-card top alignment (candidate)
+
+- Removed the nested 4 px and 8 px top offsets from the details panel so the
+  title card aligns with the MVS/CD selector at the top of the splitter.
+- Returned the same 12 px below the title card, keeping the metadata/gallery
+  row at its established height while giving the two card rows clearer space.
+
+---
+
+## 2026-09-27 — Patch 32AV: AMOLED theme and details cards (candidate)
+
+- Added the `AMOLED Black` theme with a true-black primary surface, restrained
+  warm-gold accent, and WCAG-aware semantic foregrounds.
+- Placed the selected game's title/variant/rating and metadata in separate
+  theme-aware cards while preserving the gallery's existing 500 x 370 image
+  area and its external control rail.
+- Removed the now-redundant separator between the header and media row and
+  added all-theme regression coverage for the two new detail-card selectors.
+
+---
+
+## 2026-09-27 — Patch 32AU: per-game global-reset warning (candidate)
+
+- Renamed the profile-wide action to `Reset All to Global...` and added a
+  destructive confirmation before it clears General, Video, and Input Mapping
+  overrides, removes the empty per-game profile, and closes the dialog.
+- Clarified that this action does not modify the application's global Settings;
+  tab-local Video and Input Mapping resets remain immediate and unsaved.
+
+---
+
+## 2026-09-27 — Patch 32AT: Settings action consistency (candidate)
+
+- Removed platform-dependent emoji from every Save and Reset action in
+  Settings while retaining the shared refresh symbol for actual Refresh
+  actions.
+- Standardized Hotkeys on the same Save-then-Reset order and title-style labels
+  used by the other settings tabs.
+- Restored the Input tab's native outer margins so its persistent action row
+  aligns with the Video and Misc action rows.
+
+---
+
+## 2026-09-27 — Patch 32AS: visible Goliath shortcuts (candidate)
+
+- Split Settings > Hotkeys into a fixed Goliath-shortcut summary and the
+  existing editable in-game capture controls.
+- Exposed the already implemented Ctrl+R Random shortcut alongside Search,
+  Launch, Rescan, tree expansion, tree collapse, and search clearing.
+- Centralized the displayed and active key sequences so their labels cannot
+  drift from the shortcuts used by the main window, and marked GIF recording
+  as experimental.
+
+---
+
+## 2026-09-27 — Patch 32AR1: Windows warning cleanup (candidate)
+
+- Fully initialized `MONITORINFO` before assigning its required `cbSize`,
+  removing the MinGW missing-field-initializer warnings without changing the
+  fullscreen detection behavior.
+
+---
+
+## 2026-09-27 — Patch 32AR: source audit and regression cleanup (candidate)
+
+- Added the 5, 7, and 10 second GIF encoder regression to the regular CTest
+  target, including the 80-frame limit that previously failed at 10 seconds.
+- Added a regression for the gallery's centered GIF crop and moved the encoder
+  implementation into the shared core target so the application and tests use
+  the same code.
+- Removed a leftover input-loading debug message, redundant gallery cleanup,
+  and unused platform capture includes without changing runtime behavior.
+- Replaced references to missing Linux Mint bundle scripts with complete build,
+  test, and launch commands for the current source tree.
+
+---
+
+## 2026-09-27 — Patch 32AM: Linux source cleanup and Windows sync (candidate)
+
+- Unified the Windows AJ/AK work with the tested Linux Mint X11 and GNOME
+  Wayland GIF capture. Wayland requests a game window through the desktop
+  portal and registers a user-approved GIF shortcut when supported.
+- Corrected outdated X11-only capture instructions and ignored generated
+  recordings in the source tree. The fullscreen `command.dat` overlay remains
+  compositor-controlled on GNOME Wayland, including with JGRF Vulkan.
+- Kept JGRF, Geolith, and Lithogen source and binaries outside Goliath.
+  Builds and runtime tests remain separate until validated on each platform.
+
+---
+
+## 2026-09-24 — Patch 32U: Lithogen batch and advanced options (candidate)
+
+- Added folder conversion for ZIP files, processed sequentially with a visible
+  result per archive, overall progress and a final summary. Existing .neo files
+  are skipped. Unrecognized or failed ZIPs remain visible in the results.
+- Added an optional Advanced options section: strict CRC checks, automatic
+  parent lookup, an extra parent ZIP and a set ID override (single ZIP only).
+  Advanced controls include explanations and are off by default.
+- Retained separate Lithogen process execution and rescan of new ROMs.
+  Advanced the development identity to `0.32.21`.
+
+---
+
+## 2026-09-24 — Patch 32T: Lithogen frontend (candidate)
+
+- Added Tools → Convert ZIP to .neo with a user-provided Lithogen executable,
+  separate source and output folders, streamed conversion logs, cancellation,
+  and a library rescan when the result is inside the MVS/AES ROM directory.
+- The converter runs as a separate process; no Lithogen source or binary is
+  included in Goliath. Advanced the development identity to `0.32.20`.
+
+---
+
+## 2026-09-24 — Patch 32S1: restore library counts after capture notices (candidate)
+
+- Display the library counts in a normal status-bar widget. Temporary GIF and
+  PNG capture notices can expire without leaving the status bar blank.
+
+---
+
+## 2026-09-24 — Patch 32S: capture hotkeys (candidate)
+
+- Added a Hotkeys tab with separate Windows global shortcuts for GIF and PNG.
+  GIF defaults to Ctrl+Alt+F12; PNG starts unassigned and remains in Tools.
+- Show JGRF direct-hotkey action warnings next to matching keys, validate
+  unsupported and duplicate bindings, and activate saved bindings without a
+  restart. A rejected Windows registration restores the previous bindings.
+- Allow single letters, digits and common punctuation (`;`, `,`, `.` among
+  others). Register unmodified keys only while a tracked game owns focus so
+  typing in unrelated applications remains available.
+- Advanced the development identity to version `0.32.19`.
+
+---
+
+## 2026-09-24 — Patch 32R: short game GIF (candidate)
+
+- Changed the Windows `Ctrl+Alt+F12` shortcut to record five seconds of the
+  tracked game window at eight frames per second, with a 640-pixel limit and
+  automatic saving to `recordings/<ROM>/<date>/<time>.gif` beside Goliath.
+- Kept the Tools screenshot action as a three-second delayed PNG capture.
+  Capture remains in the Goliath frontend; JGRF and Geolith are untouched.
+- Advanced the development identity to version `0.32.18`.
+
+---
+
+## 2026-09-24 — Patch 32Q2: overlay state follow-up (candidate)
+
+- Save the command line and shared overlay geometry whenever the dialog is
+  dismissed, including Esc/reject and normal close; prevent a later session
+  cleanup from overwriting an already saved position.
+- Respect the overlay's explicit placement in the shared dialog screen guard
+  while retaining monitor-boundary checks. Other dialogs still center normally.
+- Log the persisted file and source line, or the write error, for manual
+  verification in the isolated Windows test.
+
+---
+
+## 2026-09-24 — Patch 32Q: command position and screenshot shortcut (candidate)
+
+- Preserved the exact game's saved command line when an already closed
+  companion receives another close request at the end of its game session.
+- Remembered the overlay window's size and position once for all games;
+  restored geometry remains visible if the monitor arrangement changes.
+- Added an optional Windows `Ctrl+Alt+F12` global hotkey that captures the
+  active tracked game immediately while it has focus. The Tools action keeps
+  its three-second countdown, and an occupied hotkey leaves Tools available.
+- Advanced the development identity to version `0.32.17`.
+
+---
+
+## 2026-09-24 — Patch 32P: small Goliath conveniences (candidate)
+
+- Made the About build identifier open its GitHub commit only when the build
+  revision identifies a commit. Local builds with uncommitted tracked source
+  retain a non-linkable development identifier.
+- Remembered the first visible command list source line for each exact game in
+  `config/command_positions.ini`; a later session for that game resumes there.
+- Marked available command lists in the game tree with a small punch indicator,
+  including exact variant and parent/clone lookups.
+- Added a Windows Tools action that waits three seconds so the running game
+  can regain focus, then captures its visible window for review; choose
+  whether and where to save the PNG. Capture may depend on the selected game
+  renderer and Windows display mode.
+- Advanced the development identity to version `0.32.16`.
 
 ---
 

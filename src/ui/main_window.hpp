@@ -9,8 +9,11 @@
 #pragma once
 
 #include <QMainWindow>
+#include <QByteArray>
 #include <QPoint>
+#include <QPixmap>
 #include <QString>
+#include <QStringList>
 #include <QtCore/qnamespace.h>
 #include <QtGlobal>
 
@@ -49,22 +52,35 @@ class QPushButton;
 class QAction;
 class QActionGroup;
 class QTimer;
+class QMovie;
+class QKeySequence;
 
 namespace goliath {
 
 class TitleBar;
 class RescanWorker;
+#if defined(GOLIATH_WAYLAND_CAPTURE)
+class WaylandGifHotkey;
+#endif
+#if defined(GOLIATH_X11_CAPTURE)
+class X11GifHotkey;
+#endif
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
     explicit MainWindow(Config config, QWidget* parent = nullptr);
+    ~MainWindow() override;
 
 protected:
     void changeEvent(QEvent* event) override;
     bool event(QEvent* e) override;
     void closeEvent(QCloseEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
+#if defined(_WIN32)
+    bool nativeEvent(const QByteArray& eventType, void* message,
+                     qintptr* result) override;
+#endif
 
 private slots:
     void onSortChanged();
@@ -81,6 +97,8 @@ private slots:
     void manageSaveData();
     void benchmarkSelected();
     void exportSelectedAudio();
+    void captureGameScreenshot();
+    void recordGameGifAfter(int delayMs);
     void openLogging();
     void openAbout();
     void focusSearch();
@@ -137,11 +155,28 @@ private:
         qint64 pid, const QString& gameTitle,
         const std::vector<std::string>& lookupIds);
     void closeCommandCompanion(std::int64_t pid);
+    void refreshCommandCatalog();
+    bool hasCommands(const Game& game, int romIndex) const;
+    void updateScreenshotAction();
+    void registerScreenshotHotkey();
+    bool applyCaptureHotkeys(const QKeySequence& gif,
+                             const QKeySequence& png, QString* error,
+                             bool configureWayland = false);
+    void updateBareCaptureHotkeys();
+    void captureGameScreenshotAfter(int delayMs);
+    void recordGameGif();
+#if defined(GOLIATH_WAYLAND_CAPTURE)
+    void recordWaylandGameGif();
+#endif
     void pollTrackedGameProcesses();
     void finishTrackedGameSessions();
     bool hasActiveTrackedGameProcess() const;
     QString resolveSnapshot(const std::string& shortName, const std::string& parentShort = "") const;
-    void loadSnapshotFor(QString path, const std::string& shortFallback = "");
+    void loadSnapshotFor(QString path, const std::string& shortFallback = "",
+                         const std::string& recordingMedia = "");
+    void refreshGameGallery();
+    void stopGalleryMovie();
+    void showGalleryItem();
     QString selectedRomFile() const;   // bare filename of the currently selected rom, used for persistence
     QString selectedRomPath() const;   // full path of the currently selected rom, used for "Open ROM folder"
     void restoreSelection(const QString& preferredRom = {});
@@ -177,8 +212,24 @@ private:
     std::vector<std::unique_ptr<DetachedProcessTracker>>
         m_trackedGameProcesses;
     std::map<std::int64_t, std::unique_ptr<CommandDialog>> m_commandDialogs;
+    CommandDatCatalog m_commandCatalog;
+    std::filesystem::path m_commandCatalogPath;
+    std::optional<std::filesystem::file_time_type> m_commandCatalogWriteTime;
+    std::optional<std::uintmax_t> m_commandCatalogSize;
+    bool m_commandCatalogLoaded = false;
     QTimer* m_playtimeTimer = nullptr;
     bool m_exitWhenTrackedProcessesFinish = false;
+    bool m_screenshotHotkeyRegistered = false;
+    bool m_pngHotkeyRegistered = false;
+#if defined(GOLIATH_WAYLAND_CAPTURE)
+    std::shared_ptr<WaylandGifHotkey> m_waylandGifHotkey;
+#endif
+#if defined(GOLIATH_X11_CAPTURE)
+    std::shared_ptr<X11GifHotkey> m_x11GifHotkey;
+#endif
+    QString m_gifCaptureShortcut;
+    QString m_pngCaptureShortcut;
+    bool m_gifRecording = false;
 
     QString m_sortKey = "display";
     bool m_showVariants = true;
@@ -197,16 +248,32 @@ private:
     QActionGroup* m_playtimeFilterGroup = nullptr;
     QAction* m_clearFiltersAction = nullptr;
     QAction* m_rescanAction = nullptr;
+    QAction* m_screenshotAction = nullptr;
+    QAction* m_gifAction = nullptr;
 
     QPushButton* m_mvsAesButton = nullptr;
     QPushButton* m_cdButton = nullptr;
     QTreeWidget* m_tree = nullptr;
     QLineEdit* m_searchEntry = nullptr;
     std::vector<QAction*> m_selectionActions;
+    QLabel* m_libraryStatusLabel = nullptr;
     QPushButton* m_launchButton = nullptr;
 
     QScrollArea* m_detailsScroll = nullptr;
     QLabel* m_snapshotLabel = nullptr;
+    QPushButton* m_gallerySnaps = nullptr;
+    QPushButton* m_galleryGifs = nullptr;
+    QPushButton* m_galleryPrevious = nullptr;
+    QPushButton* m_galleryPlay = nullptr;
+    QPushButton* m_galleryNext = nullptr;
+    QLabel* m_galleryCountLabel = nullptr;
+    QMovie* m_galleryMovie = nullptr;
+    QPixmap m_gallerySnapshot;
+    QString m_gallerySnapshotPath;
+    QString m_galleryRomId;
+    QString m_galleryRecordingId;
+    QStringList m_galleryGifPaths;
+    int m_galleryIndex = 0;
     QLabel* m_detailsTitleLabel = nullptr;
     QPushButton* m_favoriteButton = nullptr;
     std::array<QPushButton*, 5> m_ratingButtons{};

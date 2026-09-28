@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 # Development versioning follows Patch NN[A-Z] -> 0.NN.letter-index.
-project(goliath-qt VERSION 0.32.12 LANGUAGES CXX C)
+project(goliath-qt VERSION 0.32.25 LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -25,7 +25,7 @@ set(GOLIATH_LICENSE_URL "https://www.gnu.org/licenses/gpl-3.0.html" CACHE STRING
     "Published Goliath license URL shown by About Goliath")
 
 if(NOT GOLIATH_BUILD_REVISION)
-    set(GOLIATH_BUILD_REVISION "patch32l")
+    set(GOLIATH_BUILD_REVISION "local-uncommitted")
     find_package(Git QUIET)
     if(Git_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
         execute_process(
@@ -37,7 +37,16 @@ if(NOT GOLIATH_BUILD_REVISION)
             ERROR_QUIET
         )
         if(GOLIATH_GIT_RESULT EQUAL 0 AND GOLIATH_GIT_REVISION)
-            set(GOLIATH_BUILD_REVISION "${GOLIATH_GIT_REVISION}")
+            execute_process(
+                COMMAND "${GIT_EXECUTABLE}" status --porcelain --untracked-files=normal
+                WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+                RESULT_VARIABLE GOLIATH_GIT_STATUS_RESULT
+                OUTPUT_VARIABLE GOLIATH_GIT_CHANGES
+                ERROR_QUIET
+            )
+            if(GOLIATH_GIT_STATUS_RESULT EQUAL 0 AND NOT GOLIATH_GIT_CHANGES)
+                set(GOLIATH_BUILD_REVISION "${GOLIATH_GIT_REVISION}")
+            endif()
         endif()
     endif()
 endif()
@@ -52,6 +61,7 @@ endfunction()
 
 add_library(goliath-core STATIC
     src/game/audio_export.cpp
+    src/game/animated_gif.cpp
     src/game/command_dat.cpp
     src/game/command_notation.cpp
     src/game/game_model.cpp
@@ -128,6 +138,8 @@ add_executable(goliath-qt
     src/ui/about_dialog.cpp
     src/ui/command_dialog.cpp
     src/ui/main_window.cpp
+    src/ui/game_screenshot.cpp
+    src/ui/game_gallery.cpp
     src/ui/main_window_ui.cpp
     src/ui/main_window_library.cpp
     src/ui/widgets/command_notation_view.cpp
@@ -146,6 +158,7 @@ add_executable(goliath-qt
     src/ui/benchmark_dialog.cpp
     src/ui/game_profile_dialog.cpp
     src/ui/logging_dialog.cpp
+    src/ui/lithogen_dialog.cpp
     src/ui/save_data_dialog.cpp
     src/game/detached_process_tracker.cpp
     src/game/rescan_worker.cpp
@@ -160,6 +173,35 @@ target_link_libraries(goliath-qt PRIVATE
     goliath-core
     Qt6::Widgets
 )
+if(WIN32)
+    target_sources(goliath-qt PRIVATE src/ui/windows_desktop_capture.cpp)
+    target_link_libraries(goliath-qt PRIVATE user32 d3d11 dxgi)
+endif()
+if(UNIX AND NOT APPLE)
+    option(GOLIATH_REQUIRE_WAYLAND_CAPTURE
+        "Fail configure when Wayland portal/PipeWire development files are missing" OFF)
+    find_package(Qt6 QUIET COMPONENTS DBus)
+    find_package(PkgConfig QUIET)
+    if(Qt6DBus_FOUND AND PkgConfig_FOUND)
+        pkg_check_modules(PIPEWIRE QUIET IMPORTED_TARGET libpipewire-0.3)
+    endif()
+    if(Qt6DBus_FOUND AND PIPEWIRE_FOUND)
+        target_sources(goliath-qt PRIVATE src/ui/wayland_gif_capture.cpp
+            src/ui/wayland_gif_hotkey.cpp)
+        target_link_libraries(goliath-qt PRIVATE Qt6::DBus PkgConfig::PIPEWIRE)
+        target_compile_definitions(goliath-qt PRIVATE GOLIATH_WAYLAND_CAPTURE=1)
+    elseif(GOLIATH_REQUIRE_WAYLAND_CAPTURE)
+        message(FATAL_ERROR "Wayland GIF capture requires Qt6 DBus, pkgconf and libpipewire")
+    endif()
+    option(GOLIATH_REQUIRE_X11_CAPTURE "Fail configure when X11 development files are missing" OFF)
+    find_package(X11 QUIET)
+    if(X11_FOUND)
+        target_link_libraries(goliath-qt PRIVATE X11::X11)
+        target_compile_definitions(goliath-qt PRIVATE GOLIATH_X11_CAPTURE=1)
+    elseif(GOLIATH_REQUIRE_X11_CAPTURE)
+        message(FATAL_ERROR "Install libx11-dev to build X11 GIF capture")
+    endif()
+endif()
 
 target_compile_definitions(goliath-qt PRIVATE
     GOLIATH_VERSION="${PROJECT_VERSION}"
@@ -253,8 +295,10 @@ if(BUILD_TESTS)
         tests/test_ini_document.cpp
         tests/test_bios_verify.cpp
         tests/test_input_maps.cpp
+        tests/test_capture_hotkeys.cpp
         tests/test_audio.cpp
         tests/test_audio_export.cpp
+        tests/test_animated_gif.cpp
         tests/test_command_dat.cpp
         tests/test_command_notation.cpp
         tests/test_jollygood_benchmark.cpp
@@ -269,6 +313,7 @@ if(BUILD_TESTS)
         tests/test_game_profiles.cpp
         tests/test_game_playtime.cpp
         tests/test_library_view_logic.cpp
+        tests/test_gallery_frame.cpp
         tests/test_log_file.cpp
         tests/test_save_data_manager.cpp
         tests/test_theme.cpp
@@ -286,6 +331,7 @@ if(BUILD_TESTS)
     target_link_libraries(goliath-qt-tests PRIVATE
         goliath-core
         Qt6::Core
+        Qt6::Gui
     )
 
     goliath_enable_warnings(goliath-qt-tests)

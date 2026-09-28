@@ -1,5 +1,6 @@
 #include "ui/game_profile_dialog.hpp"
 
+#include "common/theme.hpp"
 #include "game/jollygood_capabilities.hpp"
 #include "game/jollygood_executable.hpp"
 #include "input/sdl_joystick.hpp"
@@ -331,7 +332,10 @@ GameProfileDialog::GameProfileDialog(QString displayName,
 
     auto* buttons = new QHBoxLayout();
     auto* saveButton = new QPushButton("Save Profile");
-    auto* resetButton = new QPushButton("Reset to Global");
+    auto* resetButton = new QPushButton("Reset All to Global...");
+    resetButton->setToolTip(
+        "Clear every override for this game and return it to the global "
+        "Settings configuration.");
     auto* cancelButton = new QPushButton("Cancel");
     buttons->addWidget(saveButton);
     buttons->addWidget(resetButton);
@@ -414,6 +418,13 @@ GameProfileDialog::GameProfileDialog(QString displayName,
 
     updateConstraints();
     updateVideoControls();
+    const auto* themeSelector = parent
+        ? parent->findChild<QComboBox*>("theme_selector") : nullptr;
+    const std::string themeKey = themeSelector
+        ? themeSelector->currentText().toStdString() : "Dark Modern";
+    applyComboPopupStyleToDescendants(
+        this, QString::fromStdString(
+                  generate_combo_popup_style(find_theme(themeKey))));
     QTimer::singleShot(0, this,
                        [this]() { probeJollygoodVideoCapabilities(); });
 }
@@ -663,6 +674,17 @@ void GameProfileDialog::updateConstraints() {
 }
 
 void GameProfileDialog::resetToGlobal() {
+    if (m_inputMapping) m_inputMapping->cancelListening();
+    const auto reply = QMessageBox::warning(
+        this, "Reset Per-game Profile",
+        "Reset every setting for this game to Global?\n\n"
+        "This clears the General, Video, and Input Mapping overrides. The "
+        "per-game profile will be removed and this window will close.\n\n"
+        "Your global Settings are not modified.",
+        QMessageBox::Reset | QMessageBox::Cancel,
+        QMessageBox::Cancel);
+    if (reply != QMessageBox::Reset) return;
+
     if (m_inputMapping) m_inputMapping->clearAllOverrides();
     m_jgrfVideoFields.resetToInherit();
     m_geolithVideoFields.resetToInherit();

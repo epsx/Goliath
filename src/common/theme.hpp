@@ -23,7 +23,7 @@ struct Theme {
     int border_radius;
 };
 
-// The 12 built-in themes, in display order for the theme selector combo box.
+// The 13 built-in themes, in display order for the theme selector combo box.
 const std::vector<Theme>& all_themes();
 
 // Look up a theme by key ("Dark Modern", "Goliath Pearl", ...). Legacy

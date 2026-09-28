@@ -65,9 +65,7 @@ QTableWidget* make_table(const QStringList& headers) {
 }
 
 QTableWidgetItem* item(const QString& text) {
-    auto* result = new QTableWidgetItem(text);
-    result->setToolTip(text);
-    return result;
+    return new QTableWidgetItem(text);
 }
 
 } // namespace

@@ -137,7 +137,7 @@ void VideoTab::setupUi() {
     connect(saveBtn, &QPushButton::clicked, this, &VideoTab::save);
     buttonRow->addWidget(saveBtn);
 
-    auto* resetBtn = new QPushButton(QString::fromUtf8("\xE2\x86\xBB Reset to Defaults"));
+    auto* resetBtn = new QPushButton("Reset to Defaults");
     connect(resetBtn, &QPushButton::clicked, this, &VideoTab::resetDefaults);
     buttonRow->addWidget(resetBtn);
     layout->addLayout(buttonRow);

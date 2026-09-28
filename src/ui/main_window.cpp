@@ -13,6 +13,9 @@
 #include "game/bios_verify.hpp"
 #include "game/rescan_worker.hpp"
 #include "ui/rescan_dialog.hpp"
+#if defined(GOLIATH_WAYLAND_CAPTURE)
+#include "ui/wayland_gif_hotkey.hpp"
+#endif
 
 #include <QCloseEvent>
 #include <QCoreApplication>
@@ -20,13 +23,16 @@
 #include <QDialog>
 #include <QFont>
 #include <QGuiApplication>
+#include <QKeySequence>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QScreen>
+#include <QScrollBar>
 #include <QStringList>
 #include <QSplitter>
 #include <QTextEdit>
 #include <QTimer>
+#include <QTreeWidget>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -44,7 +50,7 @@ MainWindow::MainWindow(Config config, QWidget* parent)
     setWindowTitle("Goliath - Neo Geo");
     setObjectName("frameless_window");
     setWindowFlags(Qt::FramelessWindowHint);
-    setContentsMargins(1, 1, 1, 1);
+    setContentsMargins(0, 0, 0, 0);
 
     new ResizeFilter(this);
 
@@ -97,6 +103,14 @@ MainWindow::MainWindow(Config config, QWidget* parent)
     }
 
     buildUi();
+#if defined(GOLIATH_WAYLAND_CAPTURE)
+    // Let the main window show before the desktop asks for shortcut approval.
+    if (QGuiApplication::platformName() == "wayland")
+        QTimer::singleShot(0, this, [this]() { registerScreenshotHotkey(); });
+    else
+#endif
+    registerScreenshotHotkey();
+    updateScreenshotAction();
     m_playtimeTimer = new QTimer(this);
     m_playtimeTimer->setInterval(1000);
     connect(m_playtimeTimer, &QTimer::timeout,
@@ -199,9 +213,44 @@ bool MainWindow::trackGameProcess(qint64 pid,
     }
 
     m_trackedGameProcesses.push_back(std::move(tracker));
+    updateBareCaptureHotkeys();
+    updateScreenshotAction();
     if (m_playtimeTimer && !m_playtimeTimer->isActive())
         m_playtimeTimer->start();
     return true;
+}
+
+void MainWindow::refreshCommandCatalog() {
+    const fs::path path = m_paths.metadata_dir / "command.dat";
+    std::error_code ec;
+    const bool present = fs::is_regular_file(path, ec);
+    const auto writeTime = present && !ec
+        ? std::optional<fs::file_time_type>(fs::last_write_time(path, ec))
+        : std::nullopt;
+    const auto bytes = present && !ec
+        ? std::optional<std::uintmax_t>(fs::file_size(path, ec))
+        : std::nullopt;
+    if (path == m_commandCatalogPath && writeTime == m_commandCatalogWriteTime &&
+        bytes == m_commandCatalogSize && !ec) return;
+
+    m_commandCatalogPath = path;
+    m_commandCatalogWriteTime = writeTime;
+    m_commandCatalogSize = bytes;
+    std::string error;
+    const CommandDatLoadStatus status = m_commandCatalog.load(path, &error);
+    m_commandCatalogLoaded = status == CommandDatLoadStatus::Loaded;
+    if (status == CommandDatLoadStatus::Error) {
+        DebugLogger::logError(QString("could not load optional command.dat: %1")
+                                  .arg(QString::fromStdString(error)));
+    }
+}
+
+bool MainWindow::hasCommands(const Game& game, int romIndex) const {
+    if (!m_commandCatalogLoaded) return false;
+    for (const std::string& id : command_dat_lookup_ids(game, romIndex)) {
+        if (m_commandCatalog.find(id)) return true;
+    }
+    return false;
 }
 
 void MainWindow::openCommandCompanion(
@@ -209,22 +258,13 @@ void MainWindow::openCommandCompanion(
         const std::vector<std::string>& lookupIds) {
     if (pid <= 0 || lookupIds.empty()) return;
 
-    CommandDatCatalog catalog;
-    std::string error;
-    const fs::path path = m_paths.metadata_dir / "command.dat";
-    const CommandDatLoadStatus status = catalog.load(path, &error);
-    if (status == CommandDatLoadStatus::Missing) return;
-    if (status == CommandDatLoadStatus::Error) {
-        DebugLogger::logError(
-            QString("could not load optional command.dat: %1")
-                .arg(QString::fromStdString(error)));
-        return;
-    }
+    refreshCommandCatalog();
+    if (!m_commandCatalogLoaded) return;
 
     const CommandDatEntry* entry = nullptr;
     std::string matchedId;
     for (const std::string& id : lookupIds) {
-        entry = catalog.find(id);
+        entry = m_commandCatalog.find(id);
         if (entry) {
             matchedId = id;
             break;
@@ -232,12 +272,27 @@ void MainWindow::openCommandCompanion(
     }
     if (!entry) return;
 
+    QString exactMediaKey = QString::fromStdString(matchedId);
+    for (const auto& tracker : m_trackedGameProcesses) {
+        if (tracker->pid() != pid) continue;
+        exactMediaKey = QString::fromStdString(tracker->system()) + '/' +
+                        QString::fromStdString(tracker->media());
+        break;
+    }
+    const fs::path positionPath = m_paths.config_dir / "command_positions.ini";
+#if defined(_WIN32)
+    const QString positionFile = QString::fromStdWString(positionPath.wstring());
+#else
+    const QString positionFile = QString::fromStdString(positionPath.string());
+#endif
     auto dialog = std::make_unique<CommandDialog>(
         gameTitle.isEmpty() ? QString::fromStdString(matchedId) : gameTitle,
         QString::fromStdString(matchedId),
         QString::fromUtf8(entry->text.data(),
                           static_cast<qsizetype>(entry->text.size())),
-        styleSheet());
+        styleSheet(),
+        positionFile,
+        exactMediaKey);
     dialog->placeBeside(
         this, static_cast<int>(m_commandDialogs.size()));
     dialog->show();
@@ -293,6 +348,8 @@ void MainWindow::pollTrackedGameProcesses() {
         }
         it = m_trackedGameProcesses.erase(it);
     }
+    updateBareCaptureHotkeys();
+    updateScreenshotAction();
 
     if (changed) {
         saveGamePlaytime();
@@ -334,6 +391,8 @@ void MainWindow::finishTrackedGameSessions() {
         }
     }
     m_trackedGameProcesses.clear();
+    updateBareCaptureHotkeys();
+    updateScreenshotAction();
     for (auto& [pid, dialog] : m_commandDialogs) {
         (void)pid;
         dialog->close();
@@ -583,7 +642,22 @@ void MainWindow::warnIfBiosMissing() {
 }
 
 void MainWindow::openSettings() {
-    SettingsDialog dialog(m_config, m_paths, this);
+    const int treeVertical = m_tree
+        ? m_tree->verticalScrollBar()->value() : 0;
+    const int treeHorizontal = m_tree
+        ? m_tree->horizontalScrollBar()->value() : 0;
+
+    SettingsDialog dialog(m_config, m_paths,
+        [this](const QKeySequence& gif, const QKeySequence& png, QString* error) {
+            return applyCaptureHotkeys(gif, png, error, true);
+        },
+        [this]() {
+#if defined(GOLIATH_WAYLAND_CAPTURE)
+            if (m_waylandGifHotkey)
+                return m_waylandGifHotkey->assignedTrigger();
+#endif
+            return QString();
+        }, this);
     dialog.exec();
     // Path tab edits (e.g. BIOS Folder) must apply to this session too,
     // without waiting for a rescan.
@@ -592,6 +666,26 @@ void MainWindow::openSettings() {
     loadGamePlaytime();
     loadGameLibraryState();
     refreshLibraryView(true);
+
+    const auto restoreTreeViewport =
+        [this, treeVertical, treeHorizontal]() {
+            if (!m_tree) return;
+            m_tree->doItemsLayout();
+            QScrollBar* vertical = m_tree->verticalScrollBar();
+            QScrollBar* horizontal = m_tree->horizontalScrollBar();
+            vertical->setValue(std::clamp(
+                treeVertical, vertical->minimum(), vertical->maximum()));
+            horizontal->setValue(std::clamp(
+                treeHorizontal, horizontal->minimum(), horizontal->maximum()));
+        };
+
+    // Re-expanding many parents completes over queued Qt layout passes. Keep
+    // the user's viewport independent from selection restoration after each.
+    restoreTreeViewport();
+    QTimer::singleShot(0, m_tree, [this, restoreTreeViewport]() {
+        restoreTreeViewport();
+        QTimer::singleShot(0, m_tree, restoreTreeViewport);
+    });
 }
 
 void MainWindow::openLogging() {
