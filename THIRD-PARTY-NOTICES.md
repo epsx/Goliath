@@ -103,7 +103,7 @@ preserved where an upstream package supplies more than one option.
 | md4c | 0.6.0-1 | MIT |
 | PCRE2 | 10.48-3 | BSD-3-Clause with the package's binary-like-packages exception where applicable |
 | libpng | 1.6.58-1 | libpng license |
-| libwinpthread | 14.0.0.r420.g61d40c4c0-1 | MIT and BSD-3-Clause-Clear |
+| libwinpthread | 14.0.0.r426.g4564ee4b5-1 | MIT and BSD-3-Clause-Clear |
 | zstd | 1.5.7-2 | BSD-3-Clause selected from its BSD/GPL dual license |
 | zlib | 1.3.2-2 | Zlib |
 

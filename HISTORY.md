@@ -18,6 +18,14 @@ visible-only Random smoke tests.
 
 ---
 
+## 2026-09-28 — Patch 32BA4A: MSYS2 libwinpthread packaging refresh (candidate)
+
+- Updated the strict Windows CI package audit for MSYS2's libwinpthread
+  `14.0.0.r426.g4564ee4b5-1` refresh while retaining its MIT and
+  BSD-3-Clause-Clear disclosure.
+
+---
+
 ## 2026-09-28 — Patch 32BA4: MSYS2 md4c packaging refresh (candidate)
 
 - Updated the strict Windows CI package audit for MSYS2's md4c `0.6.0-1`
