@@ -18,6 +18,15 @@ visible-only Random smoke tests.
 
 ---
 
+## 2026-09-28 — Patch 32BA4: MSYS2 md4c packaging refresh (candidate)
+
+- Updated the strict Windows CI package audit for MSYS2's md4c `0.6.0-1`
+  refresh while retaining the exact-version release gate.
+- Kept the package's MIT disclosure and removed the stale workflow-run number
+  from the reusable Windows runtime notice.
+
+---
+
 ## 2026-09-28 — Patch 32BA3: Wayland shortcut ownership clarity (candidate)
 
 - Separated the desktop-owned Wayland GIF shortcut from Goliath's saved GIF

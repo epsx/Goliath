@@ -75,9 +75,9 @@ project author's direction. It is not derived from the Jolly Good icon.
 
 ## Windows runtime packages
 
-The Windows frontend audited from GitHub Actions run `35733913007` uses the
-following MSYS2 UCRT64 runtime packages. CI checks these package versions
-before staging subsequent Windows archives.
+The Windows frontend package uses the following audited MSYS2 UCRT64 runtime
+packages. CI checks these exact package versions before staging each Windows
+archive.
 The staged Windows archive contains the installed license directories of its
 runtime DLL packages under `licenses/msys2/`; alternative license texts are
 preserved where an upstream package supplies more than one option.
@@ -100,7 +100,7 @@ preserved where an upstream package supplies more than one option.
 | libjpeg-turbo | 3.2.0-1 | BSD-style terms with the complete IJG and other upstream notices retained |
 | ICU | 78.3-4 | ICU license |
 | gettext runtime | 1.0-1 | LGPL-2.1-or-later for the runtime library; all package notices are retained |
-| md4c | 0.5.3-1 | MIT |
+| md4c | 0.6.0-1 | MIT |
 | PCRE2 | 10.48-3 | BSD-3-Clause with the package's binary-like-packages exception where applicable |
 | libpng | 1.6.58-1 | libpng license |
 | libwinpthread | 14.0.0.r420.g61d40c4c0-1 | MIT and BSD-3-Clause-Clear |
