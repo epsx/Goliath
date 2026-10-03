@@ -7,7 +7,6 @@
 
 #include <atomic>
 #include <cstddef>
-#include <filesystem>
 #include <functional>
 #include <string>
 
@@ -27,6 +26,9 @@ struct ScanResult {
     std::size_t parent_games = 0;
     std::size_t variant_count = 0;
     std::size_t homebrew_games = 0;
+    std::size_t neo_geolith_crc32_verified_files = 0;
+    std::size_t neo_geolith_crc32_mismatch_files = 0;
+    std::size_t neo_metadata_only_files = 0;
 
     // Neo Geo CD statistics are kept separate from the legacy cartridge
     // counters above so existing callers/tests retain their established
@@ -37,6 +39,7 @@ struct ScanResult {
     std::size_t cd_redump_cue_verified_games = 0;
     std::size_t cd_redump_tracks_only_games = 0;
     std::size_t cd_mame_chd_matched_games = 0;
+    std::size_t cd_mame_chd_mismatch_games = 0;
     std::size_t cd_metadata_only_games = 0;
     std::size_t cd_unknown_games = 0;
 

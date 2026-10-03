@@ -1,6 +1,7 @@
 #include "ui/main_window.hpp"
 #include "ui/application_shortcuts.hpp"
 #include "ui/gallery_frame.hpp"
+#include "ui/library_item_delegate.hpp"
 
 #include "common/theme.hpp"
 #include "ui/widgets/title_bar.hpp"
@@ -12,9 +13,13 @@
 #include <QCheckBox>
 #include <QColor>
 #include <QComboBox>
+#include <QDesktopServices>
 #include <QFont>
+#include <QFontMetrics>
 #include <QFormLayout>
 #include <QFrame>
+#include <QGraphicsDropShadowEffect>
+#include <QGridLayout>
 #include <QHeaderView>
 #include <QHBoxLayout>
 #include <QIcon>
@@ -23,8 +28,10 @@
 #include <QLineEdit>
 #include <QMenu>
 #include <QModelIndex>
+#include <QMouseEvent>
 #include <QMovie>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPixmap>
 #include <QPushButton>
 #include <QPolygon>
@@ -32,19 +39,28 @@
 #include <QScrollArea>
 #include <QShortcut>
 #include <QSize>
+#include <QSizePolicy>
 #include <QSplitter>
 #include <QStatusBar>
 #include <QStyle>
+#include <QStyleOption>
+#include <QStyleOptionButton>
+#include <QStyleOptionComboBox>
 #include <QStyledItemDelegate>
 #include <QStyleOptionViewItem>
 #include <QTextEdit>
+#include <QTimer>
 #include <QTreeWidget>
+#include <QUrl>
 #include <QVBoxLayout>
 #include <QWidget>
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <filesystem>
+#include <functional>
+#include <string_view>
 #include <utility>
 
 namespace fs = std::filesystem;
@@ -52,6 +68,470 @@ namespace fs = std::filesystem;
 namespace goliath {
 
 namespace {
+
+class HatchedBackgroundWidget final : public QWidget {
+public:
+    explicit HatchedBackgroundWidget(QWidget* parent = nullptr)
+        : QWidget(parent) {
+        setProperty("goliathHatchedBackground", true);
+    }
+
+protected:
+    void paintEvent(QPaintEvent*) override {
+        QStyleOption option;
+        option.initFrom(this);
+
+        QPainter painter(this);
+        style()->drawPrimitive(QStyle::PE_Widget, &option, &painter, this);
+
+        const QColor hatchColor(
+            property("goliathHatchColor").toString());
+        if (!hatchColor.isValid()) return;
+
+        painter.setRenderHint(QPainter::Antialiasing, false);
+        painter.setPen(QPen(hatchColor, 1.0));
+        constexpr int spacing = 14;
+        const QPoint windowOrigin = mapTo(window(), QPoint(0, 0));
+        const int originSum = windowOrigin.x() + windowOrigin.y();
+        const int firstSum = ((-originSum % spacing) + spacing) % spacing;
+        for (int sum = firstSum; sum <= width() + height();
+             sum += spacing) {
+            const int startX = std::max(0, sum - height());
+            const int endX = std::min(width(), sum);
+            painter.drawLine(startX, sum - startX,
+                             endX, sum - endX);
+        }
+    }
+};
+
+class EngravedTextLabel final : public QLabel {
+public:
+    explicit EngravedTextLabel(const QString& text = {},
+                               QWidget* parent = nullptr)
+        : QLabel(text, parent) {
+        setProperty("goliathEngravedSurface", true);
+    }
+
+protected:
+    void paintEvent(QPaintEvent*) override {
+        QColor textColor(property("goliathEngravedText").toString());
+        QColor depthColor(property("goliathEngravedDepth").toString());
+        if (!textColor.isValid()) textColor = palette().windowText().color();
+        if (!depthColor.isValid()) depthColor = QColor(255, 255, 255, 120);
+        if (!isEnabled()) textColor.setAlpha(120);
+
+        QRect drawRect = contentsRect().adjusted(margin(), margin(),
+                                                  -margin(), -margin());
+        int flags = alignment();
+        if (wordWrap()) flags |= Qt::TextWordWrap;
+
+        QPainter painter(this);
+        painter.setFont(font());
+        painter.setPen(depthColor);
+        painter.drawText(drawRect.translated(1, 1), flags, text());
+        painter.setPen(textColor);
+        painter.drawText(drawRect, flags, text());
+    }
+};
+
+class VerificationDetailsLabel final : public QLabel {
+public:
+    explicit VerificationDetailsLabel(std::function<void()> activate,
+                                      QWidget* parent = nullptr)
+        : QLabel(parent), m_activate(std::move(activate)) {}
+
+protected:
+    void mouseReleaseEvent(QMouseEvent* event) override {
+        const bool activate =
+            event->button() == Qt::LeftButton &&
+            rect().contains(event->pos()) &&
+            property("verificationDetailsAvailable").toBool();
+        if (!activate) {
+            QLabel::mouseReleaseEvent(event);
+            return;
+        }
+
+        event->accept();
+        QTimer::singleShot(0, this, [this]() {
+            if (m_activate) m_activate();
+        });
+    }
+
+private:
+    std::function<void()> m_activate;
+};
+
+class CatalogLinkLabel final : public QLabel {
+public:
+    explicit CatalogLinkLabel(
+        std::function<void(const QString&)> activate,
+        QWidget* parent = nullptr)
+        : QLabel(parent), m_activate(std::move(activate)) {}
+
+protected:
+    void mouseReleaseEvent(QMouseEvent* event) override {
+        const QString url = property("externalUrl").toString();
+        const bool activate = event->button() == Qt::LeftButton &&
+                              rect().contains(event->pos()) &&
+                              !url.isEmpty();
+        if (!activate) {
+            QLabel::mouseReleaseEvent(event);
+            return;
+        }
+
+        event->accept();
+        QTimer::singleShot(0, this, [this, url]() {
+            if (m_activate) m_activate(url);
+        });
+    }
+
+private:
+    std::function<void(const QString&)> m_activate;
+};
+
+class EngravedComboBox final : public QComboBox {
+public:
+    explicit EngravedComboBox(QWidget* parent = nullptr)
+        : QComboBox(parent) {
+        setProperty("goliathEngravedSurface", true);
+    }
+
+protected:
+    void paintEvent(QPaintEvent*) override {
+        QStyleOptionComboBox option;
+        initStyleOption(&option);
+        const QString displayText = option.currentText;
+        option.currentText.clear();
+        option.currentIcon = QIcon();
+
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing);
+        style()->drawComplexControl(QStyle::CC_ComboBox, &option, &painter,
+                                    this);
+
+        QColor textColor(property("goliathEngravedText").toString());
+        QColor depthColor(property("goliathEngravedDepth").toString());
+        QColor hoverColor(property("goliathEngravedHover").toString());
+        if (!textColor.isValid()) textColor = palette().buttonText().color();
+        if (!depthColor.isValid()) depthColor = QColor(255, 255, 255, 120);
+        if (!hoverColor.isValid()) hoverColor = textColor;
+        if (option.state.testFlag(QStyle::State_MouseOver) && isEnabled())
+            textColor = hoverColor;
+        if (!isEnabled()) textColor.setAlpha(120);
+
+        QRect textRect = style()->subControlRect(
+            QStyle::CC_ComboBox, &option, QStyle::SC_ComboBoxEditField, this);
+        const QString elided = fontMetrics().elidedText(
+            displayText, Qt::ElideRight, textRect.width());
+        constexpr int flags = Qt::AlignLeft | Qt::AlignVCenter |
+                              Qt::TextSingleLine;
+        painter.setFont(font());
+        painter.setPen(depthColor);
+        painter.drawText(textRect.translated(1, 1), flags, elided);
+        painter.setPen(textColor);
+        painter.drawText(textRect, flags, elided);
+    }
+};
+
+class EngravedCheckBox final : public QCheckBox {
+public:
+    explicit EngravedCheckBox(const QString& label,
+                              QWidget* parent = nullptr)
+        : QCheckBox(label, parent) {
+        setProperty("goliathEngravedSurface", true);
+    }
+
+protected:
+    void paintEvent(QPaintEvent*) override {
+        QStyleOptionButton option;
+        initStyleOption(&option);
+
+        QColor textColor(property("goliathEngravedText").toString());
+        QColor depthColor(property("goliathEngravedDepth").toString());
+        QColor hoverColor(property("goliathEngravedHover").toString());
+        if (!textColor.isValid()) textColor = palette().windowText().color();
+        if (!depthColor.isValid()) depthColor = QColor(255, 255, 255, 120);
+        if (!hoverColor.isValid()) hoverColor = textColor;
+        if (option.state.testFlag(QStyle::State_MouseOver) && isEnabled())
+            textColor = hoverColor;
+        if (!isEnabled()) textColor.setAlpha(120);
+
+        QRect indicator = style()->subElementRect(
+            QStyle::SE_CheckBoxIndicator, &option, this);
+        const QRect textRect = style()->subElementRect(
+            QStyle::SE_CheckBoxContents, &option, this);
+        indicator = indicator.adjusted(1, 1, -1, -1);
+
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.setBrush(Qt::NoBrush);
+        painter.setPen(QPen(depthColor, 1.4));
+        painter.drawRoundedRect(indicator.translated(1, 1), 3.0, 3.0);
+        painter.setPen(QPen(textColor, 1.4));
+        painter.drawRoundedRect(indicator, 3.0, 3.0);
+
+        if (option.state.testFlag(QStyle::State_On)) {
+            QPainterPath check;
+            check.moveTo(indicator.left() + indicator.width() * 0.20,
+                         indicator.center().y());
+            check.lineTo(indicator.left() + indicator.width() * 0.43,
+                         indicator.bottom() - indicator.height() * 0.22);
+            check.lineTo(indicator.right() - indicator.width() * 0.16,
+                         indicator.top() + indicator.height() * 0.20);
+            painter.setPen(QPen(depthColor, 2.0, Qt::SolidLine,
+                                Qt::RoundCap, Qt::RoundJoin));
+            painter.drawPath(check.translated(1.0, 1.0));
+            painter.setPen(QPen(hoverColor, 2.0, Qt::SolidLine,
+                                Qt::RoundCap, Qt::RoundJoin));
+            painter.drawPath(check);
+        }
+
+        const int baseline = textRect.center().y() +
+            (fontMetrics().ascent() - fontMetrics().descent()) / 2;
+        const QPoint textPoint(textRect.left(), baseline);
+        painter.setFont(font());
+        painter.setPen(depthColor);
+        painter.drawText(textPoint + QPoint(1, 1), text());
+        painter.setPen(textColor);
+        painter.drawText(textPoint, text());
+    }
+};
+
+class EngravedTextButton final : public QPushButton {
+public:
+    explicit EngravedTextButton(const QString& label = {},
+                                QWidget* parent = nullptr)
+        : QPushButton(label, parent) {
+        setProperty("goliathEngravedSurface", true);
+    }
+
+protected:
+    void paintEvent(QPaintEvent*) override {
+        QStyleOptionButton option;
+        initStyleOption(&option);
+        const QString displayText = option.text;
+        option.text.clear();
+        option.icon = QIcon();
+
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing);
+        style()->drawControl(QStyle::CE_PushButton, &option, &painter, this);
+
+        QColor textColor(property("goliathEngravedText").toString());
+        QColor depthColor(property("goliathEngravedDepth").toString());
+        QColor accentColor(property("goliathEngravedHover").toString());
+        if (!textColor.isValid()) textColor = palette().buttonText().color();
+        if (!depthColor.isValid()) depthColor = QColor(255, 255, 255, 120);
+        if (!accentColor.isValid()) accentColor = textColor;
+
+        const bool accented = isChecked() || property("rated").toBool() ||
+            option.state.testFlag(QStyle::State_MouseOver);
+        if (accented && isEnabled()) textColor = accentColor;
+        if (!isEnabled()) textColor.setAlpha(120);
+
+        const QRect content = style()->subElementRect(
+            QStyle::SE_PushButtonContents, &option, this);
+        const int pressedOffset = option.state.testFlag(QStyle::State_Sunken)
+            ? 1 : 0;
+        constexpr int flags = Qt::AlignCenter | Qt::TextSingleLine;
+
+        painter.setFont(font());
+        if (property("goliathCircledStar").toBool()) {
+            constexpr int iconSize = 17;
+            constexpr int gap = 6;
+            const int textWidth = fontMetrics().horizontalAdvance(displayText);
+            const int totalWidth = iconSize + gap + textWidth;
+            const int startX = content.center().x() - totalWidth / 2 +
+                pressedOffset;
+            const int iconY = content.center().y() - iconSize / 2 +
+                pressedOffset;
+            const QRectF iconRect(startX, iconY, iconSize, iconSize);
+            const int baseline = content.center().y() +
+                (fontMetrics().ascent() - fontMetrics().descent()) / 2 +
+                pressedOffset;
+            const QPoint textPoint(startX + iconSize + gap, baseline);
+
+            drawCircledStar(painter, iconRect.translated(1.0, 1.0),
+                            depthColor, isChecked());
+            painter.setPen(depthColor);
+            painter.drawText(textPoint + QPoint(1, 1), displayText);
+            drawCircledStar(painter, iconRect, textColor, isChecked());
+            painter.setPen(textColor);
+            painter.drawText(textPoint, displayText);
+            return;
+        }
+
+        const QRect textRect = content.translated(pressedOffset, pressedOffset);
+        painter.setPen(depthColor);
+        painter.drawText(textRect.translated(1, 1), flags, displayText);
+        painter.setPen(textColor);
+        painter.drawText(textRect, flags, displayText);
+    }
+
+private:
+    static void drawCircledStar(QPainter& painter, const QRectF& bounds,
+                                const QColor& color, bool filled) {
+        painter.setPen(QPen(color, 1.25, Qt::SolidLine,
+                            Qt::RoundCap, Qt::RoundJoin));
+        painter.setBrush(Qt::NoBrush);
+        painter.drawEllipse(bounds.adjusted(1.0, 1.0, -1.0, -1.0));
+
+        QPainterPath star;
+        const QPointF centre = bounds.center();
+        constexpr int points = 10;
+        constexpr qreal pi = 3.14159265358979323846;
+        for (int index = 0; index < points; ++index) {
+            const qreal radius = index % 2 == 0 ? 5.1 : 2.25;
+            const qreal angle = -pi / 2.0 + index * pi / 5.0;
+            const QPointF point(centre.x() + std::cos(angle) * radius,
+                                centre.y() + std::sin(angle) * radius);
+            if (index == 0) star.moveTo(point);
+            else star.lineTo(point);
+        }
+        star.closeSubpath();
+        painter.setBrush(filled ? QBrush(color) : QBrush(Qt::NoBrush));
+        painter.drawPath(star);
+        painter.setBrush(Qt::NoBrush);
+    }
+};
+
+class EngravedActionButton final : public QPushButton {
+public:
+    enum class Glyph { Tools, Settings, About, Filters, Random };
+
+    EngravedActionButton(const QString& label, Glyph glyph,
+                         QWidget* parent = nullptr)
+        : QPushButton(label, parent), m_glyph(glyph) {
+        setProperty("goliathEngravedAction", true);
+        setProperty("goliathEngravedSurface", true);
+    }
+
+    QSize sizeHint() const override {
+        const QFontMetrics metrics(font());
+        return QSize(metrics.horizontalAdvance(text()) + 48,
+                     std::max(30, metrics.height() + 12));
+    }
+
+protected:
+    void paintEvent(QPaintEvent*) override {
+        QStyleOptionButton option;
+        initStyleOption(&option);
+        option.features.setFlag(QStyleOptionButton::HasMenu, false);
+        option.text.clear();
+        option.icon = QIcon();
+
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing);
+        style()->drawControl(QStyle::CE_PushButton, &option, &painter, this);
+
+        QColor textColor(property("goliathEngravedText").toString());
+        QColor depthColor(property("goliathEngravedDepth").toString());
+        QColor hoverColor(property("goliathEngravedHover").toString());
+        if (!textColor.isValid()) textColor = palette().buttonText().color();
+        if (!depthColor.isValid()) depthColor = QColor(255, 255, 255, 120);
+        if (!hoverColor.isValid()) hoverColor = textColor;
+        if (option.state.testFlag(QStyle::State_MouseOver) && isEnabled())
+            textColor = hoverColor;
+        if (!isEnabled()) textColor.setAlpha(120);
+
+        const QRect content = style()->subElementRect(
+            QStyle::SE_PushButtonContents, &option, this);
+        const QFontMetrics metrics(font());
+        constexpr int iconSize = 15;
+        constexpr int gap = 6;
+        const int textWidth = metrics.horizontalAdvance(text());
+        const int totalWidth = iconSize + gap + textWidth;
+        const int pressedOffset = option.state.testFlag(QStyle::State_Sunken)
+            ? 1 : 0;
+        const int startX = content.center().x() - totalWidth / 2 + pressedOffset;
+        const int iconY = content.center().y() - iconSize / 2 + pressedOffset;
+        const QRectF iconRect(startX, iconY, iconSize, iconSize);
+        const int baseline = content.center().y() +
+            (metrics.ascent() - metrics.descent()) / 2 + pressedOffset;
+        const QPoint textPoint(startX + iconSize + gap, baseline);
+
+        drawGlyph(painter, iconRect.translated(1.0, 1.0), depthColor);
+        painter.setPen(depthColor);
+        painter.drawText(textPoint + QPoint(1, 1), text());
+
+        drawGlyph(painter, iconRect, textColor);
+        painter.setPen(textColor);
+        painter.drawText(textPoint, text());
+    }
+
+private:
+    void drawGlyph(QPainter& painter, const QRectF& bounds,
+                   const QColor& color) const {
+        QPen pen(color, 1.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+        painter.setPen(pen);
+        painter.setBrush(Qt::NoBrush);
+        const QPointF centre = bounds.center();
+
+        if (m_glyph == Glyph::Tools) {
+            painter.drawLine(bounds.left() + 3.0, bounds.bottom() - 2.5,
+                             bounds.right() - 3.5, bounds.top() + 3.0);
+            painter.drawEllipse(QPointF(bounds.left() + 2.8,
+                                        bounds.bottom() - 2.8), 1.8, 1.8);
+            QPainterPath jaw;
+            jaw.moveTo(bounds.right() - 6.0, bounds.top() + 2.0);
+            jaw.lineTo(bounds.right() - 3.0, bounds.top() + 4.8);
+            jaw.lineTo(bounds.right() - 1.3, bounds.top() + 1.2);
+            painter.drawPath(jaw);
+            painter.drawLine(bounds.left() + 3.0, bounds.top() + 2.0,
+                             bounds.right() - 2.0, bounds.bottom() - 3.0);
+            painter.drawLine(bounds.left() + 1.8, bounds.top() + 1.2,
+                             bounds.left() + 4.8, bounds.top() + 4.5);
+        } else if (m_glyph == Glyph::Settings) {
+            painter.drawEllipse(centre, 3.0, 3.0);
+            painter.drawEllipse(centre, 1.0, 1.0);
+            for (int index = 0; index < 8; ++index) {
+                const qreal angle = index * 3.14159265358979323846 / 4.0;
+                const QPointF inner(centre.x() + std::cos(angle) * 4.2,
+                                    centre.y() + std::sin(angle) * 4.2);
+                const QPointF outer(centre.x() + std::cos(angle) * 6.2,
+                                    centre.y() + std::sin(angle) * 6.2);
+                painter.drawLine(inner, outer);
+            }
+        } else if (m_glyph == Glyph::About) {
+            painter.drawEllipse(bounds.adjusted(1.5, 1.5, -1.5, -1.5));
+            painter.drawPoint(QPointF(centre.x(), bounds.top() + 4.2));
+            painter.drawLine(QPointF(centre.x(), bounds.top() + 6.7),
+                             QPointF(centre.x(), bounds.bottom() - 3.0));
+        } else if (m_glyph == Glyph::Filters) {
+            QPainterPath funnel;
+            funnel.moveTo(bounds.left() + 1.5, bounds.top() + 2.0);
+            funnel.lineTo(bounds.right() - 1.5, bounds.top() + 2.0);
+            funnel.lineTo(centre.x() + 2.0, centre.y() + 1.0);
+            funnel.lineTo(centre.x() + 2.0, bounds.bottom() - 2.0);
+            funnel.lineTo(centre.x() - 1.5, bounds.bottom() - 3.5);
+            funnel.lineTo(centre.x() - 1.5, centre.y() + 1.0);
+            funnel.closeSubpath();
+            painter.drawPath(funnel);
+        } else {
+            const QRectF die = bounds.adjusted(1.8, 1.8, -1.8, -1.8);
+            painter.drawRoundedRect(die, 2.2, 2.2);
+            painter.setBrush(color);
+            painter.drawEllipse(QPointF(die.left() + 2.6,
+                                        die.top() + 2.6), 0.9, 0.9);
+            painter.drawEllipse(centre, 0.9, 0.9);
+            painter.drawEllipse(QPointF(die.right() - 2.6,
+                                        die.bottom() - 2.6), 0.9, 0.9);
+            painter.setBrush(Qt::NoBrush);
+        }
+    }
+
+    Glyph m_glyph;
+};
+
+void addPanelElevation(QWidget* panel) {
+    panel->setProperty("goliathElevatedPanel", true);
+
+    auto* shadow = new QGraphicsDropShadowEffect(panel);
+    shadow->setBlurRadius(14.0);
+    shadow->setOffset(0.0, 0.0);
+    shadow->setColor(QColor(0, 0, 0, 72));
+    panel->setGraphicsEffect(shadow);
+}
 
 // Draw the small triangle PNGs used for QTreeWidget expand/collapse
 // indicators in the active theme colors.
@@ -103,6 +583,53 @@ std::pair<QString, QString> ensureBranchAssets(
     open.save(QString::fromStdString(openPath.string()));
 
     return {QString::fromStdString(closedPath.string()), QString::fromStdString(openPath.string())};
+}
+
+std::pair<QString, QString> ensureSpinAssets(
+    const fs::path& assetsDir,
+    const std::string& themeName,
+    const QString& colorHex) {
+    std::error_code ec;
+    fs::create_directories(assetsDir, ec);
+
+    std::string safeName = themeName;
+    std::replace(safeName.begin(), safeName.end(), ' ', '_');
+    std::replace(safeName.begin(), safeName.end(), '-', '_');
+
+    const fs::path upPath = assetsDir / ("spin-up-" + safeName + ".png");
+    const fs::path downPath = assetsDir / ("spin-down-" + safeName + ".png");
+
+    constexpr int width = 10;
+    constexpr int height = 6;
+    QPixmap up(width, height);
+    QPixmap down(width, height);
+    up.fill(Qt::transparent);
+    down.fill(Qt::transparent);
+
+    const QColor color(colorHex);
+    {
+        QPainter painter(&up);
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.setBrush(color);
+        painter.setPen(Qt::NoPen);
+        QPolygon poly;
+        poly << QPoint(1, 5) << QPoint(5, 1) << QPoint(9, 5);
+        painter.drawPolygon(poly);
+    }
+    {
+        QPainter painter(&down);
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.setBrush(color);
+        painter.setPen(Qt::NoPen);
+        QPolygon poly;
+        poly << QPoint(1, 1) << QPoint(5, 5) << QPoint(9, 1);
+        painter.drawPolygon(poly);
+    }
+
+    up.save(QString::fromStdString(upPath.string()));
+    down.save(QString::fromStdString(downPath.string()));
+    return {QString::fromStdString(upPath.string()),
+            QString::fromStdString(downPath.string())};
 }
 
 QString toUrlPath(const QString& path) {
@@ -161,7 +688,7 @@ void MainWindow::buildUi() {
     m_titleBar = new TitleBar(this);
     outerLayout->addWidget(m_titleBar);
 
-    auto* contentWidget = new QWidget();
+    auto* contentWidget = new HatchedBackgroundWidget();
     outerLayout->addWidget(contentWidget, 1);
     auto* mainLayout = new QVBoxLayout(contentWidget);
     mainLayout->setContentsMargins(16, 16, 16, 16);
@@ -170,14 +697,16 @@ void MainWindow::buildUi() {
     // --- Modern Top Toolbar ---
     auto* toolbarFrame = new QFrame();
     toolbarFrame->setObjectName("toolbar_frame");
+    addPanelElevation(toolbarFrame);
     auto* toolbar = new QHBoxLayout(toolbarFrame);
     toolbar->setSpacing(10);
 
-    auto* themeLabel = new QLabel(QString::fromUtf8("\xF0\x9F\x8E\xA8 Theme:")); // 🎨 Theme:
+    auto* themeLabel = new EngravedTextLabel(
+        QString::fromUtf8("\xF0\x9F\x8E\xA8 Theme:")); // 🎨 Theme:
     themeLabel->setObjectName("toolbar_label");
     toolbar->addWidget(themeLabel);
 
-    m_themeCombo = new QComboBox();
+    m_themeCombo = new EngravedComboBox();
     m_themeCombo->setObjectName("theme_selector");
     m_themeCombo->view()->setObjectName("theme_selector_popup");
     m_themeCombo->view()->setMouseTracking(true);
@@ -197,12 +726,6 @@ void MainWindow::buildUi() {
 
     toolbar->addWidget(new QLabel("  "));
 
-    auto* sortLabel = new QLabel("Sort:");
-    sortLabel->setObjectName("toolbar_label");
-    toolbar->addWidget(sortLabel);
-
-    m_sortCombo = new QComboBox();
-    m_sortCombo->setObjectName("sort_selector");
     struct SortOption { const char* key; const char* label; };
     static const SortOption sortOptions[] = {
         {"display", "Name (A → Z)"},
@@ -214,26 +737,46 @@ void MainWindow::buildUi() {
         {"playtime_desc", "Playtime (Most → Least)"},
         {"playtime", "Playtime (Least → Most)"},
     };
-    int sortIndex = 0;
-    for (int i = 0; i < (int)(sizeof(sortOptions) / sizeof(sortOptions[0])); ++i) {
-        m_sortCombo->addItem(sortOptions[i].label, QString(sortOptions[i].key));
-        if (m_sortKey == QString(sortOptions[i].key)) sortIndex = i;
-    }
-    m_sortCombo->setCurrentIndex(sortIndex);
-    connect(m_sortCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MainWindow::onSortChanged);
-    m_sortCombo->setFixedWidth(205);
-    toolbar->addWidget(m_sortCombo);
-
-    m_filtersButton = new QPushButton("Filters");
+    m_filtersButton = new EngravedActionButton(
+        "Filters", EngravedActionButton::Glyph::Filters);
     m_filtersButton->setObjectName("filters_btn");
     m_filtersButton->setMinimumWidth(90);
     auto* filtersMenu = new QMenu(m_filtersButton);
+
+    auto* sortMenu = filtersMenu->addMenu("Sort");
+    m_sortGroup = new QActionGroup(sortMenu);
+    m_sortGroup->setExclusive(true);
+    for (const SortOption& option : sortOptions) {
+        QAction* action = sortMenu->addAction(option.label);
+        action->setCheckable(true);
+        action->setData(QString::fromUtf8(option.key));
+        action->setChecked(m_sortKey == QString::fromUtf8(option.key));
+        m_sortGroup->addAction(action);
+    }
+    connect(m_sortGroup, &QActionGroup::triggered, this,
+            [this](QAction* action) {
+                if (!action) return;
+                const QString requested = action->data().toString();
+                if (requested.isEmpty() || requested == m_sortKey) return;
+                m_sortKey = requested;
+                onSortChanged();
+            });
+    filtersMenu->addSeparator();
 
     QAction* showVariantsAction = filtersMenu->addAction("Show variants");
     showVariantsAction->setCheckable(true);
     showVariantsAction->setChecked(m_showVariants);
     connect(showVariantsAction, &QAction::toggled,
             this, &MainWindow::onShowVariantsChanged);
+
+    QAction* commandOverlayAction = filtersMenu->addAction("Command overlay");
+    commandOverlayAction->setCheckable(true);
+    commandOverlayAction->setChecked(m_commandOverlayEnabled);
+    commandOverlayAction->setToolTip(
+        "Open matching command.dat overlays automatically for future game "
+        "launches");
+    connect(commandOverlayAction, &QAction::toggled,
+            this, &MainWindow::onCommandOverlayChanged);
     filtersMenu->addSeparator();
 
     auto* ratingMenu = filtersMenu->addMenu("Rating");
@@ -310,17 +853,7 @@ void MainWindow::buildUi() {
     toolbar->addWidget(m_filtersButton);
     updateFiltersButton();
 
-    auto* commandOverlayCheckbox = new QCheckBox("Command overlay");
-    commandOverlayCheckbox->setChecked(m_commandOverlayEnabled);
-    commandOverlayCheckbox->setToolTip(
-        "Open matching command.dat overlays automatically for future game "
-        "launches");
-    connect(commandOverlayCheckbox, &QCheckBox::toggled,
-            this, &MainWindow::onCommandOverlayChanged);
-    toolbar->addWidget(commandOverlayCheckbox);
-
-    auto* favoritesOnlyCheckbox = new QCheckBox(
-        QString::fromUtf8("\xE2\x98\x85 Favorites only")); // ★
+    auto* favoritesOnlyCheckbox = new EngravedCheckBox("Favorites only");
     favoritesOnlyCheckbox->setChecked(m_favoritesOnly);
     connect(favoritesOnlyCheckbox, &QCheckBox::toggled,
             this, &MainWindow::onFavoritesOnlyChanged);
@@ -328,7 +861,8 @@ void MainWindow::buildUi() {
 
     toolbar->addWidget(new QLabel("  "));
 
-    auto* randomBtn = new QPushButton(QString::fromUtf8("\xF0\x9F\x8E\xB2 Random")); // 🎲 Random
+    auto* randomBtn = new EngravedActionButton(
+        "Random", EngravedActionButton::Glyph::Random);
     randomBtn->setObjectName("random_btn");
     randomBtn->setToolTip(QString("Launch random game (%1)").arg(
         QKeySequence(kRandomGameShortcut).toString(QKeySequence::NativeText)));
@@ -337,7 +871,8 @@ void MainWindow::buildUi() {
 
     toolbar->addStretch();
 
-    auto* toolsBtn = new QPushButton("Tools \xE2\x96\xBC"); // Tools ▼
+    auto* toolsBtn = new EngravedActionButton(
+        "Tools", EngravedActionButton::Glyph::Tools);
     toolsBtn->setObjectName("tools_btn");
     auto* toolsMenu = new QMenu(toolsBtn);
     m_selectionActions.clear();
@@ -386,20 +921,26 @@ void MainWindow::buildUi() {
 #endif
     toolbar->addWidget(toolsBtn);
 
-    auto* settingsBtn = new QPushButton(QString::fromUtf8("\xE2\x9A\x99 Settings")); // ⚙ Settings
+    auto* settingsBtn = new EngravedActionButton(
+        "Settings", EngravedActionButton::Glyph::Settings);
     settingsBtn->setObjectName("settings_btn");
     connect(settingsBtn, &QPushButton::clicked, this, &MainWindow::openSettings);
     toolbar->addWidget(settingsBtn);
 
-    auto* aboutBtn = new QPushButton("About");
+    auto* aboutBtn = new EngravedActionButton(
+        "About", EngravedActionButton::Glyph::About);
     aboutBtn->setObjectName("about_btn");
-    aboutBtn->setIcon(aboutBtn->style()->standardIcon(
-        QStyle::SP_MessageBoxInformation, nullptr, aboutBtn));
-    aboutBtn->setIconSize(QSize(16, 16));
     connect(aboutBtn, &QPushButton::clicked, this, &MainWindow::openAbout);
     toolbar->addWidget(aboutBtn);
 
-    mainLayout->addWidget(toolbarFrame);
+    // The details cards are inset by 4 px in the right pane and another 8 px
+    // inside its scroll area. Match that 12 px on the toolbar's right edge so
+    // the two horizontal outlines end on the same visual axis.
+    auto* toolbarRow = new QHBoxLayout();
+    toolbarRow->setContentsMargins(0, 0, 12, 0);
+    toolbarRow->setSpacing(0);
+    toolbarRow->addWidget(toolbarFrame);
+    mainLayout->addLayout(toolbarRow);
 
     // --- Splitter ---
     m_splitter = new QSplitter(Qt::Horizontal);
@@ -408,13 +949,16 @@ void MainWindow::buildUi() {
     mainLayout->addWidget(m_splitter, 1);
 
     // Left: Game List + Search
-    auto* leftPanel = new QWidget();
+    auto* leftPanel = new HatchedBackgroundWidget();
     auto* leftLayout = new QVBoxLayout(leftPanel);
-    leftLayout->setContentsMargins(0, 0, 0, 0);
+    // Leave enough horizontal room for the elevated controls to paint their
+    // shadows instead of clipping them at the splitter pane boundary.
+    leftLayout->setContentsMargins(8, 0, 8, 12);
     leftLayout->setSpacing(10);
 
     auto* systemSelector = new QFrame();
     systemSelector->setObjectName("system_selector_frame");
+    addPanelElevation(systemSelector);
     auto* systemLayout = new QHBoxLayout(systemSelector);
     systemLayout->setContentsMargins(2, 2, 2, 2);
     systemLayout->setSpacing(2);
@@ -442,6 +986,10 @@ void MainWindow::buildUi() {
     leftLayout->addWidget(systemSelector);
 
     m_tree = new QTreeWidget();
+    m_tree->setProperty("goliathEngravedSurface", true);
+    m_tree->setItemDelegateForColumn(
+        0, new LibraryItemDelegate(m_tree));
+    addPanelElevation(m_tree);
     m_tree->setColumnCount(2);
     m_tree->setHeaderHidden(true);
     // QTreeView enables stretchLastSection by default.  That would make the
@@ -468,6 +1016,7 @@ void MainWindow::buildUi() {
     leftLayout->addWidget(m_tree, 1);
 
     m_searchEntry = new QLineEdit();
+    addPanelElevation(m_searchEntry);
     m_searchEntry->setPlaceholderText(QString::fromUtf8("\xF0\x9F\x94\x8D Search games...")); // 🔍
     m_searchEntry->setClearButtonEnabled(true);
     m_searchEntry->setToolTip(QString(
@@ -487,7 +1036,7 @@ void MainWindow::buildUi() {
     m_splitter->addWidget(leftPanel);
 
     // Right: Details Panel
-    auto* rightWidget = new QWidget();
+    auto* rightWidget = new HatchedBackgroundWidget();
     rightWidget->setMinimumWidth(720);
     auto* rightLayout = new QVBoxLayout(rightWidget);
     rightLayout->setContentsMargins(4, 0, 4, 4);
@@ -496,14 +1045,16 @@ void MainWindow::buildUi() {
     m_detailsScroll = new QScrollArea();
     m_detailsScroll->setWidgetResizable(true);
     m_detailsScroll->setFrameShape(QFrame::NoFrame);
+    m_detailsScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
-    auto* detailsWidget = new QWidget();
+    auto* detailsWidget = new HatchedBackgroundWidget();
     auto* detailsLayout = new QVBoxLayout(detailsWidget);
     detailsLayout->setContentsMargins(8, 0, 8, 8);
     detailsLayout->setSpacing(6);
 
     auto* detailsHeaderCard = new QFrame();
     detailsHeaderCard->setObjectName("details_header_card");
+    addPanelElevation(detailsHeaderCard);
     auto* detailsHeaderLayout = new QVBoxLayout(detailsHeaderCard);
     detailsHeaderLayout->setContentsMargins(14, 10, 14, 10);
     detailsHeaderLayout->setSpacing(0);
@@ -512,15 +1063,15 @@ void MainWindow::buildUi() {
     detailsTitleRow->setContentsMargins(0, 0, 0, 0);
     detailsTitleRow->setSpacing(10);
 
-    m_detailsTitleLabel = new QLabel();
+    m_detailsTitleLabel = new EngravedTextLabel();
     m_detailsTitleLabel->setObjectName("details_title");
     m_detailsTitleLabel->setFont(QFont("Sans", 20, QFont::Bold));
     m_detailsTitleLabel->setWordWrap(true);
     detailsTitleRow->addWidget(m_detailsTitleLabel, 1, Qt::AlignTop);
 
-    m_favoriteButton = new QPushButton(
-        QString::fromUtf8("\xE2\x98\x86 Favorite")); // ☆
+    m_favoriteButton = new EngravedTextButton("Favorite");
     m_favoriteButton->setObjectName("favorite_btn");
+    m_favoriteButton->setProperty("goliathCircledStar", true);
     m_favoriteButton->setCheckable(true);
     m_favoriteButton->setEnabled(false);
     connect(m_favoriteButton, &QPushButton::toggled,
@@ -542,12 +1093,14 @@ void MainWindow::buildUi() {
     auto* ratingRow = new QHBoxLayout();
     ratingRow->setContentsMargins(0, 0, 0, 0);
     ratingRow->setSpacing(0);
-    auto* ratingLabel = new QLabel("Rating:");
+    auto* ratingLabel = new EngravedTextLabel("Rate:");
     ratingLabel->setObjectName("secondary_text");
+    ratingLabel->setProperty("goliathEngravedRole", "secondary");
+    ratingLabel->setFont(QFont("Sans", 15, QFont::DemiBold));
+    ratingLabel->setFixedHeight(24);
     ratingRow->addWidget(ratingLabel, 0, Qt::AlignVCenter);
-
     for (std::size_t index = 0; index < m_ratingButtons.size(); ++index) {
-        auto* button = new QPushButton(
+        auto* button = new EngravedTextButton(
             QString::fromUtf8("\xE2\x98\x86")); // ☆
         button->setObjectName("rating_star_btn");
         button->setFixedSize(28, 24);
@@ -568,53 +1121,221 @@ void MainWindow::buildUi() {
 
     auto* mediaRow = new QHBoxLayout();
     mediaRow->setSpacing(8);
+    // The gallery container establishes the row's vertical shadow room. Keep
+    // the row itself margin-free so its total height remains unchanged.
     mediaRow->setContentsMargins(0, 0, 0, 0);
 
     auto* infoGrid = new QFrame();
     infoGrid->setObjectName("details_info_card");
-    auto* infoGridLayout = new QFormLayout(infoGrid);
+    addPanelElevation(infoGrid);
+    auto* infoCardLayout = new QGridLayout(infoGrid);
+    infoCardLayout->setContentsMargins(16, 14, 16, 14);
+    infoCardLayout->setHorizontalSpacing(16);
+    infoCardLayout->setVerticalSpacing(8);
 
-    infoGridLayout->setContentsMargins(16, 14, 16, 14);
-    infoGridLayout->setSpacing(4);
-    infoGridLayout->setHorizontalSpacing(14);
-    infoGridLayout->setLabelAlignment(Qt::AlignRight);
-    infoGridLayout->setFieldGrowthPolicy(QFormLayout::ExpandingFieldsGrow);
-    infoGridLayout->setRowWrapPolicy(QFormLayout::DontWrapRows);
+    auto makeSectionHeading = [](const QString& text) {
+        auto* heading = new EngravedTextLabel(text);
+        heading->setObjectName("details_subsection_title");
+        heading->setFont(QFont("Sans", 11, QFont::DemiBold));
+        return heading;
+    };
+
+    auto configureForm = [](QFormLayout* form) {
+        form->setContentsMargins(0, 0, 0, 0);
+        form->setSpacing(4);
+        form->setHorizontalSpacing(12);
+        form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        form->setFieldGrowthPolicy(QFormLayout::ExpandingFieldsGrow);
+        form->setRowWrapPolicy(QFormLayout::DontWrapRows);
+    };
+
+    auto makeHorizontalDivider = []() {
+        auto* divider = new QFrame();
+        divider->setObjectName("details_info_horizontal_divider");
+        divider->setFrameShape(QFrame::NoFrame);
+        divider->setFixedHeight(2);
+        divider->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        return divider;
+    };
+
+    auto addInfoRow = [this](QFormLayout* form, const char* key,
+                             const char* label, int minimumLabelWidth) {
+        QLabel* value = nullptr;
+        if (std::string_view(key) == "catalog_id") {
+            value = new CatalogLinkLabel(
+                [this](const QString& link) {
+                    const QUrl url(link);
+                    if (url.scheme() != QStringLiteral("https") ||
+                        url.host() != QStringLiteral("redump.info")) {
+                        return;
+                    }
+                    if (!QDesktopServices::openUrl(url)) {
+                        statusBar()->showMessage(
+                            "Could not open the Redump page in the default browser.",
+                            5000);
+                    }
+                });
+            value->setTextFormat(Qt::RichText);
+            value->setTextInteractionFlags(Qt::NoTextInteraction);
+        } else if (std::string_view(key) == "verification") {
+            value = new VerificationDetailsLabel(
+                [this]() { showVerificationDetails(); });
+            value->setTextFormat(Qt::RichText);
+            value->setTextInteractionFlags(Qt::NoTextInteraction);
+        } else {
+            value = new EngravedTextLabel();
+        }
+        value->setObjectName("details_value");
+        value->setProperty("goliathEngravedRole", "secondary");
+        value->setWordWrap(true);
+        value->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+        value->setSizePolicy(QSizePolicy::Expanding,
+                             QSizePolicy::Preferred);
+
+        auto* fieldLabel = new QWidget();
+        fieldLabel->setObjectName("details_field_label");
+        fieldLabel->setMinimumWidth(minimumLabelWidth);
+        fieldLabel->setSizePolicy(QSizePolicy::Fixed,
+                                  QSizePolicy::Preferred);
+
+        auto* fieldLabelLayout = new QHBoxLayout(fieldLabel);
+        fieldLabelLayout->setContentsMargins(0, 0, 0, 0);
+        fieldLabelLayout->setSpacing(0);
+
+        auto* fieldName = new EngravedTextLabel(QString::fromUtf8(label));
+        fieldName->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+        auto* fieldColon = new EngravedTextLabel(":");
+        fieldColon->setAlignment(Qt::AlignRight | Qt::AlignTop);
+        fieldLabelLayout->addWidget(fieldName, 0, Qt::AlignTop);
+        fieldLabelLayout->addStretch();
+        fieldLabelLayout->addWidget(fieldColon, 0, Qt::AlignTop);
+
+        m_infoLabels[key] = value;
+        m_infoFieldNameLabels[key] = fieldName;
+        m_infoFieldLabels[key] = fieldLabel;
+        form->addRow(fieldLabel, value);
+    };
+
+    auto* mainDataSection = new QVBoxLayout();
+    mainDataSection->setContentsMargins(0, 0, 0, 0);
+    mainDataSection->setSpacing(4);
+    mainDataSection->addWidget(makeSectionHeading("Main Data"));
+
+    auto* mainDataForm = new QFormLayout();
+    configureForm(mainDataForm);
 
     static const std::pair<const char*, const char*> infoRows[] = {
         {"year", "Year"},
         {"manufacturer", "Manufacturer"},
+        {"alt_title", "Alternate title"},
         {"genre", "Genre"},
         {"players", "Players"},
         {"series", "Series"},
+    };
+
+    constexpr int primaryLabelWidth = 108;
+    for (const auto& [key, label] : infoRows)
+        addInfoRow(mainDataForm, key, label, primaryLabelWidth);
+    mainDataSection->addLayout(mainDataForm);
+    mainDataSection->addStretch();
+    infoCardLayout->addLayout(mainDataSection, 0, 0);
+
+    auto* technicalSection = new QVBoxLayout();
+    technicalSection->setContentsMargins(0, 0, 0, 0);
+    technicalSection->setSpacing(4);
+    technicalSection->addWidget(makeSectionHeading("Technical Details"));
+
+    auto* technicalForm = new QFormLayout();
+    configureForm(technicalForm);
+    static const std::pair<const char*, const char*> technicalRows[] = {
+        {"catalog_id", "MAME ID"},
+        {"serial", "Serial"},
+        {"release", "Release"},
+        {"media_format", "Format"},
+        {"program_rom", "ROM regions"},
+        {"verification", "Verification"},
+    };
+    for (const auto& [key, label] : technicalRows)
+        addInfoRow(technicalForm, key, label, primaryLabelWidth);
+    technicalSection->addLayout(technicalForm);
+    technicalSection->addStretch();
+    infoCardLayout->addLayout(technicalSection, 2, 0);
+
+    infoCardLayout->addWidget(makeHorizontalDivider(), 1, 0);
+
+    auto* divider = new QFrame();
+    divider->setObjectName("details_info_vertical_divider");
+    divider->setFrameShape(QFrame::NoFrame);
+    divider->setFixedWidth(2);
+    divider->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
+    infoCardLayout->addWidget(divider, 0, 1, 3, 1);
+
+    auto* profileSection = new QVBoxLayout();
+    profileSection->setContentsMargins(0, 0, 0, 0);
+    profileSection->setSpacing(6);
+
+    auto* profileHeader = new QHBoxLayout();
+    profileHeader->setContentsMargins(0, 0, 0, 0);
+    profileHeader->setSpacing(8);
+    profileHeader->addWidget(makeSectionHeading("Launch Profile"));
+    profileHeader->addStretch();
+
+    m_gameSettingsButton = new QPushButton("Configure profile");
+    m_gameSettingsButton->setObjectName("profile_configure_btn");
+    m_gameSettingsButton->setToolTip(
+        "Open Per-game Settings for the selected ROM or disc image");
+    connect(m_gameSettingsButton, &QPushButton::clicked,
+            this, &MainWindow::openGameSettings);
+    profileHeader->addWidget(m_gameSettingsButton, 0, Qt::AlignVCenter);
+    profileSection->addLayout(profileHeader);
+
+    auto* profileForm = new QFormLayout();
+    configureForm(profileForm);
+    static const std::pair<const char*, const char*> profileRows[] = {
+        {"profile_status", "Profile"},
+        {"profile_system", "System"},
+        {"profile_video", "Video"},
+        {"profile_input", "Input"},
+    };
+    constexpr int profileLabelWidth = 96;
+    for (const auto& [key, label] : profileRows)
+        addInfoRow(profileForm, key, label, profileLabelWidth);
+    profileSection->addLayout(profileForm);
+    profileSection->addStretch();
+    infoCardLayout->addLayout(profileSection, 0, 2);
+
+    auto* gameplaySection = new QVBoxLayout();
+    gameplaySection->setContentsMargins(0, 0, 0, 0);
+    gameplaySection->setSpacing(4);
+    gameplaySection->addWidget(makeSectionHeading("Gameplay Stats"));
+
+    auto* gameplayForm = new QFormLayout();
+    configureForm(gameplayForm);
+    static const std::pair<const char*, const char*> gameplayRows[] = {
         {"playtime", "Playtime"},
         {"sessions", "Sessions"},
         {"last_played", "Last Played"},
     };
+    for (const auto& [key, label] : gameplayRows)
+        addInfoRow(gameplayForm, key, label, profileLabelWidth);
+    gameplaySection->addLayout(gameplayForm);
+    gameplaySection->addStretch();
+    infoCardLayout->addLayout(gameplaySection, 2, 2);
 
-    for (const auto& [key, label] : infoRows) {
-        auto* lbl = new QLabel();
-        lbl->setObjectName("details_value");
-        lbl->setWordWrap(true);
+    infoCardLayout->addWidget(makeHorizontalDivider(), 1, 2);
+    infoCardLayout->setColumnStretch(0, 4);
+    infoCardLayout->setColumnStretch(2, 5);
+    infoCardLayout->setRowStretch(2, 1);
 
-        auto* fieldLabel = new QLabel(
-            QString("%1:").arg(label)
-        );
-
-        fieldLabel->setMinimumWidth(110);
-        fieldLabel->setAlignment(
-            Qt::AlignRight | Qt::AlignVCenter
-        );
-
-        m_infoLabels[key] = lbl;
-
-        infoGridLayout->addRow(fieldLabel, lbl);
-    }
-
-    mediaRow->addWidget(infoGrid, 1);
+    // 390 px preserves the gallery rhythm when every value fits on one line.
+    // Treat it as a floor, not a hard clipping boundary, for DPI-dependent
+    // wrapped values such as alt titles, profile input, and big-endian.
+    infoGrid->setMinimumHeight(390);
+    mediaRow->addWidget(infoGrid, 1, Qt::AlignVCenter);
 
     auto* snapshotFrame = new QFrame();
     snapshotFrame->setObjectName("snapshot_card");
+    addPanelElevation(snapshotFrame);
     snapshotFrame->setFixedSize(520, 390);
 
     auto* snapshotFrameLayout = new QVBoxLayout(snapshotFrame);
@@ -634,6 +1355,7 @@ void MainWindow::buildUi() {
     // Keep the original image area. The gallery controls live next to the
     // card, so they take no height from either the image or Description.
     auto* galleryRail = new QWidget();
+    galleryRail->setObjectName("gallery_rail");
     galleryRail->setFixedSize(92, 390);
     auto* galleryControls = new QVBoxLayout(galleryRail);
     galleryControls->setContentsMargins(4, 8, 4, 8);
@@ -732,12 +1454,15 @@ void MainWindow::buildUi() {
     });
 
     auto* galleryPanel = new QWidget();
-    galleryPanel->setFixedSize(612, 390);
+    galleryPanel->setObjectName("gallery_panel");
+    galleryPanel->setFixedSize(620, 406);
     auto* galleryPanelLayout = new QHBoxLayout(galleryPanel);
-    galleryPanelLayout->setContentsMargins(0, 0, 0, 0);
+    // Child effects are clipped by their parent. Reserve paint room inside the
+    // gallery container so all four sides of the snapshot shadow stay visible.
+    galleryPanelLayout->setContentsMargins(0, 8, 8, 8);
     galleryPanelLayout->setSpacing(0);
-    galleryPanelLayout->addWidget(galleryRail, 0, Qt::AlignTop);
-    galleryPanelLayout->addWidget(snapshotFrame, 0, Qt::AlignTop);
+    galleryPanelLayout->addWidget(galleryRail, 0, Qt::AlignVCenter);
+    galleryPanelLayout->addWidget(snapshotFrame, 0, Qt::AlignVCenter);
     mediaRow->addWidget(galleryPanel, 0, Qt::AlignTop);
     detailsLayout->addLayout(mediaRow);
 
@@ -747,6 +1472,8 @@ void MainWindow::buildUi() {
     detailsLayout->addWidget(historyLabel);
 
     m_historyText = new QTextEdit();
+    m_historyText->setObjectName("details_description_card");
+    addPanelElevation(m_historyText);
     m_historyText->setReadOnly(true);
     m_historyText->setFrameShape(QFrame::NoFrame);
     m_historyText->setAcceptRichText(false);
@@ -755,6 +1482,8 @@ void MainWindow::buildUi() {
         Qt::TextSelectableByKeyboard
     );
     m_historyText->setUndoRedoEnabled(false);
+    m_historyText->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_historyText->setLineWrapMode(QTextEdit::WidgetWidth);
     m_historyText->setMinimumHeight(240);
     m_historyText->setContentsMargins(4, 4, 4, 4);
 
@@ -770,11 +1499,12 @@ void MainWindow::buildUi() {
 
     m_splitter->setSizes({400, 760});
 
-    // Status bar with Launch button in the bottom-right corner
+    // Status bar with Launch aligned to the right edge of the detail cards.
     auto* statusBar_ = statusBar();
     // ResizeFilter already provides all-edge resizing for this frameless
     // window, so the native QSizeGrip would only add a stray corner square.
     statusBar_->setSizeGripEnabled(false);
+    statusBar_->setContentsMargins(0, 0, 28, 0);
     m_libraryStatusLabel = new QLabel(statusBar_);
     m_libraryStatusLabel->setObjectName("library_status");
     m_libraryStatusLabel->setContentsMargins(4, 0, 0, 0);
@@ -818,18 +1548,72 @@ void MainWindow::applyTheme(const QString& themeNameIn) {
                                                        QString::fromStdString(theme.text_primary));
     auto [closedSelPath, openSelPath] = ensureBranchAssets(assetsDir, themeKey,
         QString::fromStdString(theme.text_secondary), "selected");
+    auto [spinUpPath, spinDownPath] = ensureSpinAssets(
+        assetsDir, themeKey, QString::fromStdString(theme.text_primary));
 
     QString qss = QString::fromStdString(stylesheet);
     qss.replace("<<BRANCH_CLOSED>>", toUrlPath(closedPath));
     qss.replace("<<BRANCH_OPEN>>", toUrlPath(openPath));
     qss.replace("<<BRANCH_CLOSED_SELECTED>>", toUrlPath(closedSelPath));
     qss.replace("<<BRANCH_OPEN_SELECTED>>", toUrlPath(openSelPath));
+    qss.replace("<<SPIN_UP>>", toUrlPath(spinUpPath));
+    qss.replace("<<SPIN_DOWN>>", toUrlPath(spinDownPath));
 
     setStyleSheet(qss);
+
+    const bool darkSurface = contrast_text_for(theme.bg_primary) == "#ffffff";
+    QColor shadowColor;
+    if (darkSurface) {
+        shadowColor = QColor(QString::fromStdString(theme.border));
+        shadowColor.setAlpha(112);
+    } else {
+        shadowColor = QColor(0, 0, 0, 72);
+    }
+
+    const QColor borderColor(QString::fromStdString(theme.border));
+    const QColor accentColor(QString::fromStdString(theme.accent));
+    QColor hatchColor(
+        (borderColor.red() * 3 + accentColor.red()) / 4,
+        (borderColor.green() * 3 + accentColor.green()) / 4,
+        (borderColor.blue() * 3 + accentColor.blue()) / 4,
+        darkSurface ? 36 : 28);
+
+    const auto elevatedPanels = findChildren<QWidget*>();
+    for (QWidget* panel : elevatedPanels) {
+        if (panel->property("goliathHatchedBackground").toBool()) {
+            panel->setProperty("goliathHatchColor",
+                               hatchColor.name(QColor::HexArgb));
+            panel->update();
+        }
+        if (panel->property("goliathElevatedPanel").toBool()) {
+            if (auto* shadow = qobject_cast<QGraphicsDropShadowEffect*>(
+                    panel->graphicsEffect())) {
+                shadow->setColor(shadowColor);
+            }
+        }
+        if (panel->property("goliathEngravedSurface").toBool()) {
+            QColor depth = darkSurface
+                ? QColor(0, 0, 0, 190)
+                : QColor(255, 255, 255, 210);
+            const bool secondary =
+                panel->property("goliathEngravedRole").toString() ==
+                QStringLiteral("secondary");
+            panel->setProperty("goliathEngravedText",
+                               QString::fromStdString(secondary
+                                   ? theme.text_secondary
+                                   : theme.text_primary));
+            panel->setProperty("goliathEngravedDepth", depth.name(QColor::HexArgb));
+            panel->setProperty("goliathEngravedHover",
+                               QString::fromStdString(theme.accent));
+            panel->setProperty(
+                "goliathEngravedSelectionText",
+                QString::fromStdString(contrast_text_for(theme.accent)));
+            panel->update();
+        }
+    }
     const QString comboPopupStyle = QString::fromStdString(
         generate_combo_popup_style(theme));
     applyComboPopupStyle(m_themeCombo, comboPopupStyle);
-    applyComboPopupStyle(m_sortCombo, comboPopupStyle);
 
     m_config.set("UI", "theme", themeName.toStdString());
     save_config(m_config);

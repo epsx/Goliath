@@ -13,9 +13,6 @@
 #include "game/bios_verify.hpp"
 #include "game/rescan_worker.hpp"
 #include "ui/rescan_dialog.hpp"
-#if defined(GOLIATH_WAYLAND_CAPTURE)
-#include "ui/wayland_gif_hotkey.hpp"
-#endif
 
 #include <QCloseEvent>
 #include <QCoreApplication>
@@ -77,6 +74,7 @@ MainWindow::MainWindow(Config config, QWidget* parent)
     int width = std::max(m_config.get_int("UI", "window_width", 1200), 800);
     int height = std::max(m_config.get_int("UI", "window_height", 800), 600);
     resize(width, height);
+    installFramelessWindowShadow(this, "main_window_shadow_surface");
     centerWindow();
 
     loadGames();
@@ -103,6 +101,12 @@ MainWindow::MainWindow(Config config, QWidget* parent)
     }
 
     buildUi();
+    // Keep the documented compact window range authoritative. Without an
+    // explicit limit, Qt can promote the expanded card layout's size hint to
+    // an implicit minimum and prevent resizeEvent() from ever reaching the
+    // width at which the details pane collapses into Classic View.
+    setMinimumSize(800, 600);
+
 #if defined(GOLIATH_WAYLAND_CAPTURE)
     // Let the main window show before the desktop asks for shortcut approval.
     if (QGuiApplication::platformName() == "wayland")
@@ -649,14 +653,7 @@ void MainWindow::openSettings() {
 
     SettingsDialog dialog(m_config, m_paths,
         [this](const QKeySequence& gif, const QKeySequence& png, QString* error) {
-            return applyCaptureHotkeys(gif, png, error, true);
-        },
-        [this]() {
-#if defined(GOLIATH_WAYLAND_CAPTURE)
-            if (m_waylandGifHotkey)
-                return m_waylandGifHotkey->assignedTrigger();
-#endif
-            return QString();
+            return applyCaptureHotkeys(gif, png, error);
         }, this);
     dialog.exec();
     // Path tab edits (e.g. BIOS Folder) must apply to this session too,
@@ -803,8 +800,11 @@ void MainWindow::closeEvent(QCloseEvent* event) {
         m_rescanWorker = nullptr;
     }
 
-    m_config.set("UI", "window_width", std::to_string(width()));
-    m_config.set("UI", "window_height", std::to_string(height()));
+    const int shadowMargin = framelessWindowShadowMargin(this);
+    m_config.set("UI", "window_width",
+                 std::to_string(std::max(800, width() - shadowMargin * 2)));
+    m_config.set("UI", "window_height",
+                 std::to_string(std::max(600, height() - shadowMargin * 2)));
     QString lastRom = selectedRomFile();
     if (!lastRom.isEmpty()) {
         m_config.set("UI", "last_rom", lastRom.toStdString());
@@ -838,7 +838,7 @@ void MainWindow::resizeEvent(QResizeEvent* event) {
     constexpr int collapseWidth = 1000;
     constexpr int restoreWidth = 1150;
 
-    const int width = event->size().width();
+    const int width = contentsRect().width();
 
     if (!m_detailsCollapsed && width < collapseWidth) {
         const QList<int> sizes = m_splitter->sizes();

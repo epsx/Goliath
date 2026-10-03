@@ -39,7 +39,7 @@ TEST_CASE(
     fs::path json_file = make_test_file(
         "valid",
 
-        R"([
+        R"json([
             {
                 "name": "Metal Slug - Super Vehicle-001",
                 "display": "Metal Slug",
@@ -66,13 +66,39 @@ TEST_CASE(
                         "label": null,
                         "mame": "mslug",
                         "cloneof": null,
+                        "alt_title": "メタルスラッグ",
+                        "serial": "NGM-201 (MVS), NGH-201 (AES)",
+                        "release": "19960419 (MVS), 19960524 (AES)",
+                        "part": "cart",
+                        "interface": "neo_cart",
+                        "program_width": 16,
+                        "program_endianness": "big",
+                        "program_size": 1048576,
+                        "fixed_size": 262144,
+                        "audio_cpu_size": 262144,
+                        "audio_data_size": 2097152,
+                        "graphics_size": 3145728,
+                        "verification": "geolith-crc32",
+                        "crc32": "352441c2",
+                        "expected_crc32": "352441c2",
+                        "hashes": [{
+                            "file": "mslug.neo",
+                            "catalog_file": "mslug.neo",
+                            "role": "Cartridge",
+                            "algorithm": "CRC-32",
+                            "size": 1048576,
+                            "expected_size": null,
+                            "actual": "352441c2",
+                            "expected": "352441c2",
+                            "matched": true
+                        }],
                         "main": true
                     }
                 ],
 
                 "main_rom": "mslug.neo"
             }
-        ])"
+        ])json"
     );
 
     auto games = load_games(json_file);
@@ -85,6 +111,7 @@ TEST_CASE(
     REQUIRE(game.display == "Metal Slug");
     REQUIRE(game.short_name == "mslug");
     REQUIRE(game.source == "mame");
+    REQUIRE_FALSE(game.redump_id.has_value());
 
     REQUIRE(game.year.has_value());
     REQUIRE(*game.year == "1996");
@@ -110,6 +137,45 @@ TEST_CASE(
     REQUIRE(game.roms[0].name.has_value());
     REQUIRE(*game.roms[0].name == "Metal Slug - Super Vehicle-001");
     REQUIRE(game.roms[0].mame == "mslug");
+    REQUIRE(game.roms[0].alt_title ==
+            std::optional<std::string>("メタルスラッグ"));
+    REQUIRE(game.roms[0].serial == std::optional<std::string>(
+        "NGM-201 (MVS), NGH-201 (AES)"));
+    REQUIRE(game.roms[0].release == std::optional<std::string>(
+        "19960419 (MVS), 19960524 (AES)"));
+    REQUIRE(game.roms[0].part ==
+            std::optional<std::string>("cart"));
+    REQUIRE(game.roms[0].interface ==
+            std::optional<std::string>("neo_cart"));
+    REQUIRE(game.roms[0].program_width ==
+            std::optional<std::uintmax_t>(16));
+    REQUIRE(game.roms[0].program_endianness ==
+            std::optional<std::string>("big"));
+    REQUIRE(game.roms[0].program_size ==
+            std::optional<std::uintmax_t>(1048576));
+    REQUIRE(game.roms[0].fixed_size ==
+            std::optional<std::uintmax_t>(262144));
+    REQUIRE(game.roms[0].audio_cpu_size ==
+            std::optional<std::uintmax_t>(262144));
+    REQUIRE(game.roms[0].audio_data_size ==
+            std::optional<std::uintmax_t>(2097152));
+    REQUIRE(game.roms[0].graphics_size ==
+            std::optional<std::uintmax_t>(3145728));
+    REQUIRE(game.roms[0].verification ==
+            std::optional<std::string>("geolith-crc32"));
+    REQUIRE(game.roms[0].crc32 ==
+            std::optional<std::string>("352441c2"));
+    REQUIRE(game.roms[0].expected_crc32 ==
+            std::optional<std::string>("352441c2"));
+    REQUIRE(game.roms[0].hashes.size() == 1);
+    CHECK(game.roms[0].hashes[0].file == "mslug.neo");
+    CHECK(game.roms[0].hashes[0].role == "Cartridge");
+    CHECK(game.roms[0].hashes[0].algorithm == "CRC-32");
+    CHECK(game.roms[0].hashes[0].size ==
+          std::optional<std::uintmax_t>(1048576));
+    CHECK(game.roms[0].hashes[0].actual ==
+          std::optional<std::string>("352441c2"));
+    CHECK(game.roms[0].hashes[0].matched);
     REQUIRE(game.roms[0].main);
 
     REQUIRE(game.main_rom.has_value());

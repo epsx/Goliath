@@ -118,12 +118,9 @@ capture is intentionally unavailable.
 
 The portal picker appearing for every recording is expected. Desktop-reserved
 shortcuts such as `Ctrl+Alt+F3` or `Ctrl+Alt+F12` may be unavailable; choose a
-free key and approve it in the GlobalShortcuts dialog. If a binding already
-exists, use **Settings > Hotkeys > Open Desktop Shortcut Settings...**, change it
-in the desktop UI, and confirm that the displayed active desktop shortcut
-and the activation log both update. Window stacking and restored positions for
-the separate `command.dat` companion remain compositor controlled and are not
-capture failures.
+free key and approve it in the GlobalShortcuts dialog. Window stacking and
+restored positions for the separate `command.dat` companion remain compositor
+controlled and are not capture failures.
 
 ## Release sign-off
 

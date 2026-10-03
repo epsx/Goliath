@@ -1,6 +1,7 @@
 #include "game_model.hpp"
 #include "json.hpp"
 
+#include <cstdint>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -17,6 +18,20 @@ static std::optional<std::string> opt_str(const json& j, const char* key) {
     if (v.is_string()) return v.get<std::string>();
     // some fields (e.g. year) could theoretically be numeric; stringify defensively
     return v.dump();
+}
+
+static std::optional<std::uintmax_t> opt_uintmax(
+    const json& j, const char* key) {
+    if (!j.contains(key) || j.at(key).is_null()) return std::nullopt;
+    const json& value = j.at(key);
+    if (value.is_number_unsigned())
+        return value.get<std::uintmax_t>();
+    if (value.is_number_integer()) {
+        const std::int64_t signedValue = value.get<std::int64_t>();
+        if (signedValue >= 0)
+            return static_cast<std::uintmax_t>(signedValue);
+    }
+    return std::nullopt;
 }
 
 static bool has_required_string(
@@ -128,7 +143,8 @@ std::vector<Game> load_games(const fs::path& json_file) {
             verification = jg.at("verification").get<std::string>();
             if (*verification != "redump-cue" &&
                 *verification != "redump-tracks-only" &&
-                *verification != "mame-chd") {
+                *verification != "mame-chd" &&
+                *verification != "mame-chd-mismatch") {
                 std::cerr << "[goliath] Skipping game with unsupported verification: "
                           << *verification << "\n";
                 continue;
@@ -154,6 +170,11 @@ std::vector<Game> load_games(const fs::path& json_file) {
         g.system = system;
         g.identified = identified;
         g.verification = verification;
+        g.redump_id = source == "redump"
+            ? opt_str(jg, "redump_id")
+            : std::nullopt;
+        if (g.redump_id.has_value() && g.redump_id->empty())
+            g.redump_id.reset();
         g.year = opt_str(jg, "year");
         g.manufacturer = opt_str(jg, "manufacturer");
         g.developer = opt_str(jg, "developer");
@@ -193,6 +214,45 @@ std::vector<Game> load_games(const fs::path& json_file) {
             r.label = opt_str(jr, "label");
             r.mame = jr.at("mame").get<std::string>();
             r.cloneof = opt_str(jr, "cloneof");
+            r.alt_title = opt_str(jr, "alt_title");
+            r.serial = opt_str(jr, "serial");
+            r.release = opt_str(jr, "release");
+            r.part = opt_str(jr, "part");
+            r.interface = opt_str(jr, "interface");
+            r.program_width = opt_uintmax(jr, "program_width");
+            r.program_endianness = opt_str(jr, "program_endianness");
+            r.program_size = opt_uintmax(jr, "program_size");
+            r.fixed_size = opt_uintmax(jr, "fixed_size");
+            r.audio_cpu_size = opt_uintmax(jr, "audio_cpu_size");
+            r.audio_data_size = opt_uintmax(jr, "audio_data_size");
+            r.graphics_size = opt_uintmax(jr, "graphics_size");
+            r.verification = opt_str(jr, "verification");
+            r.crc32 = opt_str(jr, "crc32");
+            r.expected_crc32 = opt_str(jr, "expected_crc32");
+            if (jr.contains("hashes") && jr.at("hashes").is_array()) {
+                for (const auto& jhash : jr.at("hashes")) {
+                    if (!has_required_string(jhash, "file") ||
+                        !has_required_string(jhash, "role") ||
+                        !has_required_string(jhash, "algorithm") ||
+                        !jhash.contains("matched") ||
+                        !jhash.at("matched").is_boolean()) {
+                        continue;
+                    }
+                    MediaHashDetail hash;
+                    hash.file = jhash.at("file").get<std::string>();
+                    hash.catalog_file = opt_str(jhash, "catalog_file");
+                    hash.role = jhash.at("role").get<std::string>();
+                    hash.algorithm =
+                        jhash.at("algorithm").get<std::string>();
+                    hash.size = opt_uintmax(jhash, "size");
+                    hash.expected_size =
+                        opt_uintmax(jhash, "expected_size");
+                    hash.actual = opt_str(jhash, "actual");
+                    hash.expected = opt_str(jhash, "expected");
+                    hash.matched = jhash.at("matched").get<bool>();
+                    r.hashes.push_back(std::move(hash));
+                }
+            }
             r.main = jr.at("main").get<bool>();
 
             g.roms.push_back(std::move(r));

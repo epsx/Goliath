@@ -21,9 +21,27 @@ enum class RedumpCueMatch {
     TracksOnly
 };
 
+struct FileHashVerification {
+    std::string file;
+    std::optional<std::string> catalog_file;
+    std::string role;
+    std::string algorithm;
+    std::uintmax_t size = 0;
+    std::optional<std::uintmax_t> expected_size;
+    std::optional<std::string> actual_hash;
+    std::optional<std::string> expected_hash;
+    bool matches = false;
+};
+
 struct RedumpCueVerification {
     std::size_t catalog_index = 0;
     RedumpCueMatch match = RedumpCueMatch::TracksOnly;
+    std::vector<FileHashVerification> files;
+};
+
+struct MameChdVerification {
+    std::string actual_sha1;
+    std::optional<std::string> matched_short_name;
 };
 
 // Groups Redump catalog rows by their ordered physical-track sizes. Building
@@ -55,7 +73,7 @@ std::optional<RedumpCueVerification> verify_redump_cue(
     RedumpTitleKeyFunction title_key,
     const std::atomic<bool>* cancel = nullptr);
 
-std::optional<std::string> verify_mame_chd(
+std::optional<MameChdVerification> verify_mame_chd(
     const std::filesystem::path& chd_path,
     const MameChdHashCatalog& catalog);
 

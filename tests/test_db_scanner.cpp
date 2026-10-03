@@ -2,10 +2,12 @@
 
 #include "game/db_scanner.hpp"
 #include "game/game_model.hpp"
+#include "game/geolith_verification.hpp"
 #include "game/neocd_verification.hpp"
 #include "game/neogeo_metadata.hpp"
 #include "common/goliath_common.hpp"
 
+#include <algorithm>
 #include <atomic>
 #include <array>
 #include <chrono>
@@ -177,15 +179,29 @@ void create_common_metadata(const fs::path& root) {
         <publisher>Nazca</publisher>
         <info name="serial" value="NGM-201 (MVS), NGH-201 (AES)"/>
         <info name="release" value="19960419 (MVS), 19960524 (AES)"/>
+        <info name="alt_title" value="メタルスラッグ"/>
         <sharedfeat name="release" value="MVS,AES"/>
         <sharedfeat name="compatibility" value="MVS,AES"/>
-        <part name="cart" interface="neo_cart"/>
+        <part name="cart" interface="neo_cart">
+            <dataarea name="maincpu" width="16" endianness="big" size="0x100000"/>
+            <dataarea name="fixed" size="0x040000"/>
+            <dataarea name="audiocpu" size="0x040000"/>
+            <dataarea name="ymsnd:adpcma" size="0x080000"/>
+            <dataarea name="ymsnd:adpcmb" size="0x180000"/>
+            <dataarea name="sprites" size="0x300000"/>
+        </part>
     </software>
     <software name="msluga" cloneof="mslug">
         <description>Metal Slug (prototype)</description>
         <year>1996</year>
         <publisher>Nazca</publisher>
-        <part name="cart" interface="neo_cart"/>
+        <info name="serial" value="PROTO-201 (MVS)"/>
+        <info name="release" value="19960101 (MVS)"/>
+        <info name="alt_title" value="メタルスラッグ（試作）"/>
+        <part name="cart" interface="neo_cart">
+            <dataarea name="maincpu" width="16" endianness="big" size="0x200000"/>
+            <dataarea name="audiocrypt" size="0x080000"/>
+        </part>
     </software>
     <software name="mslug2">
         <description>Metal Slug 2 - Super Vehicle-001/II (NGM-2410 ~ NGH-2410)</description>
@@ -240,6 +256,8 @@ void create_common_metadata(const fs::path& root) {
         <year>1996</year>
         <publisher>SNK</publisher>
         <info name="serial" value="NGCD-201 (JPN)"/>
+        <info name="release" value="19960705 (JPN)"/>
+        <info name="alt_title" value="メタルスラッグ"/>
         <part name="cdrom" interface="cdrom">
             <diskarea name="cdrom">
                 <disk name="metal slug (1996)(snk)(jp-us)" sha1="b4f83b0b7046e9445f9cc16c40e57fd84b575ef9"/>
@@ -493,6 +511,49 @@ TEST_CASE("db scanner groups parent and clone", "[db][scanner]") {
     REQUIRE(result.parent_games == 1);
     REQUIRE(result.variant_count == 1);
     REQUIRE(result.homebrew_games == 0);
+
+    const std::vector<goliath::Game> games =
+        goliath::load_games(root / "database/games.json");
+    REQUIRE(games.size() == 1);
+    REQUIRE(games.front().roms.size() == 2);
+
+    const auto main = std::find_if(
+        games.front().roms.begin(), games.front().roms.end(),
+        [](const goliath::Rom& rom) { return rom.mame == "mslug"; });
+    const auto clone = std::find_if(
+        games.front().roms.begin(), games.front().roms.end(),
+        [](const goliath::Rom& rom) { return rom.mame == "msluga"; });
+    REQUIRE(main != games.front().roms.end());
+    REQUIRE(clone != games.front().roms.end());
+
+    CHECK(main->alt_title ==
+          std::optional<std::string>("メタルスラッグ"));
+    CHECK(main->serial == std::optional<std::string>(
+        "NGM-201 (MVS), NGH-201 (AES)"));
+    CHECK(main->release == std::optional<std::string>(
+        "19960419 (MVS), 19960524 (AES)"));
+    CHECK(main->part == std::optional<std::string>("cart"));
+    CHECK(main->interface == std::optional<std::string>("neo_cart"));
+    CHECK(main->program_width == std::optional<std::uintmax_t>(16));
+    CHECK(main->program_endianness ==
+          std::optional<std::string>("big"));
+    CHECK(main->program_size ==
+          std::optional<std::uintmax_t>(0x100000));
+    CHECK(main->fixed_size ==
+          std::optional<std::uintmax_t>(0x040000));
+    CHECK(main->audio_cpu_size ==
+          std::optional<std::uintmax_t>(0x040000));
+    CHECK(main->audio_data_size ==
+          std::optional<std::uintmax_t>(0x200000));
+    CHECK(main->graphics_size ==
+          std::optional<std::uintmax_t>(0x300000));
+
+    CHECK(clone->serial ==
+          std::optional<std::string>("PROTO-201 (MVS)"));
+    CHECK(clone->program_size ==
+          std::optional<std::uintmax_t>(0x200000));
+    CHECK(clone->audio_cpu_size ==
+          std::optional<std::uintmax_t>(0x080000));
 
     fs::remove_all(root);
 }
@@ -1267,6 +1328,104 @@ TEST_CASE("db scanner no longer requires mame.xml", "[db][metadata][migration]")
     fs::remove_all(root);
 }
 
+TEST_CASE("db scanner verifies each neo variant against geolith crc32",
+          "[db][neogeo][geolith][crc32]") {
+    fs::path root = make_test_root("geolith_crc32_variants");
+    create_common_metadata(root);
+
+    write_file(
+        root / "metadata/geolith.xml",
+        R"xml(<?xml version="1.0" encoding="UTF-8"?>
+<geolith-metadata schema-version="1">
+  <neo-catalog algorithm="crc32" entries="2">
+    <rom file="mslug.neo" crc32="352441c2"/>
+    <rom file="msluga.neo" crc32="00000000"/>
+  </neo-catalog>
+</geolith-metadata>
+)xml");
+    write_file(root / "roms/mslug.neo", "abc");
+    write_file(root / "roms/Metal Slug (prototype).neo", "abc");
+
+    std::string progress;
+    Config cfg = make_config(root);
+    ScanResult result = scan_roms(cfg, [&](const std::string& line) {
+        progress += line;
+    });
+
+    REQUIRE(result.success);
+    CHECK(result.rom_file_count == 2);
+    CHECK(result.neo_geolith_crc32_verified_files == 1);
+    CHECK(result.neo_geolith_crc32_mismatch_files == 1);
+    CHECK(result.neo_metadata_only_files == 0);
+    CHECK(progress.find("Geolith CRC-32 entries: 2") != std::string::npos);
+    CHECK(progress.find("Geolith CRC-32 verified  : 1") !=
+          std::string::npos);
+    CHECK(progress.find("CRC-32 mismatches        : 1") !=
+          std::string::npos);
+
+    const auto games = goliath::load_games(root / "database/games.json");
+    REQUIRE(games.size() == 1);
+    REQUIRE(games.front().roms.size() == 2);
+
+    const auto verified = std::find_if(
+        games.front().roms.begin(), games.front().roms.end(),
+        [](const goliath::Rom& rom) { return rom.file == "mslug.neo"; });
+    REQUIRE(verified != games.front().roms.end());
+    CHECK(verified->verification ==
+          std::optional<std::string>("geolith-crc32"));
+    CHECK(verified->expected_crc32 ==
+          std::optional<std::string>("352441c2"));
+    CHECK(verified->crc32 == std::optional<std::string>("352441c2"));
+    REQUIRE(verified->hashes.size() == 1);
+    CHECK(verified->hashes.front().role == "Cartridge");
+    CHECK(verified->hashes.front().algorithm == "CRC-32");
+    CHECK(verified->hashes.front().expected ==
+          std::optional<std::string>("352441c2"));
+    CHECK(verified->hashes.front().actual ==
+          std::optional<std::string>("352441c2"));
+    CHECK(verified->hashes.front().matched);
+
+    const auto mismatch = std::find_if(
+        games.front().roms.begin(), games.front().roms.end(),
+        [](const goliath::Rom& rom) {
+            return rom.file == "Metal Slug (prototype).neo";
+        });
+    REQUIRE(mismatch != games.front().roms.end());
+    CHECK(mismatch->verification ==
+          std::optional<std::string>("geolith-crc32-mismatch"));
+    CHECK(mismatch->expected_crc32 ==
+          std::optional<std::string>("00000000"));
+    CHECK(mismatch->crc32 == std::optional<std::string>("352441c2"));
+    REQUIRE(mismatch->hashes.size() == 1);
+    CHECK_FALSE(mismatch->hashes.front().matched);
+
+    fs::remove_all(root);
+}
+
+TEST_CASE("geolith crc catalog ignores malformed rows",
+          "[db][neogeo][geolith][metadata]") {
+    fs::path root = make_test_root("geolith_catalog_validation");
+    write_file(
+        root / "geolith.xml",
+        R"xml(<?xml version="1.0"?>
+<geolith-metadata schema-version="1">
+  <neo-catalog algorithm="crc32" entries="4">
+    <rom file="MSLUG.NEO" crc32="352441C2"/>
+    <rom file="bad.neo" crc32="1234"/>
+    <rom file="wrong.zip" crc32="12345678"/>
+    <rom crc32="12345678"/>
+  </neo-catalog>
+</geolith-metadata>
+)xml");
+
+    const goliath::GeolithCrcCatalog catalog =
+        goliath::load_geolith_crc_catalog(root / "geolith.xml");
+    REQUIRE(catalog.size() == 1);
+    CHECK(catalog.at("mslug.neo") == "352441c2");
+
+    fs::remove_all(root);
+}
+
 TEST_CASE("db scanner normalizes software-list description separators", "[db][metadata][migration]") {
     fs::path root = make_test_root("software_description_separator");
     create_common_metadata(root);
@@ -1384,6 +1543,27 @@ TEST_CASE("complete Redump set verification requires exact CUE and tracks", "[db
     std::string text(std::istreambuf_iterator<char>(in), {});
     REQUIRE(text.find("\"source\": \"redump\"") != std::string::npos);
     REQUIRE(text.find("\"verification\": \"redump-cue\"") != std::string::npos);
+    REQUIRE(text.find("\"redump_id\": \"69152\"") != std::string::npos);
+
+    const auto games = goliath::load_games(root / "database/games.json");
+    REQUIRE(games.size() == 1);
+    CHECK(games.front().redump_id ==
+          std::optional<std::string>("69152"));
+    REQUIRE(games.front().roms.size() == 1);
+    const goliath::Rom& cue = games.front().roms.front();
+    CHECK(cue.verification ==
+          std::optional<std::string>("redump-cue"));
+    REQUIRE(cue.hashes.size() == 2);
+    CHECK(cue.hashes[0].role == "CUE descriptor");
+    CHECK(cue.hashes[0].matched);
+    CHECK(cue.hashes[0].actual ==
+          std::optional<std::string>(
+              "71c9c43aede9cb375e70813f187c2dfc8652403d"));
+    CHECK(cue.hashes[1].role == "Track 01");
+    CHECK(cue.hashes[1].matched);
+    CHECK(cue.hashes[1].actual ==
+          std::optional<std::string>(
+              "a9993e364706816aba3e25717850c26c9cd0d89d"));
 
     in.close();
     fs::remove_all(root);
@@ -1417,6 +1597,14 @@ TEST_CASE("Redump track identity preserves metadata without complete-set status"
     REQUIRE(text.find("\"source\": \"redump\"") != std::string::npos);
     REQUIRE(text.find("\"verification\": \"redump-tracks-only\"") != std::string::npos);
     REQUIRE(text.find("Andro Dunos (France) (Unl)") != std::string::npos);
+
+    const auto games = goliath::load_games(root / "database/games.json");
+    REQUIRE(games.size() == 1);
+    REQUIRE(games.front().roms.size() == 1);
+    const goliath::Rom& cue = games.front().roms.front();
+    REQUIRE(cue.hashes.size() == 2);
+    CHECK_FALSE(cue.hashes[0].matched);
+    CHECK(cue.hashes[1].matched);
 
     in.close();
     fs::remove_all(root);
@@ -1484,6 +1672,7 @@ TEST_CASE("Redump track identity retains Redump identity and imports MAME metada
     const goliath::Game& game = games.front();
     CHECK(game.short_name == "cd_redump_test_mslug");
     CHECK(game.source == "redump");
+    CHECK(game.redump_id == std::optional<std::string>("test-mslug"));
     CHECK(game.name == "Metal Slug (Japan) (En,Ja)");
     CHECK(game.verification ==
           std::optional<std::string>("redump-tracks-only"));
@@ -1498,6 +1687,17 @@ TEST_CASE("Redump track identity retains Redump identity and imports MAME metada
           std::string::npos);
     REQUIRE(game.roms.size() == 1);
     CHECK(game.roms.front().mame == "mslug");
+    CHECK(game.roms.front().alt_title ==
+          std::optional<std::string>("メタルスラッグ"));
+    CHECK(game.roms.front().serial ==
+          std::optional<std::string>("NGCD-201 (JPN)"));
+    CHECK(game.roms.front().release ==
+          std::optional<std::string>("19960705 (JPN)"));
+    CHECK(game.roms.front().part ==
+          std::optional<std::string>("cdrom"));
+    CHECK(game.roms.front().interface ==
+          std::optional<std::string>("cdrom"));
+    CHECK_FALSE(game.roms.front().program_size.has_value());
 
     fs::remove_all(root);
 }
@@ -1529,6 +1729,18 @@ TEST_CASE("MAME CHD verification uses the CHD combined SHA-1, not Data SHA1", "[
     REQUIRE(text.find("\"short\": \"ssideki2\"") != std::string::npos);
     REQUIRE(text.find("\"verification\": \"mame-chd\"") != std::string::npos);
 
+    const auto games = goliath::load_games(root / "database/games.json");
+    REQUIRE(games.size() == 1);
+    REQUIRE(games.front().roms.size() == 1);
+    const goliath::Rom& chd = games.front().roms.front();
+    CHECK(chd.verification == std::optional<std::string>("mame-chd"));
+    REQUIRE(chd.hashes.size() == 1);
+    CHECK(chd.hashes.front().role == "CHD");
+    CHECK(chd.hashes.front().matched);
+    CHECK(chd.hashes.front().actual ==
+          std::optional<std::string>(
+              "ef2a5fee5502561d25922aad1656319de18c72a0"));
+
     in.close();
     fs::remove_all(root);
 }
@@ -1545,21 +1757,48 @@ TEST_CASE("MAME CHD badge is never granted by filename alone", "[db][neocd][mame
         "0d18059c40c2ff4b36c0cf94c5451d8811f9fd0f",
         "a766c0b7b81b7a7cd53db68dae5cf301cbb00a75");
 
+    std::string progress;
     Config cfg = make_config(root);
-    ScanResult result = scan_roms(cfg);
+    ScanResult result = scan_roms(cfg, [&](const std::string& line) {
+        progress += line;
+    });
 
     REQUIRE(result.success);
     REQUIRE(result.cd_game_count == 1);
     REQUIRE(result.cd_identified_games == 1);
     REQUIRE(result.cd_mame_chd_matched_games == 0);
-    REQUIRE(result.cd_metadata_only_games == 1);
+    REQUIRE(result.cd_mame_chd_mismatch_games == 1);
+    REQUIRE(result.cd_metadata_only_games == 0);
     REQUIRE(result.cd_unknown_games == 0);
+    REQUIRE(progress.find("CHD mismatches           : 1") !=
+            std::string::npos);
+    REQUIRE(progress.find("Metadata only            : 0") !=
+            std::string::npos);
 
     std::ifstream in(root / "database/games.json");
     std::string text(std::istreambuf_iterator<char>(in), {});
     REQUIRE(text.find("\"short\": \"ssideki2\"") != std::string::npos);
-    REQUIRE(text.find("\"verification\": null") != std::string::npos);
-    REQUIRE(text.find("mame-chd") == std::string::npos);
+    REQUIRE(text.find("\"verification\": \"mame-chd-mismatch\"") !=
+            std::string::npos);
+    REQUIRE(text.find("\"verification\": \"mame-chd\"") ==
+            std::string::npos);
+
+    const auto games = goliath::load_games(root / "database/games.json");
+    REQUIRE(games.size() == 1);
+    CHECK(games.front().verification ==
+          std::optional<std::string>("mame-chd-mismatch"));
+    REQUIRE(games.front().roms.size() == 1);
+    const goliath::Rom& chd = games.front().roms.front();
+    CHECK(chd.verification ==
+          std::optional<std::string>("mame-chd-mismatch"));
+    REQUIRE(chd.hashes.size() == 1);
+    CHECK_FALSE(chd.hashes.front().matched);
+    CHECK(chd.hashes.front().expected ==
+          std::optional<std::string>(
+              "ef2a5fee5502561d25922aad1656319de18c72a0"));
+    CHECK(chd.hashes.front().actual ==
+          std::optional<std::string>(
+              "0d18059c40c2ff4b36c0cf94c5451d8811f9fd0f"));
 
     in.close();
     fs::remove_all(root);

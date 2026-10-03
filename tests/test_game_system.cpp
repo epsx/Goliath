@@ -145,6 +145,7 @@ TEST_CASE("game model accepts verified Redump-only Neo Geo CD entries", "[game_m
             "system": "neogeocd",
             "identified": true,
             "verification": "redump-cue",
+            "redump_id": "69152",
             "main_rom": "Mystery Disc.cue",
             "roms": [{
                 "file": "Mystery Disc.cue",
@@ -160,6 +161,7 @@ TEST_CASE("game model accepts verified Redump-only Neo Geo CD entries", "[game_m
     REQUIRE(games.front().source == "redump");
     REQUIRE(games.front().identified);
     REQUIRE(games.front().verification == std::optional<std::string>("redump-cue"));
+    REQUIRE(games.front().redump_id == std::optional<std::string>("69152"));
     fs::remove(file);
 }
 
@@ -174,6 +176,7 @@ TEST_CASE("game model accepts Redump track-only Neo Geo CD identity", "[game_mod
             "system": "neogeocd",
             "identified": true,
             "verification": "redump-tracks-only",
+            "redump_id": "69152",
             "main_rom": "Modified Disc.cue",
             "roms": [{
                 "file": "Modified Disc.cue",
@@ -190,5 +193,41 @@ TEST_CASE("game model accepts Redump track-only Neo Geo CD identity", "[game_mod
     REQUIRE(games.front().identified);
     REQUIRE(games.front().verification ==
             std::optional<std::string>("redump-tracks-only"));
+    REQUIRE(games.front().redump_id == std::optional<std::string>("69152"));
+    fs::remove(file);
+}
+
+TEST_CASE("game model accepts MAME CHD mismatch state",
+          "[game_model][system][neocd][mame][chd]") {
+    const fs::path file = make_system_test_file(
+        "neogeocd_mame_chd_mismatch",
+        R"json([{
+            "name": "Karnov's Revenge",
+            "display": "Karnov's Revenge",
+            "short": "karnovr",
+            "source": "mame",
+            "system": "neogeocd",
+            "identified": true,
+            "verification": "mame-chd-mismatch",
+            "main_rom": "Karnov's Revenge.chd",
+            "roms": [{
+                "file": "Karnov's Revenge.chd",
+                "mame": "karnovr",
+                "verification": "mame-chd-mismatch",
+                "main": true
+            }]
+        }])json"
+    );
+
+    const auto games = load_games(file);
+    REQUIRE(games.size() == 1);
+    REQUIRE(games.front().system == "neogeocd");
+    REQUIRE(games.front().source == "mame");
+    REQUIRE(games.front().identified);
+    REQUIRE(games.front().verification ==
+            std::optional<std::string>("mame-chd-mismatch"));
+    REQUIRE(games.front().roms.size() == 1);
+    REQUIRE(games.front().roms.front().verification ==
+            std::optional<std::string>("mame-chd-mismatch"));
     fs::remove(file);
 }

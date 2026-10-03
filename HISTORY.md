@@ -3,12 +3,11 @@
 This document records the major implementation, validation, refactoring, and
 repository-cleanup milestones of `goliath-qt-cpp`. Entries are newest first.
 
-Historical test counts are retained as checkpoint evidence. The following
-checkpoint predates the newer candidate patches; run the current test suite
-for the present count:
+Historical test counts are retained as checkpoint evidence. The current
+publication candidate passes:
 
 ```text
-All tests passed (2505 assertions in 199 test cases)
+All tests passed (3608 assertions in 233 test cases)
 ```
 
 The preceding `1360/99` Feature 9 baseline passed its per-game mapping,
@@ -18,52 +17,50 @@ visible-only Random smoke tests.
 
 ---
 
-## 2026-09-28 — Patch 32BA4A: MSYS2 libwinpthread packaging refresh (candidate)
+## 2026-10-03 — Goliath 0.40.0 publication candidate
 
-- Updated the strict Windows CI package audit for MSYS2's libwinpthread
-  `14.0.0.r426.g4564ee4b5-1` refresh while retaining its MIT and
-  BSD-3-Clause-Clear disclosure.
-
----
-
-## 2026-09-28 — Patch 32BA4: MSYS2 md4c packaging refresh (candidate)
-
-- Updated the strict Windows CI package audit for MSYS2's md4c `0.6.0-1`
-  refresh while retaining the exact-version release gate.
-- Kept the package's MIT disclosure and removed the stale workflow-run number
-  from the reusable Windows runtime notice.
+- Consolidated the post-0.32.25 information panel, metadata verification,
+  Neo Geo CD identity/disambiguation, artwork fallback, personal library
+  badges, gallery, and selection-stability work.
+- Added the openly licensed baseline metadata set with documented provenance,
+  retained license materials, and Windows/Linux release packaging.
+- Kept dynamic MinGW runtimes as the supported Windows default after the
+  current GCC and Qt toolchain exposed a static-runtime worker-thread hang.
+- Refreshed the public screenshots and corrected the Classic view README link.
+- Removed two redundant standard-library includes after a source-wide cleanup
+  audit; the full suite passes 3608 assertions in 233 test cases.
 
 ---
 
-## 2026-09-28 — Patch 32BA3: Wayland shortcut ownership clarity (candidate)
+## 2026-09-29 — Patch 32BB7O: frameless resize diagnostics closure (candidate)
 
-- Separated the desktop-owned Wayland GIF shortcut from Goliath's saved GIF
-  duration so Settings no longer presents the initial preference as active.
-- Disabled direct preference editing after the desktop assigns a shortcut and
-  labeled the portal-reported binding as the active shortcut.
-- Kept portal v2 `ConfigureShortcuts` support and opened GNOME's Applications
-  settings when the installed v1 backend does not implement that method.
-
----
-
-## 2026-09-27 — Patch 32BA2: Wayland shortcut build repair (candidate)
-
-- Renamed the internal portal-trigger extraction helper so it is not hidden by
-  the `WaylandGifHotkey::assignedTrigger()` accessor during C++ member lookup.
-- Kept the Patch 32BA1 portal behavior unchanged.
+- Increased the custom frameless resize target from 6 px to 10 px after a
+  recorded press 8 px from the visible edge missed the older hitbox; Windows,
+  Per-game Settings, Lithogen, and Settings edge/corner tests then passed.
+- Removed the opt-in event/layout trace after 24 explicit
+  `QWindow::startSystemResize()` requests all returned true and every request
+  entered and exited a native Windows size/move transaction.
+- Confirmed that Per-game Input keeps a 369x490 minimum size while its 668x900
+  `sizeHint()` remains advisory. The large geometry changes in the recording
+  followed deliberate corner drags rather than a layout or dialog-guard reset.
+- Retained the single Qt system-resize path, native DWM shadow, square Windows
+  11 corners, custom title bar, and resize-time panel-effect suspension.
 
 ---
 
-## 2026-09-27 — Patch 32BA1: Wayland shortcut reconfiguration (candidate)
+## 2026-09-29 — Patch 32BB7M1: frameless resize experiment closure (candidate)
 
-- Reused the active GlobalShortcuts session and opened the portal v2
-  configuration UI when Settings requests a shortcut change, instead of
-  recreating a session that merely restored GNOME's persisted binding.
-- Tracked the portal's `ShortcutsChanged` signal and displayed/logged the
-  desktop-assigned trigger, which is authoritative on Wayland.
-- Kept initial `preferred_trigger` support and detected `ConfigureShortcuts`
-  directly, including distributions that backport the method without changing
-  the reported GlobalShortcuts interface version.
+- Removed the rejected native hit-test, manual left-edge resize,
+  `WS_EX_COMPOSITED`, DWM-shadow bypass, panel-shadow bypass, and dialog-guard
+  bypass diagnostics from the isolated Windows UI candidate.
+- Restored the single Qt `QWindow::startSystemResize()` path for every edge and
+  corner while retaining the validated opaque custom frame, native DWM shadow,
+  square Windows 11 corners, and custom title bar.
+- Retained automatic suspension of elevated panel effects during a native
+  resize transaction and restoration when resizing ends.
+- Documented the historical left-edge frameless repaint artifact as a known
+  Windows limitation after reproducing it in every tested older frameless
+  release and disproving the shadow and double-buffering hypotheses.
 
 ---
 

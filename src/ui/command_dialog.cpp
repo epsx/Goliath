@@ -208,8 +208,9 @@ CommandDialog::CommandDialog(const QString& gameTitle,
     });
 
     applyPresentation();
-    setMinimumSize(600, 420);
-    resize(680, 760);
+    const int shadowMargin = framelessWindowShadowMargin(this);
+    setMinimumSize(600 + shadowMargin * 2, 420 + shadowMargin * 2);
+    resize(680 + shadowMargin * 2, 760 + shadowMargin * 2);
     QTimer::singleShot(0, this, [this]() { restorePosition(); });
 }
 

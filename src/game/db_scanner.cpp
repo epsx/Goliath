@@ -2,6 +2,7 @@
 
 #include "db_scanner.hpp"
 #include "common/goliath_common.hpp"
+#include "geolith_verification.hpp"
 #include "sha1_cache.hpp"
 #include "neogeo_metadata.hpp"
 #include "neocd_verification.hpp"
@@ -71,7 +72,7 @@ static const std::regex g_paren_re(R"(\s*\(.*?\))");
 
 struct Paths {
     fs::path romdir, neocddir, icondir, snapdir, outdir, out_json;
-    fs::path metadata, neogeo_xml, neocd_xml;
+    fs::path metadata, geolith_xml, neogeo_xml, neocd_xml;
 };
 
 // ---------------------------------------------------------------------------
@@ -229,12 +230,40 @@ static std::string make_unknown_cd_short(const std::string& relative_path) {
 // Game record assembled during scanning
 // ---------------------------------------------------------------------------
 
+struct HashDetailEntry {
+    std::string file;
+    std::optional<std::string> catalog_file;
+    std::string role;
+    std::string algorithm;
+    std::optional<std::uintmax_t> size;
+    std::optional<std::uintmax_t> expected_size;
+    std::optional<std::string> actual;
+    std::optional<std::string> expected;
+    bool matched = false;
+};
+
 struct RomEntry {
     std::string file;
     std::optional<std::string> name;
     std::optional<std::string> label;
     std::string mame_short;
     std::optional<std::string> cloneof;
+    std::optional<std::string> alt_title;
+    std::optional<std::string> serial;
+    std::optional<std::string> release;
+    std::optional<std::string> part;
+    std::optional<std::string> interface;
+    std::optional<std::uintmax_t> program_width;
+    std::optional<std::string> program_endianness;
+    std::optional<std::uintmax_t> program_size;
+    std::optional<std::uintmax_t> fixed_size;
+    std::optional<std::uintmax_t> audio_cpu_size;
+    std::optional<std::uintmax_t> audio_data_size;
+    std::optional<std::uintmax_t> graphics_size;
+    std::optional<std::string> verification;
+    std::optional<std::string> crc32;
+    std::optional<std::string> expected_crc32;
+    std::vector<HashDetailEntry> hashes;
     bool is_main;
 };
 
@@ -246,6 +275,7 @@ struct GameEntry {
     std::string system = "neogeo";
     bool identified = true;
     std::optional<std::string> verification;
+    std::optional<std::string> redump_id;
     std::optional<std::string> year;
     std::optional<std::string> manufacturer;
     std::optional<std::string> developer;
@@ -263,6 +293,27 @@ struct GameEntry {
 static json opt_to_json(const std::optional<std::string>& v) {
     if (v.has_value()) return json(*v);
     return json(nullptr);
+}
+
+static json opt_uint_to_json(const std::optional<std::uintmax_t>& value) {
+    if (value.has_value()) return json(*value);
+    return json(nullptr);
+}
+
+static void copy_catalog_metadata(RomEntry& rom,
+                                  const SoftwareEntry& metadata) {
+    rom.alt_title = metadata.alt_title;
+    rom.serial = metadata.serial;
+    rom.release = metadata.release;
+    rom.part = metadata.part_name;
+    rom.interface = metadata.interface;
+    rom.program_width = metadata.maincpu_width;
+    rom.program_endianness = metadata.maincpu_endianness;
+    rom.program_size = metadata.maincpu_size;
+    rom.fixed_size = metadata.fixed_size;
+    rom.audio_cpu_size = metadata.audio_cpu_size;
+    rom.audio_data_size = metadata.audio_data_size;
+    rom.graphics_size = metadata.graphics_size;
 }
 
 static json opt_path_to_json(const std::optional<fs::path>& v) {
@@ -380,6 +431,7 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
     p.out_json = p.outdir / "games.json";
 
     p.metadata = resolve_path(config, "metadata");
+    p.geolith_xml = p.metadata / "geolith.xml";
     p.neogeo_xml = p.metadata / "neogeo.xml";
     p.neocd_xml = p.metadata / "neocd.xml";
 
@@ -391,6 +443,8 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
                            neogeo_metadata, progress_callback);
     load_software_list_xml(p.neocd_xml, "neocd", NeoGeoMedia::CD,
                            neocd_metadata, progress_callback);
+    const GeolithCrcCatalog geolith_crc_catalog =
+        load_geolith_crc_catalog(p.geolith_xml, progress_callback);
 
     RedumpCatalog redump_metadata;
     if (const auto redump_dat = find_redump_neocd_dat(p.metadata);
@@ -573,7 +627,56 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
         re.label = make_variant_label(short_name, neogeo_metadata);
         re.mame_short = short_name;
         re.cloneof = data.cloneof;
+        copy_catalog_metadata(re, data);
         re.is_main = main_flag;
+
+        std::string geolith_catalog_file = to_lower(rom);
+        auto expected_crc = geolith_crc_catalog.find(geolith_catalog_file);
+        if (expected_crc == geolith_crc_catalog.end()) {
+            // A collection may keep descriptive filenames while neogeo.xml
+            // still resolves the exact MAME/Geolith software ID. CRC identity
+            // does not depend on the local spelling, so use the canonical
+            // shortname as a safe fallback.
+            geolith_catalog_file = to_lower(short_name) + ".neo";
+            expected_crc = geolith_crc_catalog.find(geolith_catalog_file);
+        }
+        if (expected_crc != geolith_crc_catalog.end()) {
+            const std::optional<GeolithCrcVerification> crc_verification =
+                verify_geolith_neo(
+                    filesystem_io_path(p.romdir / fs::path(rom)),
+                    geolith_catalog_file,
+                    geolith_crc_catalog, cancel);
+            if (is_canceled()) {
+                result.error_message = "Scan canceled.";
+                return result;
+            }
+            if (crc_verification.has_value()) {
+                re.expected_crc32 = crc_verification->expected_crc32;
+                re.crc32 = crc_verification->actual_crc32;
+                re.verification = crc_verification->matches()
+                    ? "geolith-crc32"
+                    : "geolith-crc32-mismatch";
+
+                HashDetailEntry hash;
+                hash.file = rom;
+                hash.catalog_file = geolith_catalog_file;
+                hash.role = "Cartridge";
+                hash.algorithm = "CRC-32";
+                std::error_code size_ec;
+                const std::uintmax_t size = fs::file_size(
+                    filesystem_io_path(p.romdir / fs::path(rom)), size_ec);
+                if (!size_ec)
+                    hash.size = size;
+                hash.actual = crc_verification->actual_crc32;
+                hash.expected = crc_verification->expected_crc32;
+                hash.matched = crc_verification->matches();
+                re.hashes.push_back(std::move(hash));
+            } else if (progress_callback) {
+                progress_callback("Warning: could not calculate CRC-32 for " +
+                                  (p.romdir / fs::path(rom)).string() +
+                                  "\n");
+            }
+        }
 
         game_it->second.roms.push_back(std::move(re));
         if (main_flag) {
@@ -604,6 +707,7 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
         std::optional<RedumpCueVerification> redump_verification;
         std::optional<std::string> redump_metadata_short;
         std::optional<std::string> mame_chd_short;
+        std::optional<MameChdVerification> mame_chd_verification;
 
         if (cd_ext == ".cue" && !redump_metadata.empty()) {
             redump_verification = verify_redump_cue(cd_image_io_path,
@@ -628,8 +732,11 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
                     redump, cd_match_index, neocd_metadata);
             }
         } else if (cd_ext == ".chd") {
-            mame_chd_short = verify_mame_chd(cd_image_io_path,
-                                              mame_chd_hashes);
+            mame_chd_verification = verify_mame_chd(
+                cd_image_io_path, mame_chd_hashes);
+            if (mame_chd_verification.has_value())
+                mame_chd_short =
+                    mame_chd_verification->matched_short_name;
             if (mame_chd_short.has_value()) {
                 // The CHD header hash is stronger than the filename hint. A
                 // renamed official CHD must still recover the correct
@@ -663,6 +770,7 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
                 redump_metadata[redump_verification->catalog_index];
             g.identified = true;
             g.source = "redump";
+            g.redump_id = redump.id;
             g.short_name = make_redump_cd_short(redump, rel);
             g.name = redump.description.empty() ? redump.name : redump.description;
             g.display = clean_cd_display(g.name);
@@ -696,6 +804,7 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
                 g.snapshot = find_snapshot(p.snapdir,
                                            *redump_metadata_short);
                 re.mame_short = *redump_metadata_short;
+                copy_catalog_metadata(re, *metadata_entry);
             } else {
                 g.year = std::nullopt;
                 g.manufacturer = std::nullopt;
@@ -757,6 +866,7 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
 
             re.mame_short = *short_opt;
             re.cloneof = data.cloneof;
+            copy_catalog_metadata(re, data);
         } else {
             g.identified = false;
             g.source = "unknown";
@@ -777,6 +887,56 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
             g.snapshot = std::nullopt;
 
             re.mame_short = g.short_name;
+        }
+
+        if (redump_verification.has_value()) {
+            re.verification =
+                redump_verification->match == RedumpCueMatch::CompleteSet
+                    ? "redump-cue"
+                    : "redump-tracks-only";
+            for (const FileHashVerification& verified_file :
+                 redump_verification->files) {
+                HashDetailEntry hash;
+                hash.file = verified_file.file;
+                hash.catalog_file = verified_file.catalog_file;
+                hash.role = verified_file.role;
+                hash.algorithm = verified_file.algorithm;
+                hash.size = verified_file.size;
+                hash.expected_size = verified_file.expected_size;
+                hash.actual = verified_file.actual_hash;
+                hash.expected = verified_file.expected_hash;
+                hash.matched = verified_file.matches;
+                re.hashes.push_back(std::move(hash));
+            }
+        } else if (mame_chd_verification.has_value()) {
+            HashDetailEntry hash;
+            hash.file = rel;
+            hash.role = "CHD";
+            hash.algorithm = "SHA-1";
+            std::error_code size_ec;
+            const std::uintmax_t size =
+                fs::file_size(cd_image_io_path, size_ec);
+            if (!size_ec)
+                hash.size = size;
+            hash.actual = mame_chd_verification->actual_sha1;
+
+            const auto metadata_it = neocd_metadata.find(re.mame_short);
+            if (metadata_it != neocd_metadata.end()) {
+                hash.catalog_file = metadata_it->second.disk_name;
+                hash.expected = metadata_it->second.disk_sha1;
+            }
+            hash.matched =
+                hash.expected.has_value() && hash.actual.has_value() &&
+                to_lower(*hash.expected) == to_lower(*hash.actual);
+            re.verification = hash.matched
+                ? "mame-chd"
+                : "mame-chd-mismatch";
+            // Unlike metadata-only identification, both outcomes prove that
+            // the CHD header was read and compared with neocd.xml. Preserve
+            // the result at game level so summaries and badges do not report
+            // a verified mismatch as unverified metadata.
+            g.verification = re.verification;
+            re.hashes.push_back(std::move(hash));
         }
 
         g.roms.push_back(std::move(re));
@@ -822,6 +982,7 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
         jg["system"] = g.system;
         jg["identified"] = g.identified;
         jg["verification"] = opt_to_json(g.verification);
+        jg["redump_id"] = opt_to_json(g.redump_id);
         jg["year"] = opt_to_json(g.year);
         jg["manufacturer"] = opt_to_json(g.manufacturer);
         jg["developer"] = opt_to_json(g.developer);
@@ -841,6 +1002,38 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
             jr["label"] = opt_to_json(r.label);
             jr["mame"] = r.mame_short;
             jr["cloneof"] = opt_to_json(r.cloneof);
+            jr["alt_title"] = opt_to_json(r.alt_title);
+            jr["serial"] = opt_to_json(r.serial);
+            jr["release"] = opt_to_json(r.release);
+            jr["part"] = opt_to_json(r.part);
+            jr["interface"] = opt_to_json(r.interface);
+            jr["program_width"] = opt_uint_to_json(r.program_width);
+            jr["program_endianness"] =
+                opt_to_json(r.program_endianness);
+            jr["program_size"] = opt_uint_to_json(r.program_size);
+            jr["fixed_size"] = opt_uint_to_json(r.fixed_size);
+            jr["audio_cpu_size"] = opt_uint_to_json(r.audio_cpu_size);
+            jr["audio_data_size"] = opt_uint_to_json(r.audio_data_size);
+            jr["graphics_size"] = opt_uint_to_json(r.graphics_size);
+            jr["verification"] = opt_to_json(r.verification);
+            jr["crc32"] = opt_to_json(r.crc32);
+            jr["expected_crc32"] = opt_to_json(r.expected_crc32);
+            json jhashes = json::array();
+            for (const HashDetailEntry& hash : r.hashes) {
+                json jhash;
+                jhash["file"] = hash.file;
+                jhash["catalog_file"] = opt_to_json(hash.catalog_file);
+                jhash["role"] = hash.role;
+                jhash["algorithm"] = hash.algorithm;
+                jhash["size"] = opt_uint_to_json(hash.size);
+                jhash["expected_size"] =
+                    opt_uint_to_json(hash.expected_size);
+                jhash["actual"] = opt_to_json(hash.actual);
+                jhash["expected"] = opt_to_json(hash.expected);
+                jhash["matched"] = hash.matched;
+                jhashes.push_back(std::move(jhash));
+            }
+            jr["hashes"] = std::move(jhashes);
             jr["main"] = r.is_main;
             jroms.push_back(std::move(jr));
         }
@@ -888,12 +1081,16 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
     result.parent_games = 0;
     result.variant_count = 0;
     result.homebrew_games = 0;
+    result.neo_geolith_crc32_verified_files = 0;
+    result.neo_geolith_crc32_mismatch_files = 0;
+    result.neo_metadata_only_files = 0;
     result.cd_image_count = 0;
     result.cd_game_count = 0;
     result.cd_identified_games = 0;
     result.cd_redump_cue_verified_games = 0;
     result.cd_redump_tracks_only_games = 0;
     result.cd_mame_chd_matched_games = 0;
+    result.cd_mame_chd_mismatch_games = 0;
     result.cd_metadata_only_games = 0;
     result.cd_unknown_games = 0;
     result.cd_redump_sha1_cache_hits = redump_sha1_cache.hits();
@@ -913,6 +1110,9 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
                 result.cd_redump_tracks_only_games++;
             else if (g.verification == std::optional<std::string>("mame-chd"))
                 result.cd_mame_chd_matched_games++;
+            else if (g.verification ==
+                     std::optional<std::string>("mame-chd-mismatch"))
+                result.cd_mame_chd_mismatch_games++;
             else if (g.identified)
                 result.cd_metadata_only_games++;
             continue;
@@ -920,6 +1120,18 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
 
         result.game_count++;
         result.rom_file_count += g.roms.size();
+        for (const RomEntry& rom : g.roms) {
+            if (rom.verification ==
+                std::optional<std::string>("geolith-crc32")) {
+                result.neo_geolith_crc32_verified_files++;
+            } else if (rom.verification ==
+                       std::optional<std::string>(
+                           "geolith-crc32-mismatch")) {
+                result.neo_geolith_crc32_mismatch_files++;
+            } else {
+                result.neo_metadata_only_files++;
+            }
+        }
         if (g.source == "homebrew") result.homebrew_games++;
         if (g.main_rom.has_value()) result.parent_games++;
     }
@@ -934,6 +1146,14 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
     summary += "Parents                  : " + std::to_string(result.parent_games) + "\n";
     summary += "Variants (clones/hacks)  : " + std::to_string(result.variant_count) + "\n";
     summary += "Homebrew                 : " + std::to_string(result.homebrew_games) + "\n\n";
+    summary += "Geolith CRC-32 verified  : " +
+               std::to_string(result.neo_geolith_crc32_verified_files) +
+               "\n";
+    summary += "CRC-32 mismatches        : " +
+               std::to_string(result.neo_geolith_crc32_mismatch_files) +
+               "\n";
+    summary += "Metadata only            : " +
+               std::to_string(result.neo_metadata_only_files) + "\n\n";
     summary += "Neo Geo CD\n\n";
     summary += "Images                   : " + std::to_string(result.cd_image_count) + "\n";
     summary += "Games                    : " + std::to_string(result.cd_game_count) + "\n";
@@ -941,6 +1161,7 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
     summary += "Redump sets verified     : " + std::to_string(result.cd_redump_cue_verified_games) + "\n";
     summary += "Redump tracks only       : " + std::to_string(result.cd_redump_tracks_only_games) + "\n";
     summary += "MAME sets matched        : " + std::to_string(result.cd_mame_chd_matched_games) + "\n";
+    summary += "CHD mismatches           : " + std::to_string(result.cd_mame_chd_mismatch_games) + "\n";
     summary += "Metadata only            : " + std::to_string(result.cd_metadata_only_games) + "\n";
     summary += "Unknown                  : " + std::to_string(result.cd_unknown_games) + "\n";
     summary += "Redump SHA-1 cache hits  : " + std::to_string(result.cd_redump_sha1_cache_hits) + "\n";

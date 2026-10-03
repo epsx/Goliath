@@ -5,7 +5,9 @@
 #include <algorithm>
 #include <cctype>
 #include <fstream>
+#include <limits>
 #include <regex>
+#include <string_view>
 #include <system_error>
 #include <unordered_set>
 #include <utility>
@@ -50,6 +52,22 @@ std::optional<std::uintmax_t> parse_uintmax(const char* text) {
         std::size_t used = 0;
         const std::string value = text;
         const unsigned long long parsed = std::stoull(value, &used, 10);
+        if (used != value.size())
+            return std::nullopt;
+        return static_cast<std::uintmax_t>(parsed);
+    } catch (...) {
+        return std::nullopt;
+    }
+}
+
+std::optional<std::uintmax_t> parse_xml_uintmax(const char* text) {
+    if (!text || !*text)
+        return std::nullopt;
+
+    try {
+        std::size_t used = 0;
+        const std::string value = text;
+        const unsigned long long parsed = std::stoull(value, &used, 0);
         if (used != value.size())
             return std::nullopt;
         return static_cast<std::uintmax_t>(parsed);
@@ -438,8 +456,62 @@ void load_software_list_xml(const fs::path& xml_path,
             else if (key == "compatibility") entry.compatibility = value;
         }
 
-        if (media == NeoGeoMedia::CD) {
-            if (TinyXmlElement* part = software->FirstChildElement("part")) {
+        if (TinyXmlElement* part = software->FirstChildElement("part")) {
+            if (const char* part_name = part->Attribute("name");
+                part_name && *part_name) {
+                entry.part_name = part_name;
+            }
+            if (const char* interface_name = part->Attribute("interface");
+                interface_name && *interface_name) {
+                entry.interface = interface_name;
+            }
+
+            if (media == NeoGeoMedia::Cartridge) {
+                for (TinyXmlElement* dataarea =
+                         part->FirstChildElement("dataarea");
+                     dataarea;
+                     dataarea = dataarea->NextSiblingElement("dataarea")) {
+                    const char* area_name = dataarea->Attribute("name");
+                    if (!area_name)
+                        continue;
+
+                    const std::string_view name = area_name;
+                    const std::optional<std::uintmax_t> area_size =
+                        parse_xml_uintmax(dataarea->Attribute("size"));
+                    if (name == "maincpu") {
+                        entry.maincpu_width = parse_xml_uintmax(
+                            dataarea->Attribute("width"));
+                        if (const char* endianness =
+                                dataarea->Attribute("endianness");
+                            endianness && *endianness) {
+                            entry.maincpu_endianness = endianness;
+                        }
+                        entry.maincpu_size = area_size;
+                    } else if (name == "fixed") {
+                        entry.fixed_size = area_size;
+                    } else if (name == "audiocpu") {
+                        if (!entry.audio_cpu_size.has_value())
+                            entry.audio_cpu_size = area_size;
+                    } else if (name == "audiocrypt") {
+                        // Encrypted boards store their physical M ROM here
+                        // instead of in the ordinary audiocpu data area.
+                        entry.audio_cpu_size = area_size;
+                    } else if (name == "ymsnd:adpcma" ||
+                               name == "ymsnd:adpcmb") {
+                        if (!area_size.has_value())
+                            continue;
+                        const std::uintmax_t current =
+                            entry.audio_data_size.value_or(0);
+                        if (*area_size <=
+                            std::numeric_limits<std::uintmax_t>::max() -
+                                current) {
+                            entry.audio_data_size = current + *area_size;
+                        }
+                    } else if (name == "sprites") {
+                        entry.graphics_size = area_size;
+                    }
+                }
+            } else {
                 if (TinyXmlElement* diskarea = part->FirstChildElement("diskarea")) {
                     if (TinyXmlElement* disk = diskarea->FirstChildElement("disk")) {
                         if (const char* disk_name = disk->Attribute("name"); disk_name && *disk_name)

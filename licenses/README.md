@@ -5,6 +5,8 @@ source and Windows runtime components used or redistributed with Goliath.
 
 - `source/` covers dependencies vendored in the Goliath source tree.
 - `upstream/` covers JG, JGRF, Geolith, libchdr, and their bundled material.
+- `metadata/` explains the license routing for the bundled reference catalogs;
+  their file-specific notices remain embedded in `../../metadata/`.
 - `msys2/` contains the license files for the audited Windows portable build.
   CI refreshes the license directories of deployed DLL packages from its
   installed MSYS2 packages and regenerates this manifest before upload.

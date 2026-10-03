@@ -90,7 +90,9 @@ AboutDialog::AboutDialog(QWidget* parent)
     resize(960, 680);
     setMinimumSize(720, 520);
     setModal(true);
-    setSizeGripEnabled(true);
+    // Frameless dialogs already use ResizeFilter on every visible edge. A
+    // native QSizeGrip would appear as a stray square above the shadow gutter.
+    setSizeGripEnabled(false);
 
     QVBoxLayout* rootLayout = nullptr;
     setupFramelessDialog(this, "About Goliath", &rootLayout, true, false);

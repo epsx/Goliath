@@ -44,6 +44,16 @@ double linear_channel(int value) {
         : std::pow((srgb + 0.055) / 1.055, 2.4);
 }
 
+std::string rgba_color(const std::string& color, int alpha) {
+    std::array<int, 3> rgb{};
+    if (!parse_rgb(color, rgb)) return "rgba(0, 0, 0, 0)";
+
+    std::ostringstream out;
+    out << "rgba(" << rgb[0] << ", " << rgb[1] << ", " << rgb[2]
+        << ", " << alpha << ")";
+    return out.str();
+}
+
 } // namespace
 
 const std::vector<Theme>& all_themes() {
@@ -105,9 +115,9 @@ std::string contrast_text_for(const std::string& background) {
     return black_contrast >= white_contrast ? "#000000" : "#ffffff";
 }
 
-// @token@ markers stand in for theme fields; <<BRANCH_*>> tokens are left
-// untouched here and get substituted by the caller once the branch-arrow
-// PNGs have been written to disk.
+// @token@ markers stand in for theme fields; <<BRANCH_*>> and <<SPIN_*>>
+// tokens are left untouched here and get substituted by the caller once the
+// small theme-colored indicator PNGs have been written to disk.
 std::string generate_theme_style(const Theme& theme) {
     static const char* TEMPLATE = R"QSS(
 QWidget {
@@ -115,6 +125,23 @@ QWidget {
     font-size: 10pt;
     color: @text_primary@;
     background-color: @bg_primary@;
+}
+
+QWidget#gallery_panel,
+QWidget#gallery_rail {
+    background-color: transparent;
+    border: none;
+}
+
+QWidget#details_field_label {
+    background-color: transparent;
+    border: none;
+}
+
+QSplitter#library_details_splitter,
+QSplitter#library_details_splitter::handle {
+    background-color: transparent;
+    border: none;
 }
 
 QMainWindow {
@@ -348,6 +375,11 @@ QTextEdit QScrollBar:vertical {
     width: 12px;
 }
 
+QAbstractScrollArea::corner {
+    background-color: @bg_secondary@;
+    border: none;
+}
+
 QScrollArea {
     border: none;
     background-color: transparent;
@@ -498,12 +530,52 @@ QSpinBox {
     background-color: @bg_tertiary@;
     border: 1px solid @border@;
     border-radius: @border_radius@px;
-    padding: 4px 8px;
+    padding: 4px 22px 4px 8px;
     color: @text_primary@;
 }
 
 QSpinBox:focus {
     border: 1px solid @accent@;
+}
+
+QSpinBox::up-button,
+QSpinBox::down-button {
+    subcontrol-origin: border;
+    width: 18px;
+    background-color: transparent;
+    border: none;
+}
+
+QSpinBox::up-button {
+    subcontrol-position: top right;
+    border-top-right-radius: @border_radius@px;
+}
+
+QSpinBox::down-button {
+    subcontrol-position: bottom right;
+    border-bottom-right-radius: @border_radius@px;
+}
+
+QSpinBox::up-button:hover,
+QSpinBox::down-button:hover {
+    background-color: @bg_hover@;
+}
+
+QSpinBox::up-button:pressed,
+QSpinBox::down-button:pressed {
+    background-color: @accent@;
+}
+
+QSpinBox::up-arrow {
+    image: url("<<SPIN_UP>>");
+    width: 10px;
+    height: 6px;
+}
+
+QSpinBox::down-arrow {
+    image: url("<<SPIN_DOWN>>");
+    width: 10px;
+    height: 6px;
 }
 
 QCheckBox {
@@ -622,17 +694,58 @@ QFrame#toolbar_frame {
     padding: 8px;
 }
 
+QPushButton#tools_btn,
+QPushButton#settings_btn,
+QPushButton#about_btn,
+QPushButton#filters_btn,
+QPushButton#random_btn,
+QPushButton#favorite_btn {
+    background-color: transparent;
+    border: none;
+}
+
+QPushButton#tools_btn:hover,
+QPushButton#settings_btn:hover,
+QPushButton#about_btn:hover,
+QPushButton#filters_btn:hover,
+QPushButton#random_btn:hover,
+QPushButton#favorite_btn:hover {
+    background-color: @bg_hover@;
+    border: none;
+}
+
+QPushButton#tools_btn:pressed,
+QPushButton#settings_btn:pressed,
+QPushButton#about_btn:pressed,
+QPushButton#filters_btn:pressed,
+QPushButton#random_btn:pressed,
+QPushButton#favorite_btn:pressed {
+    background-color: @bg_tertiary@;
+    border: none;
+}
+
+QPushButton#favorite_btn:checked {
+    color: @accent@;
+}
+
+QPushButton#tools_btn::menu-indicator,
+QPushButton#filters_btn::menu-indicator {
+    image: none;
+    width: 0px;
+    height: 0px;
+}
+
 QComboBox#theme_selector {
-    background-color: @accent@;
-    color: @on_accent@;
+    background-color: @bg_tertiary@;
+    color: @text_primary@;
     border: none;
     padding: 6px 12px;
     border-radius: @border_radius@px;
 }
 
 QComboBox#theme_selector:hover {
-    background-color: @accent_hover@;
-    color: @on_accent_hover@;
+    background-color: @bg_hover@;
+    color: @accent@;
 }
 
 QLabel#toolbar_label {
@@ -642,6 +755,7 @@ QLabel#toolbar_label {
 
 QLabel#details_title,
 QLabel#details_section_title,
+QLabel#details_subsection_title,
 QLabel#section_heading {
     color: @text_primary@;
 }
@@ -653,6 +767,39 @@ QLabel#details_title {
 QLabel#details_section_title {
     padding-top: 10px;
     padding-bottom: 2px;
+}
+
+QLabel#details_subsection_title {
+    color: @text_primary@;
+    padding-bottom: 3px;
+}
+
+QFrame#details_info_vertical_divider {
+    min-width: 2px;
+    max-width: 2px;
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 1, y2: 0,
+        stop: 0 @divider_shadow@,
+        stop: 0.5 @divider_shadow@,
+        stop: 0.5 @divider_highlight@,
+        stop: 1 @divider_highlight@);
+    border: none;
+}
+
+QFrame#details_info_horizontal_divider {
+    min-height: 2px;
+    max-height: 2px;
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 @divider_shadow@,
+        stop: 0.5 @divider_shadow@,
+        stop: 0.5 @divider_highlight@,
+        stop: 1 @divider_highlight@);
+    border: none;
+}
+
+QPushButton#profile_configure_btn {
+    min-width: 110px;
 }
 
 QLabel#section_heading {
@@ -673,15 +820,15 @@ QLabel#variant_label {
 }
 
 QFrame#details_header_card,
-QFrame#details_info_card {
+QFrame#details_info_card,
+QFrame#snapshot_card,
+QTextEdit#details_description_card {
     background-color: @bg_secondary@;
     border: 1px solid @border@;
     border-radius: @border_radius@px;
 }
 
 QFrame#snapshot_card {
-    background-color: @bg_secondary@;
-    border: 1px solid @border@;
     border-radius: 12px;
 }
 
@@ -793,6 +940,15 @@ QToolTip {
     out = tok_replace(out, "@danger@", theme.danger);
     out = tok_replace(out, "@text_primary@", theme.text_primary);
     out = tok_replace(out, "@text_secondary@", theme.text_secondary);
+    const bool dark_card = contrast_text_for(theme.bg_secondary) == "#ffffff";
+    const std::string divider_shadow = dark_card
+        ? rgba_color("#000000", 100)
+        : rgba_color(theme.border, 88);
+    const std::string divider_highlight = dark_card
+        ? rgba_color(theme.text_primary, 28)
+        : rgba_color("#ffffff", 150);
+    out = tok_replace(out, "@divider_shadow@", divider_shadow);
+    out = tok_replace(out, "@divider_highlight@", divider_highlight);
     out = tok_replace(out, "@border_radius@", std::to_string(theme.border_radius));
     out = tok_replace(out, "@border@", theme.border);
     return out;

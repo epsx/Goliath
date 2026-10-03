@@ -9,6 +9,16 @@
 #include <QCursor>
 #include <QDialog>
 #include <QEvent>
+#include <QGraphicsEffect>
+#if defined(_WIN32)
+#include <QAbstractNativeEventFilter>
+#include <QHash>
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <dwmapi.h>
+#endif
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QIcon>
@@ -28,6 +38,96 @@
 namespace goliath {
 
 namespace {
+
+#if defined(_WIN32)
+void setElevatedPanelEffectsEnabled(QWidget* window, bool enabled) {
+    if (!window) return;
+
+    const auto panels = window->findChildren<QWidget*>();
+    for (QWidget* panel : panels) {
+        if (!panel->property("goliathElevatedPanel").toBool()) continue;
+        if (auto* effect = panel->graphicsEffect())
+            effect->setEnabled(enabled);
+    }
+    if (enabled) window->update();
+}
+
+// DWM needs a real non-client-capable window style to retain its external
+// shadow. Suppress only Windows' non-client layout so Goliath's Qt title bar
+// remains the sole visible frame while the client surface stays opaque.
+class FramelessDwmEventFilter final : public QObject,
+                                      public QAbstractNativeEventFilter {
+public:
+    explicit FramelessDwmEventFilter(QObject* parent) : QObject(parent) {}
+
+    void registerWindow(QWidget* window, HWND hwnd) {
+        const quintptr key = reinterpret_cast<quintptr>(hwnd);
+        if (m_windows.contains(key)) return;
+
+        m_windows.insert(key, window);
+        connect(window, &QObject::destroyed, this,
+                [this, key]() { m_windows.remove(key); });
+    }
+
+    bool nativeEventFilter(const QByteArray& eventType, void* message,
+                           qintptr* result) override {
+        if (eventType != "windows_generic_MSG" || !message || !result)
+            return false;
+
+        auto* nativeMessage = static_cast<MSG*>(message);
+        const quintptr key =
+            reinterpret_cast<quintptr>(nativeMessage->hwnd);
+        const auto record = m_windows.constFind(key);
+        if (record == m_windows.cend()) {
+            return false;
+        }
+
+        if (nativeMessage->message == WM_NCCALCSIZE) {
+            // A zero result makes the entire window rectangle client area. The
+            // WS_CAPTION/WS_THICKFRAME styles remain solely for DWM composition.
+            // When maximized, constrain that client area to the monitor work
+            // rectangle so a bottom/side taskbar never covers application UI.
+            if (nativeMessage->wParam != 0 &&
+                IsZoomed(nativeMessage->hwnd)) {
+                auto* parameters = reinterpret_cast<NCCALCSIZE_PARAMS*>(
+                    nativeMessage->lParam);
+                const HMONITOR monitor = MonitorFromWindow(
+                    nativeMessage->hwnd, MONITOR_DEFAULTTONEAREST);
+                MONITORINFO monitorInfo{};
+                monitorInfo.cbSize = sizeof(monitorInfo);
+                if (parameters && monitor &&
+                    GetMonitorInfoW(monitor, &monitorInfo)) {
+                    parameters->rgrc[0] = monitorInfo.rcWork;
+                }
+            }
+            *result = 0;
+            return true;
+        }
+
+        if (nativeMessage->message == WM_ENTERSIZEMOVE) {
+            setElevatedPanelEffectsEnabled(record.value(), false);
+            return false;
+        }
+        if (nativeMessage->message == WM_EXITSIZEMOVE) {
+            setElevatedPanelEffectsEnabled(record.value(), true);
+            return false;
+        }
+        return false;
+    }
+
+private:
+    QHash<quintptr, QPointer<QWidget>> m_windows;
+};
+
+FramelessDwmEventFilter* framelessDwmEventFilter() {
+    static auto* filter = []() {
+        auto* instance = new FramelessDwmEventFilter(qApp);
+        qApp->installNativeEventFilter(instance);
+        return instance;
+    }();
+    return filter;
+}
+#endif
 
 // Keeps a modal frameless dialog inside the active monitor's work area. The
 // first show is centered on its parent's monitor; later layout/work-area or
@@ -132,6 +232,77 @@ private:
 
 } // namespace
 
+bool installFramelessWindowShadow(QWidget* window,
+                                  const QString& surfaceObjectName) {
+#if defined(_WIN32)
+    Q_UNUSED(surfaceObjectName);
+    if (!window) return false;
+    if (window->property("goliathNativeShadow").toBool()) return true;
+
+    // Keep the Qt top-level fully opaque. DWM owns the external frame shadow,
+    // avoiding the layered-window repaint gaps seen with complex widget trees.
+    window->setAttribute(Qt::WA_TranslucentBackground, false);
+
+    const HWND hwnd = reinterpret_cast<HWND>(window->winId());
+    if (!hwnd) return false;
+    framelessDwmEventFilter()->registerWindow(window, hwnd);
+
+    const LONG_PTR currentStyle = GetWindowLongPtrW(hwnd, GWL_STYLE);
+    // Restore the complete standard top-level capabilities that
+    // Qt::FramelessWindowHint removes. WM_NCCALCSIZE below still suppresses
+    // the native frame itself, while Explorer can once again treat the taskbar
+    // button like a normal minimizable/restorable application window.
+    const LONG_PTR shadowStyle = currentStyle | WS_CAPTION | WS_THICKFRAME |
+        WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
+    if (shadowStyle != currentStyle)
+        SetWindowLongPtrW(hwnd, GWL_STYLE, shadowStyle);
+
+    const DWMNCRENDERINGPOLICY policy = DWMNCRP_ENABLED;
+    const HRESULT policyResult = DwmSetWindowAttribute(
+        hwnd, DWMWA_NCRENDERING_POLICY, &policy, sizeof(policy));
+
+    // Keep Goliath's rectangular custom frame on Windows 11. Attribute 33 is
+    // DWMWA_WINDOW_CORNER_PREFERENCE and value 1 is DWMWCP_DONOTROUND.
+    // Older Windows versions reject this optional attribute harmlessly.
+    constexpr auto cornerAttribute =
+        static_cast<DWMWINDOWATTRIBUTE>(33);
+    constexpr UINT squareCorners = 1;
+    DwmSetWindowAttribute(hwnd, cornerAttribute, &squareCorners,
+                          sizeof(squareCorners));
+
+    // Windows 11 otherwise paints its own dark rounded border around the
+    // custom client frame in windowed mode. Attribute 34 is
+    // DWMWA_BORDER_COLOR and 0xFFFFFFFE is DWMWA_COLOR_NONE. Older Windows
+    // versions reject this optional attribute harmlessly.
+    constexpr auto borderAttribute =
+        static_cast<DWMWINDOWATTRIBUTE>(34);
+    constexpr COLORREF noBorderColor = 0xFFFFFFFE;
+    DwmSetWindowAttribute(hwnd, borderAttribute, &noBorderColor,
+                          sizeof(noBorderColor));
+
+    const MARGINS margins{1, 1, 1, 1};
+    const HRESULT frameResult = DwmExtendFrameIntoClientArea(hwnd, &margins);
+    const BOOL frameChanged = SetWindowPos(
+        hwnd, nullptr, 0, 0, 0, 0,
+        SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
+            SWP_NOACTIVATE);
+    if (FAILED(policyResult) || FAILED(frameResult) || !frameChanged)
+        return false;
+
+    window->setProperty("goliathNativeShadow", true);
+    return true;
+#else
+    Q_UNUSED(window);
+    Q_UNUSED(surfaceObjectName);
+    return false;
+#endif
+}
+
+int framelessWindowShadowMargin(const QWidget* window) {
+    Q_UNUSED(window);
+    return 0;
+}
+
 TitleBar::TitleBar(QWidget* window, bool showMinMax)
     : QFrame(window), m_window(window) {
     setObjectName("title_bar");
@@ -220,7 +391,10 @@ void TitleBar::mouseDoubleClickEvent(QMouseEvent* event) {
     QFrame::mouseDoubleClickEvent(event);
 }
 
-constexpr int RESIZE_BORDER = 6;
+// Keep the resize target comfortably reachable at common Windows display
+// scales. The previous 6 px target missed a recorded press 8 px from the
+// visible edge even though the pointer still looked like it was on the frame.
+constexpr int RESIZE_BORDER = 10;
 
 ResizeFilter::ResizeFilter(QWidget* window)
     : QObject(window), m_window(window) {
@@ -276,18 +450,21 @@ bool ResizeFilter::isInteractiveControl(QObject* obj) {
 }
 
 Qt::Edges ResizeFilter::resizeEdges(const QPoint& globalPos) const {
-    QRect geo = m_window->frameGeometry();
-    if (!geo.contains(globalPos)) return Qt::Edges();
-    int x = globalPos.x() - geo.x();
-    int y = globalPos.y() - geo.y();
-    int w = geo.width();
-    int h = geo.height();
+    // Hit-test inside the visible client edge. This remains reliable for a
+    // frameless window regardless of the external shadow implementation.
+    const QPoint localPos = m_window->mapFromGlobal(globalPos);
+    const QRect visibleRect = m_window->contentsRect();
+    if (!visibleRect.contains(localPos)) return Qt::Edges();
 
     Qt::Edges edges;
-    if (x < RESIZE_BORDER) edges |= Qt::LeftEdge;
-    if (x >= w - RESIZE_BORDER) edges |= Qt::RightEdge;
-    if (y < RESIZE_BORDER) edges |= Qt::TopEdge;
-    if (y >= h - RESIZE_BORDER) edges |= Qt::BottomEdge;
+    if (localPos.x() < visibleRect.left() + RESIZE_BORDER)
+        edges |= Qt::LeftEdge;
+    if (localPos.x() > visibleRect.right() - RESIZE_BORDER)
+        edges |= Qt::RightEdge;
+    if (localPos.y() < visibleRect.top() + RESIZE_BORDER)
+        edges |= Qt::TopEdge;
+    if (localPos.y() > visibleRect.bottom() - RESIZE_BORDER)
+        edges |= Qt::BottomEdge;
     return edges;
 }
 
@@ -339,6 +516,11 @@ void setupFramelessDialog(QDialog* dialog, const QString& title,
     dialog->setWindowTitle(title);
     dialog->setObjectName("frameless_window");
     dialog->setWindowFlags(dialog->windowFlags() | Qt::FramelessWindowHint);
+
+    // The command overlay intentionally uses a translucent top-level surface;
+    // replacing it with an opaque DWM frame would break its presentation.
+    if (showTitleBar)
+        installFramelessWindowShadow(dialog, "dialog_shadow_surface");
 
     // Inherit the main window stylesheet so the title bar/cursor keep the theme.
     if (auto* pw = dialog->parentWidget(); pw && !pw->styleSheet().isEmpty())

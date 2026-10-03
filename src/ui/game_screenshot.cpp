@@ -588,38 +588,26 @@ void MainWindow::registerScreenshotHotkey() {
 }
 
 bool MainWindow::applyCaptureHotkeys(const QKeySequence& gif,
-                                      const QKeySequence& png, QString* error,
-                                      bool configureWayland) {
+                                      const QKeySequence& png, QString* error) {
 #if defined(GOLIATH_WAYLAND_CAPTURE)
     if (QGuiApplication::platformName() == "wayland") {
         Q_UNUSED(png); // PNG capture currently needs the Windows game-window API.
         if (!m_waylandGifHotkey) {
             m_waylandGifHotkey = std::make_shared<WaylandGifHotkey>(
                 [this]() {
-                    DebugLogger::logInfo("Wayland GIF shortcut activated");
                     if (hasActiveTrackedGameProcess() && !m_gifRecording)
                         QTimer::singleShot(0, this, [this]() { recordWaylandGameGif(); });
                 }, this);
-            connect(m_waylandGifHotkey.get(),
-                    &WaylandGifHotkey::assignedTriggerChanged, this,
-                    [this](const QString& trigger) {
-                        m_gifCaptureShortcut = trigger;
-                        const QString message = trigger.isEmpty()
-                            ? QStringLiteral("Wayland GIF shortcut is unassigned")
-                            : QString("Wayland GIF shortcut assigned by desktop: %1")
-                                  .arg(trigger);
-                        DebugLogger::logInfo(message);
-                        statusBar()->showMessage(message, 8000);
-                    });
         }
-        if (!m_waylandGifHotkey->setShortcut(gif, error, configureWayland)) return false;
-        if (m_gifCaptureShortcut.isEmpty())
-            m_gifCaptureShortcut = m_waylandGifHotkey->assignedTrigger();
+        if (!m_waylandGifHotkey->setShortcut(gif, error)) return false;
+        m_gifCaptureShortcut = gif.toString(QKeySequence::PortableText);
+        if (!m_waylandGifHotkey->assignedTrigger().isEmpty())
+            statusBar()->showMessage(QString("Wayland GIF shortcut: %1")
+                .arg(m_waylandGifHotkey->assignedTrigger()), 8000);
         updateScreenshotAction();
         return true;
     }
 #endif
-    Q_UNUSED(configureWayland);
 #if defined(GOLIATH_X11_CAPTURE)
     Q_UNUSED(png); // Linux PNG capture is not available yet.
     if (QGuiApplication::platformName() != "xcb") {

@@ -4,39 +4,55 @@
 #include "game/jollygood_bios.hpp"
 #include "game/jollygood_launch.hpp"
 #include "game/game_profile_runtime.hpp"
+#include "game/game_profile_summary.hpp"
 #include "ui/audio_export_dialog.hpp"
 #include "ui/benchmark_dialog.hpp"
 #include "ui/game_profile_dialog.hpp"
+#include "ui/library_item_delegate.hpp"
 #include "ui/library_view_logic.hpp"
 #include "ui/save_data_dialog.hpp"
 #include "ui/recording_id.hpp"
+#include "ui/widgets/title_bar.hpp"
 
 #include <QAction>
 #include <QActionGroup>
 #include <QAbstractItemView>
+#include <QClipboard>
 #include <QComboBox>
+#include <QColor>
 #include <QCoreApplication>
+#include <QDate>
 #include <QDateTime>
 #include <QDesktopServices>
+#include <QDialog>
 #include <QFileInfo>
+#include <QFontDatabase>
+#include <QGuiApplication>
+#include <QHeaderView>
 #include <QIcon>
+#include <QKeySequence>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
 #include <QMessageBox>
 #include <QPixmap>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QShortcut>
 #include <QSignalBlocker>
 #include <QStatusBar>
 #include <QStyle>
 #include <QStringList>
+#include <QTableWidget>
+#include <QTableWidgetItem>
 #include <QTextEdit>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 #include <QTimer>
 #include <QUrl>
+#include <QVBoxLayout>
 
 #include <algorithm>
 #include <cctype>
@@ -71,6 +87,196 @@ QString variantFullName(const Rom& rom) {
     if (!rom.mame.empty())
         return QString::fromStdString(rom.mame);
     return QString::fromStdString(rom.file);
+}
+
+QString utf8Text(const std::optional<std::string>& value) {
+    if (!value.has_value() || value->empty()) return {};
+    return QString::fromUtf8(value->data(),
+                             static_cast<qsizetype>(value->size()));
+}
+
+QString catalogListLines(const std::optional<std::string>& value) {
+    QString text = utf8Text(value).trimmed();
+    if (text.isEmpty()) return {};
+    return text.split(QRegularExpression(QStringLiteral("\\s*,\\s*")),
+                      Qt::SkipEmptyParts).join(QChar('\n'));
+}
+
+QString releaseDateLines(const std::optional<std::string>& value) {
+    const QString raw = utf8Text(value).trimmed();
+    if (raw.isEmpty()) return {};
+
+    QStringList formatted;
+    const QRegularExpression datePattern(
+        QStringLiteral("^(\\d{4})(\\d{2})(\\d{2})(.*)$"));
+    const QStringList entries = raw.split(
+        QRegularExpression(QStringLiteral("\\s*,\\s*")),
+        Qt::SkipEmptyParts);
+    for (const QString& entry : entries) {
+        const QString trimmed = entry.trimmed();
+        const QRegularExpressionMatch match = datePattern.match(trimmed);
+        if (!match.hasMatch()) {
+            formatted.push_back(trimmed);
+            continue;
+        }
+
+        const QDate date = QDate::fromString(
+            match.captured(1) + match.captured(2) + match.captured(3),
+            QStringLiteral("yyyyMMdd"));
+        formatted.push_back(
+            date.isValid()
+                ? date.toString(QStringLiteral("yyyy-MM-dd")) +
+                      match.captured(4)
+                : trimmed);
+    }
+    return formatted.join(QChar('\n'));
+}
+
+QString mediaFormatText(const Rom* rom) {
+    if (!rom) return {};
+    const QString part = utf8Text(rom->part);
+    const QString interfaceName = utf8Text(rom->interface);
+
+    QString display;
+    if (part == QStringLiteral("cart"))
+        display = QStringLiteral("Cartridge");
+    else if (part == QStringLiteral("cdrom"))
+        display = QStringLiteral("CD-ROM");
+    else
+        display = part;
+
+    if (!interfaceName.isEmpty()) {
+        if (display.isEmpty()) return interfaceName;
+        display += QStringLiteral(" (") + interfaceName + QChar(')');
+    }
+    return display;
+}
+
+QString binarySizeText(std::uintmax_t size) {
+    constexpr std::uintmax_t kib = 1024;
+    constexpr std::uintmax_t mib = 1024 * kib;
+    if (size != 0 && size % mib == 0)
+        return QString::number(size / mib) + QStringLiteral(" MiB");
+    if (size != 0 && size % kib == 0)
+        return QString::number(size / kib) + QStringLiteral(" KiB");
+    return QString::number(static_cast<qulonglong>(size)) +
+           QStringLiteral(" bytes");
+}
+
+QString romRegionsText(const Rom* rom) {
+    if (!rom) return {};
+    QStringList parts;
+    if (rom->program_size.has_value())
+        parts.push_back(QStringLiteral("P ") +
+                        binarySizeText(*rom->program_size));
+    if (rom->fixed_size.has_value())
+        parts.push_back(QStringLiteral("S ") +
+                        binarySizeText(*rom->fixed_size));
+    if (rom->audio_cpu_size.has_value())
+        parts.push_back(QStringLiteral("M ") +
+                        binarySizeText(*rom->audio_cpu_size));
+    if (rom->audio_data_size.has_value())
+        parts.push_back(QStringLiteral("V ") +
+                        binarySizeText(*rom->audio_data_size));
+    if (rom->graphics_size.has_value())
+        parts.push_back(QStringLiteral("C ") +
+                        binarySizeText(*rom->graphics_size));
+    return parts.join(QStringLiteral(" ") + QChar(u'\u00B7') + QChar(' '));
+}
+
+QString romRegionsTooltip(const Rom* rom) {
+    if (!rom) return {};
+    QStringList lines;
+    lines.push_back(QStringLiteral(
+        "MAME neogeo.xml data-area sizes (not the .neo file size):"));
+    auto addRegion = [&](const QString& code, const QString& description,
+                         const QString& dataArea,
+                         const std::optional<std::uintmax_t>& size) {
+        if (!size.has_value()) return;
+        lines.push_back(
+            code + QStringLiteral(" — ") + description +
+            QStringLiteral(" / ") + dataArea + QStringLiteral(": ") +
+            binarySizeText(*size) + QStringLiteral(" (0x") +
+            QString::number(static_cast<qulonglong>(*size), 16).toUpper() +
+            QStringLiteral(")"));
+    };
+    addRegion("P", "Program ROM", "maincpu", rom->program_size);
+    addRegion("S", "Fixed-layer ROM", "fixed", rom->fixed_size);
+    addRegion("M", "Audio CPU ROM", "audiocpu / audiocrypt",
+              rom->audio_cpu_size);
+    addRegion("V", "Audio sample ROM", "ADPCM-A + ADPCM-B",
+              rom->audio_data_size);
+    addRegion("C", "Graphics ROM", "sprites", rom->graphics_size);
+    if (rom->program_width.has_value() ||
+        rom->program_endianness.has_value()) {
+        QStringList attributes;
+        if (rom->program_width.has_value()) {
+            attributes.push_back(
+                QString::number(
+                    static_cast<qulonglong>(*rom->program_width)) +
+                QStringLiteral("-bit"));
+        }
+        if (rom->program_endianness.has_value()) {
+            QString endianness = utf8Text(rom->program_endianness);
+            if (!endianness.isEmpty() && !endianness.endsWith("-endian"))
+                endianness += QStringLiteral("-endian");
+            if (!endianness.isEmpty()) attributes.push_back(endianness);
+        }
+        if (!attributes.isEmpty()) {
+            lines.push_back(QStringLiteral("P attributes: ") +
+                            attributes.join(QStringLiteral(" ") +
+                                            QChar(u'\u00B7') + QChar(' ')));
+        }
+    }
+    return lines.size() > 1 ? lines.join(QChar('\n')) : QString();
+}
+
+const Rom* detailsRom(const Game& game, int romIndex) {
+    if (romIndex >= 0 && romIndex < static_cast<int>(game.roms.size()))
+        return &game.roms[romIndex];
+    if (game.main_rom.has_value()) {
+        for (const Rom& rom : game.roms) {
+            if (rom.main && rom.file == *game.main_rom) return &rom;
+        }
+    }
+    for (const Rom& rom : game.roms) {
+        if (rom.main) return &rom;
+    }
+    return nullptr;
+}
+
+QString verificationRichText(
+    const LibraryVerificationPresentation& presentation) {
+    QString html = QString::fromStdString(presentation.label).toHtmlEscaped();
+    if (!presentation.value.empty()) {
+        QString color;
+        if (presentation.tone == VerificationTone::Success)
+            color = QStringLiteral("#5fd171");
+        else if (presentation.tone == VerificationTone::Error)
+            color = QStringLiteral("#ef6262");
+
+        html += QStringLiteral("&nbsp;&nbsp;");
+        const QString value =
+            QString::fromStdString(presentation.value).toHtmlEscaped();
+        if (presentation.details_available && color.isEmpty())
+            color = QStringLiteral("#8c8c8c");
+        if (color.isEmpty()) {
+            html += value;
+        } else {
+            const QString underline = presentation.details_available
+                ? QStringLiteral(" text-decoration:underline;")
+                : QString();
+            html += QStringLiteral("<span style=\"color:%1; "
+                                   "font-weight:600;%2\">%3</span>")
+                        .arg(color, underline, value);
+        }
+    }
+    return html;
+}
+
+QString verificationTooltip(
+    const LibraryVerificationPresentation& presentation) {
+    return QString::fromStdString(presentation.tooltip);
 }
 
 bool treeItemIsEffectivelyVisible(const QTreeWidgetItem* item) {
@@ -134,6 +340,16 @@ CdVerificationBadge cdVerificationBadge(const Game& game) {
             QString::fromUtf8("\xE2\x9C\x93 MAME set"),
             "The CHD internal combined SHA-1 matches the local MAME "
             "neocd.xml entry."
+        };
+    }
+
+    if (game.verification ==
+        std::optional<std::string>("mame-chd-mismatch")) {
+        return {
+            QString::fromUtf8("\xE2\x9A\xA0 CHD mismatch"),
+            "The CHD combined header SHA-1 does not match the "
+            "filename-identified MAME neocd.xml entry. Open Verification "
+            "Details to compare the expected and calculated hashes."
         };
     }
 
@@ -293,6 +509,8 @@ std::vector<int> MainWindow::sortedVariantOrder(const Game& game) const {
 std::vector<int> MainWindow::sortedGameOrder() const {
     std::vector<int> idx(m_games.size());
     for (std::size_t i = 0; i < idx.size(); ++i) idx[i] = static_cast<int>(i);
+    const std::vector<std::string> listTitles =
+        libraryGameListTitles(m_games);
 
     auto yearValue = [&](const Game& game) -> int {
         if (!game.year.has_value() || game.year->empty()) return 0;
@@ -305,8 +523,8 @@ std::vector<int> MainWindow::sortedGameOrder() const {
 
     if (m_sortKey == "display_desc") {
         std::stable_sort(idx.begin(), idx.end(), [&](int a, int b) {
-            return lowercaseAscii(m_games[a].display) >
-                   lowercaseAscii(m_games[b].display);
+            return lowercaseAscii(listTitles[a]) >
+                   lowercaseAscii(listTitles[b]);
         });
     } else if (m_sortKey == "year_desc") {
         std::stable_sort(idx.begin(), idx.end(), [&](int a, int b) {
@@ -327,14 +545,14 @@ std::vector<int> MainWindow::sortedGameOrder() const {
                 m_games[b], ratingMetric);
             if (libraryMetricPrecedes(left, right, descending)) return true;
             if (libraryMetricPrecedes(right, left, descending)) return false;
-            return lowercaseAscii(m_games[a].display) <
-                   lowercaseAscii(m_games[b].display);
+            return lowercaseAscii(listTitles[a]) <
+                   lowercaseAscii(listTitles[b]);
         });
     } else {
         // "display" and legacy/unknown sort keys fall back to Name (A -> Z).
         std::stable_sort(idx.begin(), idx.end(), [&](int a, int b) {
-            return lowercaseAscii(m_games[a].display) <
-                   lowercaseAscii(m_games[b].display);
+            return lowercaseAscii(listTitles[a]) <
+                   lowercaseAscii(listTitles[b]);
         });
     }
 
@@ -349,74 +567,75 @@ void MainWindow::populateTree() {
     m_tree->setColumnHidden(1, m_librarySystem != "neogeocd");
 
     m_tree->clear();
+    const std::vector<std::string> listTitles =
+        libraryGameListTitles(m_games);
     for (int idx : sortedGameOrder()) {
         const Game& game = m_games[idx];
         if (game.system != m_librarySystem) continue;
 
         auto* parentItem = new QTreeWidgetItem(m_tree);
-        QString parentText = QString::fromStdString(game.display);
-        QString parentTooltip;
+        QString parentText = QString::fromStdString(listTitles[idx]);
         const auto parentMedia = selected_launch_media(game, -1);
         const bool parentFavorite = parentMedia.has_value() &&
             m_gameLibraryState.is_favorite(game.system, *parentMedia);
-        if (parentFavorite) {
-            parentText.prepend(QString::fromUtf8("\xE2\x98\x85 ")); // ★
-        }
+        const int parentRating = parentMedia.has_value()
+            ? m_gameLibraryState.rating(game.system, *parentMedia) : 0;
         if (game.main_rom.has_value() &&
             m_gameProfiles.find(game.system, *game.main_rom)) {
             parentText += QString::fromUtf8(" \xE2\x9A\x99");
-            parentTooltip +=
-                "A per-game launch profile is active for this media. "
-                "Right-click and choose Game settings to inspect or reset it.";
         }
         if (hasCommands(game, -1)) {
             parentText += QString::fromUtf8(" \xF0\x9F\x91\x8A"); // 👊
         }
         parentItem->setText(0, parentText);
-        if (!parentTooltip.isEmpty()) parentItem->setToolTip(0, parentTooltip);
         parentItem->setData(0, GameIndexRole, idx);
         parentItem->setData(0, RomIndexRole, -1);
         parentItem->setData(0, ExactMatchRole, true);
+        parentItem->setData(0, LibraryFavoriteRole, parentFavorite);
+        parentItem->setData(
+            0, LibraryRatingRole, libraryListRatingBadge(parentRating));
 
         const CdVerificationBadge badge = cdVerificationBadge(game);
         if (!badge.text.isEmpty()) {
             parentItem->setText(1, badge.text);
-            parentItem->setToolTip(1, badge.tooltip);
             parentItem->setTextAlignment(1, Qt::AlignRight | Qt::AlignVCenter);
         }
 
+        QIcon gameIcon;
         if (game.icon.has_value() && fs::exists(*game.icon)) {
             QPixmap pixmap(QString::fromStdString(*game.icon));
             if (!pixmap.isNull()) {
                 pixmap = pixmap.scaled(32, 32, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-                parentItem->setIcon(0, QIcon(pixmap));
+                gameIcon = QIcon(pixmap);
             }
         }
+        if (gameIcon.isNull()) {
+            gameIcon = QIcon(QStringLiteral(":/icons/goliath-qt.ico"));
+        }
+        parentItem->setIcon(0, gameIcon);
 
         for (int romIdx : sortedVariantOrder(game)) {
             const Rom& rom = game.roms[romIdx];
             auto* childItem = new QTreeWidgetItem(parentItem);
             QString childText = QString::fromStdString(
                 rom.mame.empty() ? rom.file : rom.mame);
-            QString childTooltip = variantFullName(rom);
-            if (m_gameLibraryState.is_favorite(game.system, rom.file)) {
-                childText.prepend(QString::fromUtf8("\xE2\x98\x85 ")); // ★
-            }
+            const bool childFavorite =
+                m_gameLibraryState.is_favorite(game.system, rom.file);
+            const int childRating =
+                m_gameLibraryState.rating(game.system, rom.file);
             if (m_gameProfiles.find(game.system, rom.file)) {
                 childText += QString::fromUtf8(" \xE2\x9A\x99");
-                if (!childTooltip.isEmpty()) childTooltip += "\n\n";
-                childTooltip +=
-                    "A per-game launch profile is active for this variant. "
-                    "Right-click and choose Game settings to inspect or reset it.";
             }
             if (hasCommands(game, romIdx)) {
                 childText += QString::fromUtf8(" \xF0\x9F\x91\x8A"); // 👊
             }
             childItem->setText(0, childText);
-            childItem->setToolTip(0, childTooltip);
             childItem->setData(0, GameIndexRole, idx);
             childItem->setData(0, RomIndexRole, romIdx);
             childItem->setData(0, ExactMatchRole, true);
+            childItem->setData(0, LibraryFavoriteRole, childFavorite);
+            childItem->setData(
+                0, LibraryRatingRole, libraryListRatingBadge(childRating));
             childItem->setHidden(!m_showVariants);
         }
 
@@ -477,6 +696,7 @@ void MainWindow::refreshLibraryView(
 
 void MainWindow::setLibrarySystem(const std::string& system) {
     if (system != "neogeo" && system != "neogeocd") return;
+    if (!librarySystemChangeRequired(m_librarySystem, system)) return;
 
     m_librarySystem = system;
     if (m_mvsAesButton) m_mvsAesButton->setChecked(system == "neogeo");
@@ -493,6 +713,7 @@ void MainWindow::setSelectionActionsEnabled(bool enabled) {
         if (action) action->setEnabled(enabled);
     }
     if (m_launchButton) m_launchButton->setEnabled(enabled);
+    if (m_gameSettingsButton) m_gameSettingsButton->setEnabled(enabled);
     if (m_favoriteButton) m_favoriteButton->setEnabled(enabled);
     for (QPushButton* button : m_ratingButtons) {
         if (button) button->setEnabled(enabled);
@@ -591,8 +812,7 @@ void MainWindow::clearDetailsForNoSelection(bool filtered) {
     if (m_favoriteButton) {
         const QSignalBlocker blocker(m_favoriteButton);
         m_favoriteButton->setChecked(false);
-        m_favoriteButton->setText(
-            QString::fromUtf8("\xE2\x98\x86 Favorite")); // ☆
+        m_favoriteButton->setText("Favorite");
     }
     updateRatingButtons(0, false);
 
@@ -602,10 +822,15 @@ void MainWindow::clearDetailsForNoSelection(bool filtered) {
                  : (isCd ? "Neo Geo CD" : "Neo Geo MVS/AES"));
     m_variantLabel->clear();
     m_variantLabel->setToolTip(QString());
+    for (auto& entry : m_infoFieldLabels)
+        entry.second->show();
     for (auto& entry : m_infoLabels) {
+        entry.second->show();
         entry.second->setText("-");
         entry.second->setToolTip(QString());
     }
+    m_infoFieldNameLabels["catalog_id"]->setText("MAME ID");
+    m_infoLabels["catalog_id"]->setProperty("externalUrl", QString());
     m_historyText->setPlainText(filtered
         ? "No games match the current library filters."
         : (isCd
@@ -671,9 +896,7 @@ void MainWindow::updateSelection() {
         const QSignalBlocker blocker(m_favoriteButton);
         m_favoriteButton->setEnabled(playtimeMedia.has_value());
         m_favoriteButton->setChecked(favorite);
-        m_favoriteButton->setText(favorite
-            ? QString::fromUtf8("\xE2\x98\x85 Favorite")
-            : QString::fromUtf8("\xE2\x98\x86 Favorite"));
+        m_favoriteButton->setText("Favorite");
     }
     updateRatingButtons(rating, playtimeMedia.has_value());
 
@@ -714,15 +937,86 @@ void MainWindow::updateSelection() {
         if (!value.has_value() || value->empty()) return "-";
         return QString::fromStdString(*value);
     };
+    auto setOptionalInfoRow = [this](const char* key, const QString& text,
+                                     const QString& tooltip = QString()) {
+        const bool visible = !text.trimmed().isEmpty();
+        m_infoFieldLabels[key]->setVisible(visible);
+        m_infoLabels[key]->setVisible(visible);
+        m_infoLabels[key]->setText(visible ? text : QString());
+        m_infoLabels[key]->setToolTip(visible ? tooltip : QString());
+    };
+
+    const Rom* metadataRom = detailsRom(game, romIdx);
 
     m_detailsTitleLabel->setText(QString::fromStdString(
         libraryDetailsTitle(game.system == "neogeocd", game.name,
                             game.display)));
     m_infoLabels["year"]->setText(showOrPlaceholder(game.year));
     m_infoLabels["manufacturer"]->setText(showOrPlaceholder(game.manufacturer));
+    setOptionalInfoRow("alt_title",
+                       metadataRom ? utf8Text(metadataRom->alt_title)
+                                   : QString());
     m_infoLabels["genre"]->setText(showOrPlaceholder(game.genre));
     m_infoLabels["players"]->setText(showOrPlaceholder(game.players));
     m_infoLabels["series"]->setText(showOrPlaceholder(game.series));
+
+    const QString mediaText = playtimeMedia.has_value()
+        ? QString::fromStdString(*playtimeMedia)
+        : QString("-");
+    const LibraryCatalogIdPresentation catalog =
+        libraryCatalogIdPresentation(game, metadataRom);
+    m_infoFieldNameLabels["catalog_id"]->setText(
+        QString::fromStdString(catalog.label));
+    const QString catalogId = QString::fromStdString(catalog.value);
+    const QString catalogUrl = QString::fromStdString(catalog.url);
+    m_infoLabels["catalog_id"]->setProperty("externalUrl", catalogUrl);
+    m_infoLabels["catalog_id"]->setToolTip(catalogUrl);
+    if (catalogId.isEmpty()) {
+        m_infoLabels["catalog_id"]->setText("-");
+    } else if (catalogUrl.isEmpty()) {
+        m_infoLabels["catalog_id"]->setText(catalogId.toHtmlEscaped());
+    } else {
+        m_infoLabels["catalog_id"]->setText(
+            QStringLiteral(
+                "<a href=\"%1\" style=\"text-decoration:underline;\">%2</a>")
+                .arg(catalogUrl.toHtmlEscaped(),
+                     catalogId.toHtmlEscaped()));
+    }
+
+    setOptionalInfoRow(
+        "serial", metadataRom ? catalogListLines(metadataRom->serial)
+                              : QString());
+    setOptionalInfoRow(
+        "release", metadataRom ? releaseDateLines(metadataRom->release)
+                               : QString());
+    setOptionalInfoRow("media_format", mediaFormatText(metadataRom), mediaText);
+    setOptionalInfoRow("program_rom", romRegionsText(metadataRom),
+                       romRegionsTooltip(metadataRom));
+
+    const LibraryVerificationPresentation verification =
+        libraryVerificationPresentation(game, metadataRom);
+    m_infoLabels["verification"]->setText(
+        verificationRichText(verification));
+    m_infoLabels["verification"]->setProperty(
+        "verificationDetailsAvailable", verification.details_available);
+    m_infoLabels["verification"]->setToolTip(
+        verificationTooltip(verification));
+
+    const GameLaunchProfile* selectedProfile =
+        playtimeMedia.has_value()
+            ? m_gameProfiles.find(game.system, *playtimeMedia)
+            : nullptr;
+    const GameProfileSummary profileSummary = summarize_game_profile(
+        game.system, selectedProfile,
+        load_game_profile_global_settings(m_paths));
+    m_infoLabels["profile_status"]->setText(
+        profileSummary.custom ? "Custom overrides" : "Global defaults");
+    m_infoLabels["profile_system"]->setText(
+        QString::fromStdString(profileSummary.system));
+    m_infoLabels["profile_video"]->setText(
+        QString::fromStdString(profileSummary.video));
+    m_infoLabels["profile_input"]->setText(
+        QString::fromStdString(profileSummary.input));
 
     const GamePlaytimeRecord* playtime = playtimeMedia.has_value()
         ? m_gamePlaytime.find(game.system, *playtimeMedia)
@@ -863,11 +1157,12 @@ void MainWindow::filterGames(const QString& text) {
             QTreeWidgetItem* child = parent->child(j);
             int romIdx = child->data(0, RomIndexRole).toInt();
             const Rom& rom = game.roms[romIdx];
-            QString romHay = QString("%1 %2 %3 %4")
+            QString romHay = QString("%1 %2 %3 %4 %5")
                                   .arg(QString::fromStdString(rom.mame))
                                   .arg(QString::fromStdString(rom.name.value_or("")))
                                   .arg(QString::fromStdString(rom.label.value_or("")))
                                   .arg(QString::fromStdString(rom.file))
+                                  .arg(utf8Text(rom.alt_title))
                                   .toLower();
             const bool textMatch = romHay.contains(needle);
             const bool childFavorite =
@@ -929,6 +1224,187 @@ void MainWindow::launchItem(QTreeWidgetItem* item) {
         display = variantFullName(game.roms[romIdx]);
     launchMedia(QString::fromStdString(*media), game.system, profile,
                 std::nullopt, command_dat_lookup_ids(game, romIdx), display);
+}
+
+void MainWindow::showVerificationDetails() {
+    if (!m_tree) return;
+    QTreeWidgetItem* item = m_tree->currentItem();
+    if (!item) return;
+
+    const int gameIdx = item->data(0, GameIndexRole).toInt();
+    const int romIdx = item->data(0, RomIndexRole).toInt();
+    if (gameIdx < 0 || gameIdx >= static_cast<int>(m_games.size())) return;
+
+    const Game& game = m_games[gameIdx];
+    const Rom* rom = detailsRom(game, romIdx);
+    if (!rom || rom->hashes.empty()) return;
+
+    const LibraryVerificationPresentation presentation =
+        libraryVerificationPresentation(game, rom);
+
+    QDialog dialog(this);
+    dialog.resize(1380, 540);
+    dialog.setMinimumSize(920, 420);
+    QVBoxLayout* layout = nullptr;
+    setupFramelessDialog(&dialog, "Verification Details", &layout);
+
+    auto* summary = new QLabel(&dialog);
+    summary->setWordWrap(true);
+    summary->setTextInteractionFlags(
+        Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
+    QString summaryValue;
+    if (!presentation.value.empty()) {
+        const QString color =
+            presentation.tone == VerificationTone::Success
+                ? QStringLiteral("#5fd171")
+                : presentation.tone == VerificationTone::Error
+                      ? QStringLiteral("#ef6262")
+                      : QString();
+        const QString escapedValue =
+            QString::fromStdString(presentation.value).toHtmlEscaped();
+        summaryValue = color.isEmpty()
+            ? escapedValue
+            : QStringLiteral("<span style=\"color:%1; font-weight:600;\">"
+                             "%2</span>")
+                  .arg(color, escapedValue);
+    }
+    const QString title = QString::fromStdString(
+        rom->name.value_or(game.name)).toHtmlEscaped();
+    summary->setText(
+        QStringLiteral("<b>%1</b><br>%2&nbsp;&nbsp;%3<br>%4")
+            .arg(title)
+            .arg(QString::fromStdString(presentation.label).toHtmlEscaped())
+            .arg(summaryValue)
+            .arg(QString::fromStdString(presentation.tooltip)
+                     .toHtmlEscaped()));
+    layout->addWidget(summary);
+
+    auto* table = new QTableWidget(
+        static_cast<int>(rom->hashes.size()), 7, &dialog);
+    table->setObjectName("verification_details_table");
+    table->setHorizontalHeaderLabels({
+        "Type", "Local file", "Catalog file", "Size",
+        "Expected", "Calculated", "Status",
+    });
+    table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    table->setSelectionBehavior(QAbstractItemView::SelectItems);
+    table->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    table->setAlternatingRowColors(true);
+    table->setWordWrap(false);
+    table->verticalHeader()->setVisible(false);
+
+    const QFont fixedFont =
+        QFontDatabase::systemFont(QFontDatabase::FixedFont);
+    auto makeItem = [](const QString& text) {
+        auto* cell = new QTableWidgetItem(text);
+        cell->setFlags(cell->flags() & ~Qt::ItemIsEditable);
+        return cell;
+    };
+
+    for (int row = 0; row < static_cast<int>(rom->hashes.size()); ++row) {
+        const MediaHashDetail& hash = rom->hashes[static_cast<std::size_t>(row)];
+        QString sizeText = hash.size.has_value()
+            ? binarySizeText(*hash.size)
+            : QStringLiteral("-");
+        if (hash.expected_size.has_value() &&
+            (!hash.size.has_value() ||
+             *hash.expected_size != *hash.size)) {
+            sizeText += QStringLiteral(" / expected ") +
+                binarySizeText(*hash.expected_size);
+        }
+
+        table->setItem(row, 0, makeItem(
+            QString::fromStdString(hash.role + " / " + hash.algorithm)));
+        table->setItem(row, 1, makeItem(
+            QString::fromStdString(hash.file)));
+        table->setItem(row, 2, makeItem(
+            hash.catalog_file.has_value()
+                ? QString::fromStdString(*hash.catalog_file)
+                : QStringLiteral("-")));
+        table->setItem(row, 3, makeItem(sizeText));
+
+        auto* expected = makeItem(
+            hash.expected.has_value()
+                ? QString::fromStdString(*hash.expected)
+                : QStringLiteral("-"));
+        expected->setFont(fixedFont);
+        table->setItem(row, 4, expected);
+
+        auto* calculated = makeItem(
+            hash.actual.has_value()
+                ? QString::fromStdString(*hash.actual)
+                : QStringLiteral("-"));
+        calculated->setFont(fixedFont);
+        table->setItem(row, 5, calculated);
+
+        auto* status = makeItem(hash.matched ? "Match" : "Mismatch");
+        status->setForeground(
+            QColor(hash.matched ? "#5fd171" : "#ef6262"));
+        status->setTextAlignment(Qt::AlignCenter);
+        table->setItem(row, 6, status);
+    }
+
+    QHeaderView* header = table->horizontalHeader();
+    header->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    header->setSectionResizeMode(1, QHeaderView::Stretch);
+    header->setSectionResizeMode(2, QHeaderView::Stretch);
+    header->setSectionResizeMode(3, QHeaderView::ResizeToContents);
+    header->setSectionResizeMode(4, QHeaderView::Stretch);
+    header->setSectionResizeMode(5, QHeaderView::Stretch);
+    header->setSectionResizeMode(6, QHeaderView::ResizeToContents);
+    layout->addWidget(table, 1);
+
+    auto copySelectedCells = [table]() {
+        QList<QTableWidgetItem*> selected = table->selectedItems();
+        if (selected.isEmpty()) return;
+
+        std::sort(selected.begin(), selected.end(),
+                  [](const QTableWidgetItem* left,
+                     const QTableWidgetItem* right) {
+                      if (left->row() != right->row())
+                          return left->row() < right->row();
+                      return left->column() < right->column();
+                  });
+
+        QStringList rows;
+        QStringList cells;
+        int currentRow = selected.front()->row();
+        for (const QTableWidgetItem* item : selected) {
+            if (item->row() != currentRow) {
+                rows.push_back(cells.join(QChar('\t')));
+                cells.clear();
+                currentRow = item->row();
+            }
+            cells.push_back(item->text());
+        }
+        rows.push_back(cells.join(QChar('\t')));
+        QGuiApplication::clipboard()->setText(rows.join(QChar('\n')));
+    };
+
+    auto* copyButton = new QPushButton("Copy selected", &dialog);
+    copyButton->setToolTip("Copy the selected cells (Ctrl+C)");
+    copyButton->setEnabled(false);
+    connect(table, &QTableWidget::itemSelectionChanged,
+            copyButton, [table, copyButton]() {
+                copyButton->setEnabled(!table->selectedItems().isEmpty());
+            });
+    connect(copyButton, &QPushButton::clicked,
+            &dialog, copySelectedCells);
+
+    auto* copyShortcut = new QShortcut(QKeySequence::Copy, table);
+    copyShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(copyShortcut, &QShortcut::activated,
+            &dialog, copySelectedCells);
+
+    auto* closeButton = new QPushButton("Close", &dialog);
+    connect(closeButton, &QPushButton::clicked,
+            &dialog, &QDialog::accept);
+    auto* buttonRow = new QHBoxLayout();
+    buttonRow->addStretch();
+    buttonRow->addWidget(copyButton);
+    buttonRow->addWidget(closeButton);
+    layout->addLayout(buttonRow);
+    dialog.exec();
 }
 
 void MainWindow::openGameSettings() {
@@ -1118,7 +1594,6 @@ void MainWindow::focusSearch() {
 }
 
 void MainWindow::onSortChanged() {
-    m_sortKey = m_sortCombo->currentData().toString();
     if (m_sortKey.isEmpty()) m_sortKey = "display";
 
     m_config.set("UI", "sort_key", m_sortKey.toStdString());
@@ -1300,8 +1775,9 @@ void MainWindow::updateFiltersButton() {
     m_filtersButton->setText(m_filtersButton->text() + QString::fromUtf8(" \xE2\x96\xBC"));
 #endif
     m_filtersButton->setToolTip(activeCount == 0
-        ? "Show variants or filter the library by rating or playtime"
-        : descriptions.join("\n"));
+        ? "Sort the library, show variants, or filter by rating or playtime"
+        : QString("Sort and filter the library\n%1")
+              .arg(descriptions.join("\n")));
     if (m_clearFiltersAction) {
         m_clearFiltersAction->setEnabled(activeCount > 0);
     }
@@ -1449,6 +1925,8 @@ void MainWindow::setSelectedRating(int rating) {
     if (ratingAffectsView) {
         refreshLibraryView(true);
     } else {
+        item->setData(
+            0, LibraryRatingRole, libraryListRatingBadge(next));
         updateSelection();
     }
 }
@@ -1731,6 +2209,7 @@ void MainWindow::updateStatus() {
     std::size_t identified = 0;
     std::size_t verifiedSets = 0;
     std::size_t cueMismatch = 0;
+    std::size_t chdMismatch = 0;
     std::size_t metadataOnly = 0;
     std::size_t unknown = 0;
     std::size_t favorites = 0;
@@ -1761,6 +2240,9 @@ void MainWindow::updateStatus() {
                 verifiedSets++;
             } else if (g.verification == std::optional<std::string>("redump-tracks-only")) {
                 cueMismatch++;
+            } else if (g.verification ==
+                       std::optional<std::string>("mame-chd-mismatch")) {
+                chdMismatch++;
             } else if (g.identified) {
                 metadataOnly++;
             }
@@ -1772,11 +2254,13 @@ void MainWindow::updateStatus() {
     if (m_librarySystem == "neogeocd") {
         message = QString(
                       "Neo Geo CD - Games: %1 - Identified: %2 - Verified sets: %3 - "
-                      "CUE mismatch: %4 - Metadata only: %5 - Unknown: %6")
+                      "CUE mismatch: %4 - CHD mismatch: %5 - Metadata only: %6 - "
+                      "Unknown: %7")
                       .arg(parents)
                       .arg(identified)
                       .arg(verifiedSets)
                       .arg(cueMismatch)
+                      .arg(chdMismatch)
                       .arg(metadataOnly)
                       .arg(unknown);
     } else {

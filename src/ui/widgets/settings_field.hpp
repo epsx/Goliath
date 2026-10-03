@@ -70,6 +70,7 @@ private:
     struct Entry {
         FieldSpec::Kind kind;
         QWidget* widget;
+        std::vector<int> numeric_choice_values;
     };
     std::map<std::string, Entry> m_entries;
 };

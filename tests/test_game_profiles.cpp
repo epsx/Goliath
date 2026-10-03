@@ -4,6 +4,7 @@
 #include "common/paths.hpp"
 #include "game/game_profile.hpp"
 #include "game/game_profile_runtime.hpp"
+#include "game/game_profile_summary.hpp"
 #include "ini/ini_document.hpp"
 
 #if defined(_WIN32)
@@ -23,6 +24,7 @@ using goliath::AppPaths;
 using goliath::DirectPathKind;
 using goliath::GameLaunchProfile;
 using goliath::GameProfileGlobalSettings;
+using goliath::GameProfileSummary;
 using goliath::GameProfileStore;
 using goliath::IniDocument;
 using goliath::effective_cartridge_system;
@@ -30,6 +32,7 @@ using goliath::game_profile_supports_four_player;
 using goliath::game_profile_uses_mvs_hardware;
 using goliath::make_game_profile_key;
 using goliath::materialize_game_profile_runtime;
+using goliath::summarize_game_profile;
 using goliath::normalize_game_profile_media;
 using goliath::inspect_direct_path;
 
@@ -150,6 +153,17 @@ TEST_CASE("shared video schema matches JGRF and Geolith contracts",
     REQUIRE(goliath::is_valid_video_setting_value(*scanline, 10));
     REQUIRE(goliath::is_valid_video_setting_value(*overscan, 4));
     REQUIRE_FALSE(goliath::is_valid_video_setting_value(*overscan, 5));
+    REQUIRE(overscan->options.size() == 5);
+    CHECK(overscan->options[0].value == 0);
+    CHECK(std::string(overscan->options[0].label) == "0");
+    CHECK(overscan->options[1].value == 1);
+    CHECK(std::string(overscan->options[1].label) == "4");
+    CHECK(overscan->options[2].value == 2);
+    CHECK(std::string(overscan->options[2].label) == "8");
+    CHECK(overscan->options[3].value == 3);
+    CHECK(std::string(overscan->options[3].label) == "12");
+    CHECK(overscan->options[4].value == 4);
+    CHECK(std::string(overscan->options[4].label) == "16");
 }
 
 TEST_CASE("per-game profiles round-trip outside games.json",
@@ -662,6 +676,53 @@ TEST_CASE("runtime profile materialization accepts long storage paths",
     REQUIRE(fs::is_directory(runtime.config_root / "jollygood"));
 
     fs::remove_all(root);
+}
+
+TEST_CASE("launch profile summary resolves inherited Neo Geo settings",
+          "[profiles][summary]") {
+    GameProfileGlobalSettings global;
+    global.cartridge_system = 2;
+    global.universe_hardware = 1;
+    global.region = 3;
+    global.video_api = 0;
+    global.shader = 2;
+    global.input_device = 0;
+
+    const GameProfileSummary summary =
+        summarize_game_profile("neogeo", nullptr, global);
+
+    REQUIRE_FALSE(summary.custom);
+    REQUIRE(summary.system == "Universe BIOS / MVS / EU");
+    REQUIRE(summary.video == "OpenGL Core\nSharp Bilinear");
+    REQUIRE(summary.input == "Auto / Global mappings");
+}
+
+TEST_CASE("launch profile summary exposes exact-media overrides",
+          "[profiles][summary]") {
+    GameProfileGlobalSettings global;
+    global.cd_system = 2;
+    global.region = 0;
+    global.video_api = 0;
+    global.shader = 2;
+    global.input_device = 0;
+
+    GameLaunchProfile profile;
+    profile.cd_system = 1;
+    profile.region = 1;
+    profile.video_api = 3;
+    profile.shader = 5;
+    profile.input_device = 1;
+    profile.controller_port = 2;
+    profile.input_overrides["neogeojs1"]["A"] = "j2b0";
+
+    const GameProfileSummary summary =
+        summarize_game_profile("neogeocd", &profile, global);
+
+    REQUIRE(summary.custom);
+    REQUIRE(summary.system == "Neo Geo CD (Top Loader) / JP");
+    REQUIRE(summary.video == "Vulkan (Experimental)\nCRTea");
+    REQUIRE(summary.input ==
+            "Neo Geo Joysticks / Controller port 3 / Custom bindings");
 }
 
 TEST_CASE("runtime profile refuses a substituted exact-media directory",

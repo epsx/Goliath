@@ -1,0 +1,312 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Data derived from Geolith's rename-neo.sh.
+
+Copyright 2024 orbea
+All rights reserved.
+
+Redistribution and use of this script, with or without modification, is
+permitted provided that the following conditions are met:
+
+1. Redistributions of this script must retain the above copyright
+   notice, this list of conditions and the following disclaimer.
+
+THIS SOFTWARE IS PROVIDED BY THE AUTHOR "AS IS" AND ANY EXPRESS OR IMPLIED
+WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
+EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-->
+<geolith-metadata
+    schema-version="1"
+    source-project="https://gitlab.com/jgemu/geolith"
+    source-file="rename-neo.sh"
+    source-tag="0.4.2"
+    source-commit="d3104014927b5b72fc48e93c3d7e033754a61956"
+    source-sha256="0f9ec3062433c423b1440806a7525ee6ec7dbe9a31e7d90d61db8c2688a86276">
+  <neo-catalog algorithm="crc32" entries="278">
+    <rom file="2020bb.neo" crc32="8041ad52"/>
+    <rom file="2020bba.neo" crc32="e9526781"/>
+    <rom file="2020bbh.neo" crc32="9143727f"/>
+    <rom file="3countb.neo" crc32="03bdc5a6"/>
+    <rom file="alpham2.neo" crc32="d8cb49e9"/>
+    <rom file="alpham2p.neo" crc32="aab8f811"/>
+    <rom file="androdun.neo" crc32="6aaed441"/>
+    <rom file="aodk.neo" crc32="8dcafd3b"/>
+    <rom file="aof.neo" crc32="02e281f9"/>
+    <rom file="aof2.neo" crc32="bc3e4c20"/>
+    <rom file="aof2a.neo" crc32="c649e151"/>
+    <rom file="aof3.neo" crc32="46b7eac3"/>
+    <rom file="aof3k.neo" crc32="890a3f7a"/>
+    <rom file="b2b.neo" crc32="5228faba"/>
+    <rom file="bakatono.neo" crc32="4e1acd2b"/>
+    <rom file="bangbead.neo" crc32="0003bb08"/>
+    <rom file="bjourney.neo" crc32="3d0805de"/>
+    <rom file="bjourneyh.neo" crc32="c552ea99"/>
+    <rom file="blazstar.neo" crc32="21aa3a79"/>
+    <rom file="breakers.neo" crc32="e9e191f2"/>
+    <rom file="breakrev.neo" crc32="0874ff8b"/>
+    <rom file="bstars.neo" crc32="221e9fdb"/>
+    <rom file="bstars2.neo" crc32="cea02498"/>
+    <rom file="bstarsh.neo" crc32="1fff2e59"/>
+    <rom file="burningf.neo" crc32="62c88a2d"/>
+    <rom file="burningfh.neo" crc32="adcc7b7d"/>
+    <rom file="burningfp.neo" crc32="8d3e9c7b"/>
+    <rom file="burningfpa.neo" crc32="b5df2d4e"/>
+    <rom file="burningfpb.neo" crc32="f208a832"/>
+    <rom file="crswd2bl.neo" crc32="9acfb8e5"/>
+    <rom file="crsword.neo" crc32="75fabd5d"/>
+    <rom file="ct2k3sa.neo" crc32="7e74bdf9"/>
+    <rom file="ct2k3sp.neo" crc32="060956ce"/>
+    <rom file="cthd2003.neo" crc32="62e9ef46"/>
+    <rom file="ctomaday.neo" crc32="0ce8e4f2"/>
+    <rom file="cyberlip.neo" crc32="d20d6a3e"/>
+    <rom file="diggerma.neo" crc32="41581ae2"/>
+    <rom file="doubledr.neo" crc32="5f92a3aa"/>
+    <rom file="dragonsh.neo" crc32="1e3e2500"/>
+    <rom file="eightman.neo" crc32="843dcf30"/>
+    <rom file="fatfursp.neo" crc32="beccef57"/>
+    <rom file="fatfurspa.neo" crc32="e2f91cac"/>
+    <rom file="fatfury1.neo" crc32="dabcc80b"/>
+    <rom file="fatfury2.neo" crc32="1a896e27"/>
+    <rom file="fatfury3.neo" crc32="d353eeed"/>
+    <rom file="fbfrenzy.neo" crc32="2db33ec0"/>
+    <rom file="fightfev.neo" crc32="8515503b"/>
+    <rom file="fightfeva.neo" crc32="babd8403"/>
+    <rom file="flipshot.neo" crc32="e3d2d230"/>
+    <rom file="froman2b.neo" crc32="e7d57377"/>
+    <rom file="fswords.neo" crc32="e6aa08c1"/>
+    <rom file="galaxyfg.neo" crc32="ec905658"/>
+    <rom file="ganryu.neo" crc32="382e661f"/>
+    <rom file="garou.neo" crc32="25d2e39e"/>
+    <rom file="garoubl.neo" crc32="2c3351e9"/>
+    <rom file="garouh.neo" crc32="bf2204c4"/>
+    <rom file="garouha.neo" crc32="9f96e440"/>
+    <rom file="garoup.neo" crc32="81275c80"/>
+    <rom file="ghostlop.neo" crc32="adafd77a"/>
+    <rom file="goalx3.neo" crc32="1a3799d6"/>
+    <rom file="gowcaizr.neo" crc32="519b1bd4"/>
+    <rom file="gpilots.neo" crc32="aad82c6c"/>
+    <rom file="gpilotsh.neo" crc32="eea2b267"/>
+    <rom file="gpilotsp.neo" crc32="3b16438b"/>
+    <rom file="gururin.neo" crc32="5c587362"/>
+    <rom file="ironclad.neo" crc32="e38554fb"/>
+    <rom file="ironclado.neo" crc32="300b920a"/>
+    <rom file="irrmaze.neo" crc32="c03d0ec0"/>
+    <rom file="janshin.neo" crc32="c62ab999"/>
+    <rom file="jockeygp.neo" crc32="71db01dd"/>
+    <rom file="jockeygpa.neo" crc32="23102f16"/>
+    <rom file="joyjoy.neo" crc32="2c368d6a"/>
+    <rom file="kabukikl.neo" crc32="e5c7c02f"/>
+    <rom file="karnovr.neo" crc32="be78c856"/>
+    <rom file="kf10thep.neo" crc32="6eeee6bc"/>
+    <rom file="kf2k2mp.neo" crc32="dbe7f03c"/>
+    <rom file="kf2k2mp2.neo" crc32="607e6a06"/>
+    <rom file="kf2k2pla.neo" crc32="b5f1403f"/>
+    <rom file="kf2k2pls.neo" crc32="8974e46d"/>
+    <rom file="kf2k3bl.neo" crc32="f9a1c5cb"/>
+    <rom file="kf2k3bla.neo" crc32="4af506bf"/>
+    <rom file="kf2k3pl.neo" crc32="2ec1f4a3"/>
+    <rom file="kf2k3upl.neo" crc32="e49b4a2f"/>
+    <rom file="kf2k5uni.neo" crc32="7230b2e9"/>
+    <rom file="kizuna.neo" crc32="4a93ef82"/>
+    <rom file="kof10th.neo" crc32="b1ebae6e"/>
+    <rom file="kof2000.neo" crc32="39e509d4"/>
+    <rom file="kof2000n.neo" crc32="e5f0a167"/>
+    <rom file="kof2001.neo" crc32="01202e76"/>
+    <rom file="kof2001h.neo" crc32="9ebbb90a"/>
+    <rom file="kof2002.neo" crc32="388ce6f9"/>
+    <rom file="kof2002b.neo" crc32="04845fd1"/>
+    <rom file="kof2003.neo" crc32="c5e8f3ee"/>
+    <rom file="kof2003h.neo" crc32="ced0f3fa"/>
+    <rom file="kof2k4se.neo" crc32="2dc44424"/>
+    <rom file="kof94.neo" crc32="1de3c0cb"/>
+    <rom file="kof95.neo" crc32="161c3f78"/>
+    <rom file="kof95a.neo" crc32="74fad1b2"/>
+    <rom file="kof95h.neo" crc32="a2b60b1d"/>
+    <rom file="kof96.neo" crc32="e54b8545"/>
+    <rom file="kof96h.neo" crc32="1be5ef6e"/>
+    <rom file="kof97.neo" crc32="bef7053f"/>
+    <rom file="kof97h.neo" crc32="f04f9dc7"/>
+    <rom file="kof97k.neo" crc32="4c007242"/>
+    <rom file="kof97oro.neo" crc32="7e41756c"/>
+    <rom file="kof97pls.neo" crc32="8ca84974"/>
+    <rom file="kof98.neo" crc32="7937a3b5"/>
+    <rom file="kof98a.neo" crc32="097f43f3"/>
+    <rom file="kof98h.neo" crc32="b5add56b"/>
+    <rom file="kof98k.neo" crc32="79034090"/>
+    <rom file="kof98ka.neo" crc32="f90c3ac7"/>
+    <rom file="kof99.neo" crc32="0fa6c82c"/>
+    <rom file="kof99e.neo" crc32="a340318c"/>
+    <rom file="kof99h.neo" crc32="7068d605"/>
+    <rom file="kof99k.neo" crc32="bebdef97"/>
+    <rom file="kof99ka.neo" crc32="e683d204"/>
+    <rom file="kof99p.neo" crc32="f256c4ec"/>
+    <rom file="kog.neo" crc32="890805a0"/>
+    <rom file="kotm.neo" crc32="03919498"/>
+    <rom file="kotm2.neo" crc32="45d1ee0c"/>
+    <rom file="kotm2a.neo" crc32="8244fe15"/>
+    <rom file="kotm2p.neo" crc32="2589d82e"/>
+    <rom file="kotmh.neo" crc32="a4c35bfd"/>
+    <rom file="lans2004.neo" crc32="f0bdeb60"/>
+    <rom file="lastblad.neo" crc32="c1c6d0f0"/>
+    <rom file="lastbladh.neo" crc32="b2ce2dbb"/>
+    <rom file="lastbld2.neo" crc32="315305ee"/>
+    <rom file="lasthope.neo" crc32="16c6ae63"/>
+    <rom file="lastsold.neo" crc32="e7f4e875"/>
+    <rom file="lbowling.neo" crc32="7222c3ce"/>
+    <rom file="legendos.neo" crc32="67f65c54"/>
+    <rom file="lresort.neo" crc32="6738aeb0"/>
+    <rom file="lresortp.neo" crc32="c41b32c3"/>
+    <rom file="magdrop2.neo" crc32="fd5d3e9a"/>
+    <rom file="magdrop3.neo" crc32="7bf1a9b0"/>
+    <rom file="maglord.neo" crc32="11971fbf"/>
+    <rom file="maglordh.neo" crc32="f2d54371"/>
+    <rom file="mahretsu.neo" crc32="18309421"/>
+    <rom file="marukodq.neo" crc32="a725e249"/>
+    <rom file="matrim.neo" crc32="b09a3c96"/>
+    <rom file="matrimbl.neo" crc32="96de3019"/>
+    <rom file="miexchng.neo" crc32="7edfbb25"/>
+    <rom file="minasan.neo" crc32="fa5f4de4"/>
+    <rom file="moshougi.neo" crc32="71112101"/>
+    <rom file="ms4plus.neo" crc32="9aec5792"/>
+    <rom file="ms5plus.neo" crc32="0271c9c4"/>
+    <rom file="mslug.neo" crc32="05be3849"/>
+    <rom file="mslug2.neo" crc32="ac0aa8ef"/>
+    <rom file="mslug2t.neo" crc32="2056e958"/>
+    <rom file="mslug3.neo" crc32="296f41b1"/>
+    <rom file="mslug3a.neo" crc32="4d42caf5"/>
+    <rom file="mslug3b6.neo" crc32="f70d50cb"/>
+    <rom file="mslug3h.neo" crc32="24b483c3"/>
+    <rom file="mslug4.neo" crc32="80822177"/>
+    <rom file="mslug4h.neo" crc32="9a041b23"/>
+    <rom file="mslug5.neo" crc32="11e4f258"/>
+    <rom file="mslug5b.neo" crc32="5d1f010c"/>
+    <rom file="mslug5h.neo" crc32="ba52e48d"/>
+    <rom file="mslugx.neo" crc32="fdc65a72"/>
+    <rom file="mutnat.neo" crc32="100027fa"/>
+    <rom file="nam1975.neo" crc32="338f2dee"/>
+    <rom file="ncombat.neo" crc32="75d42338"/>
+    <rom file="ncombath.neo" crc32="00a23c2a"/>
+    <rom file="ncommand.neo" crc32="817db341"/>
+    <rom file="neobombe.neo" crc32="452609d6"/>
+    <rom file="neocup98.neo" crc32="3896f2d9"/>
+    <rom file="neodrift.neo" crc32="f2063afc"/>
+    <rom file="neomrdo.neo" crc32="6ab90d70"/>
+    <rom file="ninjamas.neo" crc32="6c043356"/>
+    <rom file="nitd.neo" crc32="42ce8908"/>
+    <rom file="nitdbl.neo" crc32="ed62a567"/>
+    <rom file="overtop.neo" crc32="935c39ea"/>
+    <rom file="panicbom.neo" crc32="c7799f9d"/>
+    <rom file="pbobbl2n.neo" crc32="1710150c"/>
+    <rom file="pbobblen.neo" crc32="71619b37"/>
+    <rom file="pbobblenb.neo" crc32="54fa6513"/>
+    <rom file="pgoal.neo" crc32="463fe2bc"/>
+    <rom file="pnyaa.neo" crc32="9a371ae5"/>
+    <rom file="pnyaaa.neo" crc32="aea780c7"/>
+    <rom file="popbounc.neo" crc32="30c2f23f"/>
+    <rom file="preisle2.neo" crc32="2734d1be"/>
+    <rom file="pspikes2.neo" crc32="7e6bb2eb"/>
+    <rom file="pulstar.neo" crc32="71d34714"/>
+    <rom file="puzzldpr.neo" crc32="a7ea0a8a"/>
+    <rom file="puzzledp.neo" crc32="9610638a"/>
+    <rom file="quizdai2.neo" crc32="bd15b7a1"/>
+    <rom file="quizdais.neo" crc32="483b8670"/>
+    <rom file="quizdaisk.neo" crc32="d0c614a0"/>
+    <rom file="quizkof.neo" crc32="0603f66d"/>
+    <rom file="quizkofk.neo" crc32="f660f0d9"/>
+    <rom file="ragnagrd.neo" crc32="8c08477b"/>
+    <rom file="rbff1.neo" crc32="9de2bc23"/>
+    <rom file="rbff1a.neo" crc32="ec8b37f0"/>
+    <rom file="rbff1k.neo" crc32="bf5b4349"/>
+    <rom file="rbff1ka.neo" crc32="40eb7054"/>
+    <rom file="rbff2.neo" crc32="5ba5aa03"/>
+    <rom file="rbff2h.neo" crc32="fc3be0de"/>
+    <rom file="rbff2k.neo" crc32="d23d0173"/>
+    <rom file="rbffspec.neo" crc32="60f8fcf8"/>
+    <rom file="rbffspeck.neo" crc32="da1e9521"/>
+    <rom file="ridhero.neo" crc32="4221f383"/>
+    <rom file="ridheroh.neo" crc32="17184baf"/>
+    <rom file="roboarmy.neo" crc32="23b6caaf"/>
+    <rom file="roboarmya.neo" crc32="77923e2d"/>
+    <rom file="rotd.neo" crc32="29ae65fd"/>
+    <rom file="rotdh.neo" crc32="ecf6a9f7"/>
+    <rom file="s1945p.neo" crc32="a5f8886e"/>
+    <rom file="samsh5sp.neo" crc32="d06d508c"/>
+    <rom file="samsh5sph.neo" crc32="9febe986"/>
+    <rom file="samsh5spho.neo" crc32="f649dac3"/>
+    <rom file="samsho.neo" crc32="12cc6bf3"/>
+    <rom file="samsho2.neo" crc32="9208e903"/>
+    <rom file="samsho2k.neo" crc32="800c26b1"/>
+    <rom file="samsho2ka.neo" crc32="8ba0db81"/>
+    <rom file="samsho3.neo" crc32="2bf539cf"/>
+    <rom file="samsho3h.neo" crc32="b738594d"/>
+    <rom file="samsho4.neo" crc32="d6d86cd8"/>
+    <rom file="samsho4k.neo" crc32="9642929c"/>
+    <rom file="samsho5.neo" crc32="0d34dde4"/>
+    <rom file="samsho5a.neo" crc32="8a08119e"/>
+    <rom file="samsho5b.neo" crc32="a9664cde"/>
+    <rom file="samsho5h.neo" crc32="bf03bc84"/>
+    <rom file="samshoh.neo" crc32="20519852"/>
+    <rom file="savagere.neo" crc32="68964a13"/>
+    <rom file="sbp.neo" crc32="346afd7f"/>
+    <rom file="sdodgeb.neo" crc32="04e50958"/>
+    <rom file="sengoku.neo" crc32="5c7b047b"/>
+    <rom file="sengoku2.neo" crc32="e48c07d0"/>
+    <rom file="sengoku3.neo" crc32="311a9ad5"/>
+    <rom file="sengoku3a.neo" crc32="207c2770"/>
+    <rom file="sengokuh.neo" crc32="dbcede61"/>
+    <rom file="shocktr2.neo" crc32="1438e16f"/>
+    <rom file="shocktro.neo" crc32="7e919117"/>
+    <rom file="shocktroa.neo" crc32="dc4edbe3"/>
+    <rom file="socbrawl.neo" crc32="2ea06384"/>
+    <rom file="socbrawlh.neo" crc32="02d3b361"/>
+    <rom file="sonicwi2.neo" crc32="ac1851bb"/>
+    <rom file="sonicwi3.neo" crc32="10edc4ff"/>
+    <rom file="spinmast.neo" crc32="6c76c571"/>
+    <rom file="ssideki.neo" crc32="99b48cbd"/>
+    <rom file="ssideki2.neo" crc32="51744243"/>
+    <rom file="ssideki3.neo" crc32="68b96364"/>
+    <rom file="ssideki4.neo" crc32="574c4b4e"/>
+    <rom file="stakwin.neo" crc32="fb42bea3"/>
+    <rom file="stakwin2.neo" crc32="9c791c8c"/>
+    <rom file="strhoop.neo" crc32="fa3f7ee1"/>
+    <rom file="superspy.neo" crc32="9f7f80cf"/>
+    <rom file="svc.neo" crc32="7376fc43"/>
+    <rom file="svcboot.neo" crc32="83ee63a1"/>
+    <rom file="svcplus.neo" crc32="83a48e6b"/>
+    <rom file="svcplusa.neo" crc32="e06d4da4"/>
+    <rom file="svcsplus.neo" crc32="30e60a48"/>
+    <rom file="tophuntr.neo" crc32="bc747b28"/>
+    <rom file="tophuntrh.neo" crc32="661180a9"/>
+    <rom file="tpgolf.neo" crc32="f4a8abc6"/>
+    <rom file="trally.neo" crc32="ad8dc774"/>
+    <rom file="turfmast.neo" crc32="f00c2138"/>
+    <rom file="twinspri.neo" crc32="192ccf78"/>
+    <rom file="twsoc96.neo" crc32="dd9c0acf"/>
+    <rom file="viewpoin.neo" crc32="110f9248"/>
+    <rom file="viewpoinp.neo" crc32="52867517"/>
+    <rom file="vliner.neo" crc32="7c3c125a"/>
+    <rom file="vliner53.neo" crc32="94aa40bd"/>
+    <rom file="vliner54.neo" crc32="6bc89cd6"/>
+    <rom file="vliner6e.neo" crc32="a7bdda97"/>
+    <rom file="vliner7e.neo" crc32="013a7536"/>
+    <rom file="wakuwak7.neo" crc32="81b7ad16"/>
+    <rom file="wh1.neo" crc32="d864f492"/>
+    <rom file="wh1h.neo" crc32="e65d03d1"/>
+    <rom file="wh1ha.neo" crc32="9ff1ed75"/>
+    <rom file="wh2.neo" crc32="99e14fc1"/>
+    <rom file="wh2h.neo" crc32="20d3e23d"/>
+    <rom file="wh2j.neo" crc32="e1a45894"/>
+    <rom file="whp.neo" crc32="37858a01"/>
+    <rom file="wjammers.neo" crc32="342f7f79"/>
+    <rom file="zedblade.neo" crc32="4cc9e910"/>
+    <rom file="zintrckb.neo" crc32="5cea990f"/>
+    <rom file="zupapa.neo" crc32="6f323821"/>
+  </neo-catalog>
+</geolith-metadata>

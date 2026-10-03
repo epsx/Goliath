@@ -10,15 +10,18 @@
 #include <QChar>
 #include <QEventLoop>
 #include <QList>
-#include <QProcess>
-#include <QStandardPaths>
-#include <QStringList>
 #include <QTimer>
 #include <QUuid>
 
 #include <utility>
 
 namespace goliath {
+
+struct PortalShortcut {
+    QString id;
+    QVariantMap properties;
+};
+using PortalShortcuts = QList<PortalShortcut>;
 
 QDBusArgument& operator<<(QDBusArgument& arg, const PortalShortcut& shortcut) {
     arg.beginStructure();
@@ -35,6 +38,9 @@ const QDBusArgument& operator>>(const QDBusArgument& arg, PortalShortcut& shortc
 }
 
 } // namespace goliath
+
+Q_DECLARE_METATYPE(goliath::PortalShortcut)
+Q_DECLARE_METATYPE(goliath::PortalShortcuts)
 
 namespace goliath {
 
@@ -99,17 +105,6 @@ QString portalTrigger(const QKeySequence& sequence) {
     if (modifiers & Qt::AltModifier) name.prepend("ALT+");
     if (modifiers & Qt::ShiftModifier) name.prepend("SHIFT+");
     return name;
-}
-
-QString portalAssignedTrigger(const PortalShortcuts& shortcuts,
-                              bool* found = nullptr) {
-    if (found) *found = false;
-    for (const auto& shortcut : shortcuts) {
-        if (shortcut.id != QString::fromLatin1(kShortcutId)) continue;
-        if (found) *found = true;
-        return shortcut.properties.value("trigger_description").toString();
-    }
-    return {};
 }
 
 bool portalRequest(QDBusConnection bus, const QString& method, QVariantList args,
@@ -187,9 +182,6 @@ WaylandGifHotkey::WaylandGifHotkey(std::function<void()> trigger, QObject* paren
     m_signalConnected = m_bus.connect(kPortal, kDesktop, kInterface,
         "Activated", this,
         SLOT(onActivated(QDBusObjectPath,QString,qulonglong,QVariantMap)));
-    m_shortcutsSignalConnected = m_bus.connect(kPortal, kDesktop, kInterface,
-        "ShortcutsChanged", this,
-        SLOT(onShortcutsChanged(QDBusObjectPath,PortalShortcuts)));
 }
 
 WaylandGifHotkey::~WaylandGifHotkey() {
@@ -197,9 +189,6 @@ WaylandGifHotkey::~WaylandGifHotkey() {
     m_bus.disconnect(kPortal, kDesktop, kInterface,
         "Activated", this,
         SLOT(onActivated(QDBusObjectPath,QString,qulonglong,QVariantMap)));
-    m_bus.disconnect(kPortal, kDesktop, kInterface,
-        "ShortcutsChanged", this,
-        SLOT(onShortcutsChanged(QDBusObjectPath,PortalShortcuts)));
     QDBusConnection::disconnectFromBus(m_busName);
 }
 
@@ -211,60 +200,11 @@ void WaylandGifHotkey::closeSession() {
     m_sessionPath.clear();
 }
 
-void WaylandGifHotkey::setAssignedTrigger(const QString& trigger) {
-    if (m_assignedTrigger == trigger) return;
-    m_assignedTrigger = trigger;
-    emit assignedTriggerChanged(m_assignedTrigger);
-}
-
-bool WaylandGifHotkey::configureShortcut(QString* error) {
-    if (error) error->clear();
-    if (m_sessionPath.isEmpty()) {
-        if (error) *error = "No Wayland shortcut session is active.";
-        return false;
-    }
-    if (!m_shortcutsSignalConnected) {
-        if (error) *error = "Cannot monitor shortcut changes from the desktop portal.";
-        return false;
-    }
-
-    QDBusMessage call = QDBusMessage::createMethodCall(
-        kPortal, kDesktop, kInterface, "ConfigureShortcuts");
-    call.setArguments({QVariant::fromValue(QDBusObjectPath(m_sessionPath)),
-                       QString(), QVariant::fromValue(QVariantMap{})});
-    const QDBusMessage reply = m_bus.call(call, QDBus::Block, 5000);
-    if (reply.type() == QDBusMessage::ErrorMessage) {
-        if (reply.errorName() == "org.freedesktop.DBus.Error.UnknownMethod" &&
-            qEnvironmentVariable("XDG_CURRENT_DESKTOP")
-                .contains("GNOME", Qt::CaseInsensitive)) {
-            const QString settings =
-                QStandardPaths::findExecutable("gnome-control-center");
-            if (!settings.isEmpty() &&
-                QProcess::startDetached(
-                    settings, QStringList{QStringLiteral("applications")}))
-                return true;
-        }
-        if (error) {
-            if (reply.errorName() == "org.freedesktop.DBus.Error.UnknownMethod") {
-                *error = "This desktop portal cannot reconfigure an existing "
-                         "shortcut. Use the desktop's application permissions "
-                         "to change or remove the Goliath global shortcut.";
-            } else {
-                *error = QString("The desktop could not open shortcut settings: %1")
-                             .arg(reply.errorMessage());
-            }
-        }
-        return false;
-    }
-    return true;
-}
-
-bool WaylandGifHotkey::setShortcut(const QKeySequence& key, QString* error,
-                                   bool configureExisting) {
+bool WaylandGifHotkey::setShortcut(const QKeySequence& key, QString* error) {
     if (error) error->clear();
     if (key.isEmpty()) {
         closeSession();
-        setAssignedTrigger({});
+        m_assignedTrigger.clear();
         return true;
     }
     if (!m_signalConnected) {
@@ -278,12 +218,6 @@ bool WaylandGifHotkey::setShortcut(const QKeySequence& key, QString* error,
         if (error) *error = "Choose one letter, number, F1-F24, or punctuation key; Ctrl/Alt/Shift are optional.";
         return false;
     }
-
-    // The portal owns the actual binding after BindShortcuts. Recreating the
-    // session only restores that persisted binding and does not apply a new
-    // preferred_trigger. Portal v2 provides ConfigureShortcuts for changes.
-    if (!m_sessionPath.isEmpty())
-        return configureExisting ? configureShortcut(error) : true;
 
     QString failure;
     QVariantMap result;
@@ -326,7 +260,12 @@ bool WaylandGifHotkey::setShortcut(const QKeySequence& key, QString* error,
         ? qdbus_cast<PortalShortcuts>(assigned.value<QDBusArgument>())
         : PortalShortcuts{};
     bool accepted = false;
-    const QString triggerDescription = portalAssignedTrigger(bound, &accepted);
+    QString assignedTrigger;
+    for (const auto& shortcut : bound)
+        if (shortcut.id == QString::fromLatin1(kShortcutId)) {
+            accepted = true;
+            assignedTrigger = shortcut.properties.value("trigger_description").toString();
+        }
     if (!accepted) {
         closeCandidate();
         if (error) *error = "The desktop did not assign a GIF shortcut.";
@@ -334,7 +273,7 @@ bool WaylandGifHotkey::setShortcut(const QKeySequence& key, QString* error,
     }
     closeSession();
     m_sessionPath = candidate;
-    setAssignedTrigger(triggerDescription);
+    m_assignedTrigger = assignedTrigger;
     return true;
 }
 
@@ -345,14 +284,6 @@ void WaylandGifHotkey::onActivated(const QDBusObjectPath& session,
     Q_UNUSED(options);
     if (session.path() == m_sessionPath && id == QString::fromLatin1(kShortcutId))
         m_trigger();
-}
-
-void WaylandGifHotkey::onShortcutsChanged(const QDBusObjectPath& session,
-                                          const PortalShortcuts& shortcuts) {
-    if (session.path() != m_sessionPath) return;
-    bool found = false;
-    const QString trigger = portalAssignedTrigger(shortcuts, &found);
-    setAssignedTrigger(found ? trigger : QString());
 }
 
 } // namespace goliath

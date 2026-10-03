@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <utility>
 
 namespace fs = std::filesystem;
 
@@ -92,10 +93,17 @@ TEST_CASE("command.dat lookup prioritizes exact variant then parent",
           "[command_dat][lookup]") {
     goliath::Game game;
     game.short_name = "kof98";
-    game.roms.push_back(goliath::Rom{
-        "kof98.neo", {}, {}, "kof98", {}, true});
-    game.roms.push_back(goliath::Rom{
-        "kof98h.neo", {}, {}, "KOF98H", std::string("kof98"), false});
+    goliath::Rom parent;
+    parent.file = "kof98.neo";
+    parent.mame = "kof98";
+    parent.main = true;
+    game.roms.push_back(std::move(parent));
+
+    goliath::Rom variant;
+    variant.file = "kof98h.neo";
+    variant.mame = "KOF98H";
+    variant.cloneof = "kof98";
+    game.roms.push_back(std::move(variant));
 
     CHECK(goliath::command_dat_lookup_ids(game, 1) ==
           std::vector<std::string>{"kof98h", "kof98"});

@@ -151,7 +151,7 @@ TEST_CASE("theme catalog exposes balanced dark and light palettes", "[theme]") {
     }
 }
 
-TEST_CASE("details header and information use theme-aware cards",
+TEST_CASE("details panels use theme-aware raised cards",
           "[theme][details]") {
     for (const Theme& theme : all_themes()) {
         INFO("theme=" << theme.key);
@@ -160,12 +160,94 @@ TEST_CASE("details header and information use theme-aware cards",
               std::string::npos);
         CHECK(stylesheet.find("QFrame#details_info_card") !=
               std::string::npos);
-        const std::string card_style =
+        CHECK(stylesheet.find("QFrame#snapshot_card") !=
+              std::string::npos);
+        CHECK(stylesheet.find("QTextEdit#details_description_card") !=
+              std::string::npos);
+        CHECK(stylesheet.find("QLabel#details_subsection_title") !=
+              std::string::npos);
+        CHECK(stylesheet.find("QFrame#details_info_vertical_divider") !=
+              std::string::npos);
+        CHECK(stylesheet.find("QFrame#details_info_horizontal_divider") !=
+              std::string::npos);
+        CHECK(stylesheet.find("QPushButton#profile_configure_btn") !=
+              std::string::npos);
+        CHECK(stylesheet.find(
+            "QWidget#details_field_label {\n"
+            "    background-color: transparent;\n"
+            "    border: none;\n"
+            "}") != std::string::npos);
+        CHECK(stylesheet.find(
+            "    background-color: " + theme.bg_secondary + ";\n") !=
+              std::string::npos);
+        CHECK(stylesheet.find(
+            "    border: 1px solid " + theme.border + ";\n") !=
+              std::string::npos);
+        CHECK(stylesheet.find(
+            "QFrame#details_header_card {\n"
+            "    background-color: transparent;") == std::string::npos);
+        CHECK(stylesheet.find("@card_highlight@") == std::string::npos);
+        CHECK(stylesheet.find("@card_shadow@") == std::string::npos);
+        CHECK(stylesheet.find("@divider_shadow@") == std::string::npos);
+        CHECK(stylesheet.find("@divider_highlight@") == std::string::npos);
+        CHECK(stylesheet.find("qlineargradient(") != std::string::npos);
+        CHECK(stylesheet.find("rgba(") != std::string::npos);
+    }
+}
+
+TEST_CASE("primary toolbar actions use borderless theme feedback",
+          "[theme][toolbar]") {
+    for (const Theme& theme : all_themes()) {
+        INFO("theme=" << theme.key);
+        const std::string stylesheet = generate_theme_style(theme);
+        CHECK(stylesheet.find("QPushButton#tools_btn") != std::string::npos);
+        CHECK(stylesheet.find("QPushButton#settings_btn") != std::string::npos);
+        CHECK(stylesheet.find("QPushButton#about_btn") != std::string::npos);
+        CHECK(stylesheet.find("QPushButton#filters_btn") != std::string::npos);
+        CHECK(stylesheet.find("QPushButton#random_btn") != std::string::npos);
+        CHECK(stylesheet.find("QPushButton#favorite_btn") != std::string::npos);
+        CHECK(stylesheet.find("QPushButton#tools_btn::menu-indicator") !=
+              std::string::npos);
+        CHECK(stylesheet.find("QPushButton#filters_btn::menu-indicator") !=
+              std::string::npos);
+        CHECK(stylesheet.find("QComboBox#theme_selector") !=
+              std::string::npos);
+        CHECK(stylesheet.find("QComboBox#sort_selector") ==
+              std::string::npos);
+        const std::string toolbar_card =
+            "QFrame#toolbar_frame {\n"
             "    background-color: " + theme.bg_secondary + ";\n"
             "    border: 1px solid " + theme.border + ";\n"
-            "    border-radius: " + std::to_string(theme.border_radius) +
-            "px;";
-        CHECK(stylesheet.find(card_style) != std::string::npos);
+            "    border-radius: " +
+            std::to_string(theme.border_radius) + "px;\n";
+        CHECK(stylesheet.find(toolbar_card) != std::string::npos);
+        const std::string expected_selectors =
+            "QComboBox#theme_selector {\n"
+            "    background-color: " + theme.bg_tertiary + ";\n";
+        CHECK(stylesheet.find(expected_selectors) != std::string::npos);
+        CHECK(stylesheet.find("    background-color: transparent;\n"
+                              "    border: none;\n") != std::string::npos);
+        CHECK(stylesheet.find("    image: none;\n"
+                              "    width: 0px;\n"
+                              "    height: 0px;\n") != std::string::npos);
+    }
+}
+
+TEST_CASE("gallery control containers preserve the patterned background",
+          "[theme][gallery]") {
+    for (const Theme& theme : all_themes()) {
+        INFO("theme=" << theme.key);
+        const std::string stylesheet = generate_theme_style(theme);
+        CHECK(stylesheet.find(
+            "QWidget#gallery_panel,\n"
+            "QWidget#gallery_rail {\n"
+            "    background-color: transparent;\n"
+            "    border: none;\n") != std::string::npos);
+        CHECK(stylesheet.find(
+            "QSplitter#library_details_splitter,\n"
+            "QSplitter#library_details_splitter::handle {\n"
+            "    background-color: transparent;\n"
+            "    border: none;\n") != std::string::npos);
     }
 }
 
@@ -174,6 +256,23 @@ TEST_CASE("legacy and unknown theme keys resolve predictably", "[theme]") {
     CHECK(find_theme("Monokai Pro").key == "Gruvbox Dark");
     CHECK(find_theme("missing theme").key == "Dark Modern");
     CHECK(find_theme("Sakura Paper").key == "Sakura Paper");
+}
+
+TEST_CASE("numeric steppers use embedded theme arrow controls",
+          "[theme][spinbox]") {
+    for (const Theme& theme : all_themes()) {
+        INFO("theme=" << theme.key);
+        const std::string stylesheet = generate_theme_style(theme);
+        CHECK(stylesheet.find("QSpinBox::up-button") != std::string::npos);
+        CHECK(stylesheet.find("QSpinBox::down-button") != std::string::npos);
+        CHECK(stylesheet.find("<<SPIN_UP>>") != std::string::npos);
+        CHECK(stylesheet.find("<<SPIN_DOWN>>") != std::string::npos);
+        CHECK(stylesheet.find("    width: 18px;\n"
+                              "    background-color: transparent;\n"
+                              "    border: none;\n") != std::string::npos);
+        CHECK(stylesheet.find("    padding: 4px 22px 4px 8px;\n") !=
+              std::string::npos);
+    }
 }
 
 TEST_CASE("generated theme styles use readable semantic contrast", "[theme]") {

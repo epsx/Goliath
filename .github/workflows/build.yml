@@ -62,6 +62,7 @@ jobs:
           cp build-ci/goliath-qt.exe "$stage/"
           cp LICENSE THIRD-PARTY-NOTICES.md "$stage/"
           cp -R licenses "$stage/"
+          cp -R metadata "$stage/"
 
           windeployqt6.exe --release "$stage/goliath-qt.exe"
           cp /ucrt64/bin/SDL3.dll "$stage/"
@@ -104,9 +105,9 @@ jobs:
             'libstdc++ 16.2.0-4' 'glib2 2.90.0-1'
             'graphite2 1.3.15-1' 'harfbuzz 14.5.0-1'
             'libiconv 1.19-1' 'libjpeg-turbo 3.2.0-1'
-            'icu 78.3-4' 'gettext-runtime 1.0-1' 'md4c 0.6.0-1'
+            'icu 78.3-4' 'gettext-runtime 1.0-1' 'md4c 0.5.3-1'
             'pcre2 10.48-3' 'libpng 1.6.58-1'
-            'libwinpthread 14.0.0.r426.g4564ee4b5-1'
+            'libwinpthread 14.0.0.r420.g61d40c4c0-1'
             'zstd 1.5.7-2' 'zlib 1.3.2-2'
           )
           for expected in "${expected_packages[@]}"; do
@@ -256,6 +257,7 @@ jobs:
           cp build-ci/goliath-qt "$stage/"
           cp LICENSE THIRD-PARTY-NOTICES.md "$stage/"
           cp -R licenses "$stage/"
+          cp -R metadata "$stage/"
 
           (
             cd "$stage/licenses"

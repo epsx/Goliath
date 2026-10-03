@@ -326,7 +326,8 @@ std::optional<RedumpCueVerification> verify_redump_cue(
     // CUE may still describe byte-perfect Redump tracks, but only an exact CUE
     // size/SHA-1 match is allowed to receive complete Redump-set status.
     std::error_code ec;
-    const std::uintmax_t cue_size = fs::file_size(cue_path, ec);
+    const std::uintmax_t raw_cue_size = fs::file_size(cue_path, ec);
+    const std::uintmax_t cue_size = ec ? 0 : raw_cue_size;
     std::optional<std::string> cue_sha1;
     if (!ec) {
         const bool size_candidate = std::any_of(
@@ -353,12 +354,73 @@ std::optional<RedumpCueVerification> verify_redump_cue(
         }
     }
 
+    auto make_result = [&](std::size_t selected,
+                           RedumpCueMatch match)
+        -> std::optional<RedumpCueVerification> {
+        if (selected >= catalog.size())
+            return std::nullopt;
+
+        if (!cue_sha1.has_value())
+            cue_sha1 = sha1_file_hex(cue_path, cancel);
+        if (cancel && cancel->load(std::memory_order_acquire))
+            return std::nullopt;
+
+        RedumpCueVerification result;
+        result.catalog_index = selected;
+        result.match = match;
+
+        const RedumpGameEntry& selected_game = catalog[selected];
+        const RedumpRomEntry* expected_cue = redump_cue_row(selected_game);
+        FileHashVerification cue_detail;
+        cue_detail.file = cue_path.filename().string();
+        cue_detail.role = "CUE descriptor";
+        cue_detail.algorithm = "SHA-1";
+        cue_detail.size = cue_size;
+        cue_detail.actual_hash = cue_sha1;
+        if (expected_cue) {
+            cue_detail.catalog_file = expected_cue->name;
+            cue_detail.expected_size = expected_cue->size;
+            cue_detail.expected_hash = expected_cue->sha1;
+            cue_detail.matches =
+                cue_detail.actual_hash.has_value() &&
+                cue_detail.expected_hash.has_value() &&
+                cue_detail.size == expected_cue->size &&
+                to_lower(*cue_detail.actual_hash) ==
+                    to_lower(*cue_detail.expected_hash);
+        }
+        result.files.push_back(std::move(cue_detail));
+
+        const auto expected_tracks = redump_track_rows(selected_game);
+        for (std::size_t index = 0;
+             index < local_files->size() && index < expected_tracks.size();
+             ++index) {
+            FileHashVerification detail;
+            detail.file = (*local_files)[index].path.filename().string();
+            detail.catalog_file = expected_tracks[index]->name;
+            detail.role = "Track " +
+                (index + 1 < 10 ? std::string("0") : std::string()) +
+                std::to_string(index + 1);
+            detail.algorithm = "SHA-1";
+            detail.size = (*local_files)[index].size;
+            detail.expected_size = expected_tracks[index]->size;
+            detail.actual_hash = local_sha1[index];
+            detail.expected_hash = expected_tracks[index]->sha1;
+            detail.matches =
+                detail.expected_hash.has_value() &&
+                detail.size == expected_tracks[index]->size &&
+                to_lower(*detail.actual_hash) ==
+                    to_lower(*detail.expected_hash);
+            result.files.push_back(std::move(detail));
+        }
+        return result;
+    };
+
     if (!complete_matches.empty()) {
         const auto selected = select_catalog_match(
             cue_path, catalog, complete_matches, title_key);
         if (!selected.has_value())
             return std::nullopt;
-        return RedumpCueVerification{*selected, RedumpCueMatch::CompleteSet};
+        return make_result(*selected, RedumpCueMatch::CompleteSet);
     }
 
     // Identical track data can theoretically occur in more than one DAT row.
@@ -368,10 +430,10 @@ std::optional<RedumpCueVerification> verify_redump_cue(
         cue_path, catalog, matches, title_key);
     if (!selected.has_value())
         return std::nullopt;
-    return RedumpCueVerification{*selected, RedumpCueMatch::TracksOnly};
+    return make_result(*selected, RedumpCueMatch::TracksOnly);
 }
 
-std::optional<std::string> verify_mame_chd(
+std::optional<MameChdVerification> verify_mame_chd(
     const fs::path& chd_path,
     const MameChdHashCatalog& catalog) {
     const auto chd_sha1 = read_chd_combined_sha1(chd_path);
@@ -386,10 +448,10 @@ std::optional<std::string> verify_mame_chd(
         // A duplicated hash mapped to different software entries is ambiguous;
         // never award a verification badge in that case.
         if (matched_short.has_value() && *matched_short != short_name)
-            return std::nullopt;
+            return MameChdVerification{*chd_sha1, std::nullopt};
         matched_short = short_name;
     }
-    return matched_short;
+    return MameChdVerification{*chd_sha1, matched_short};
 }
 
 } // namespace goliath

@@ -33,6 +33,7 @@ private:
         const VideoSettingSpec* spec;
         QWidget* widget;
         int inherit_value;
+        bool numeric_choice = false;
     };
     std::map<std::string, Entry> m_entries;
 };

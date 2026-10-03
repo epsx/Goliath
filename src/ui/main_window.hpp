@@ -94,6 +94,7 @@ private slots:
     void launchSelected();
     void launchSelectedItem(QTreeWidgetItem* item, int column);
     void openGameSettings();
+    void showVerificationDetails();
     void manageSaveData();
     void benchmarkSelected();
     void exportSelectedAudio();
@@ -160,8 +161,7 @@ private:
     void updateScreenshotAction();
     void registerScreenshotHotkey();
     bool applyCaptureHotkeys(const QKeySequence& gif,
-                             const QKeySequence& png, QString* error,
-                             bool configureWayland = false);
+                             const QKeySequence& png, QString* error);
     void updateBareCaptureHotkeys();
     void captureGameScreenshotAfter(int delayMs);
     void recordGameGif();
@@ -242,8 +242,8 @@ private:
 
     TitleBar* m_titleBar = nullptr;
     QComboBox* m_themeCombo = nullptr;
-    QComboBox* m_sortCombo = nullptr;
     QPushButton* m_filtersButton = nullptr;
+    QActionGroup* m_sortGroup = nullptr;
     QActionGroup* m_ratingFilterGroup = nullptr;
     QActionGroup* m_playtimeFilterGroup = nullptr;
     QAction* m_clearFiltersAction = nullptr;
@@ -276,9 +276,12 @@ private:
     int m_galleryIndex = 0;
     QLabel* m_detailsTitleLabel = nullptr;
     QPushButton* m_favoriteButton = nullptr;
+    QPushButton* m_gameSettingsButton = nullptr;
     std::array<QPushButton*, 5> m_ratingButtons{};
     QLabel* m_variantLabel = nullptr;
     std::map<std::string, QLabel*> m_infoLabels;
+    std::map<std::string, QLabel*> m_infoFieldNameLabels;
+    std::map<std::string, QWidget*> m_infoFieldLabels;
     QTextEdit* m_historyText = nullptr;
     QString m_detailsSelectionKey;
     RescanWorker* m_rescanWorker = nullptr;

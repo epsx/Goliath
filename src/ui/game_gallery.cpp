@@ -4,10 +4,14 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
+#include <QFontMetrics>
+#include <QIcon>
 #include <QImage>
 #include <QImageReader>
 #include <QLabel>
 #include <QMovie>
+#include <QPainter>
+#include <QPalette>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QStyle>
@@ -16,6 +20,42 @@
 #include <vector>
 
 namespace goliath {
+
+namespace {
+
+QPixmap missingSnapshotPlaceholder(const QLabel* label) {
+    if (!label || label->size().isEmpty()) return {};
+
+    QPixmap placeholder(label->size());
+    placeholder.fill(Qt::transparent);
+
+    const QIcon icon(QStringLiteral(":/icons/goliath-qt.ico"));
+    const QPixmap logo = icon.pixmap(QSize(160, 160));
+
+    QPainter painter(&placeholder);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+
+    const int spacing = 18;
+    QFont textFont = label->font();
+    textFont.setPointSizeF(textFont.pointSizeF() + 1.0);
+    painter.setFont(textFont);
+    painter.setPen(label->palette().color(QPalette::WindowText));
+
+    const QFontMetrics metrics(textFont);
+    const int contentHeight = logo.height() + spacing + metrics.height();
+    const int logoY = (placeholder.height() - contentHeight) / 2;
+    const int logoX = (placeholder.width() - logo.width()) / 2;
+    painter.drawPixmap(logoX, logoY, logo);
+    painter.drawText(
+        QRect(0, logoY + logo.height() + spacing,
+              placeholder.width(), metrics.height()),
+        Qt::AlignHCenter | Qt::AlignVCenter,
+        QStringLiteral("No snapshot available"));
+    return placeholder;
+}
+
+} // namespace
 
 void MainWindow::stopGalleryMovie() {
     if (!m_galleryMovie) return;
@@ -102,9 +142,11 @@ void MainWindow::showGalleryItem() {
         QString("%1/%2").arg(count ? m_galleryIndex + 1 : 0).arg(count));
 
     if (!gifTab) {
-        m_snapshotLabel->setPixmap(m_gallerySnapshot);
-        m_snapshotLabel->setText(m_gallerySnapshot.isNull()
-                                     ? "No snapshot available" : "");
+        m_snapshotLabel->setPixmap(
+            m_gallerySnapshot.isNull()
+                ? missingSnapshotPlaceholder(m_snapshotLabel)
+                : m_gallerySnapshot);
+        m_snapshotLabel->setText("");
     } else if (count == 0) {
         m_snapshotLabel->setPixmap(QPixmap());
         m_snapshotLabel->setText("No GIF recordings for this game");

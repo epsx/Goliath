@@ -28,9 +28,9 @@ separate opt-in build described in section 4.
 
 Before running the frontend with real games, prepare a runtime directory with
 JGRF and Geolith, then add your own lawfully obtained BIOS files, ROMs, Neo Geo
-CD images, and external metadata catalogs as described below. None of that
-user-supplied content is distributed with Goliath. Goliath creates
-`goliath.ini` next to its executable on first start.
+CD images, and any supplemental metadata described below. Goliath distributes
+only its openly licensed baseline catalogs; user-supplied content is not
+included. Goliath creates `goliath.ini` next to its executable on first start.
 
 ---
 
@@ -293,17 +293,31 @@ running.
 
 ---
 
-## 6. Install the external metadata
+## 6. Install baseline and supplemental metadata
 
 The scanner reads metadata from the configured **Settings -> Path -> Metadata
 Folder**. The default is `metadata/` beside the executable.
 
-The complete input set used by the current scanner is:
+The repository and release artifacts include this licensed baseline:
 
 ```text
 metadata/
+├── geolith.xml
 ├── neogeo.xml
 ├── neocd.xml
+├── softwarelist.dtd
+└── README.md
+```
+
+These files provide Geolith `.neo` CRC-32 verification, MVS/AES software
+metadata, and Neo Geo CD MAME CHD SHA-1 verification. Their upstream source,
+snapshot identifiers, exact SHA-256 values, and licenses are recorded in
+`metadata/README.md` and `THIRD-PARTY-NOTICES.md`.
+
+The scanner also accepts optional user-supplied catalogs in the same directory:
+
+```text
+metadata/
 ├── <Redump Neo Geo CD catalog>.dat
 ├── catver.ini
 ├── catlist.ini
@@ -313,10 +327,8 @@ metadata/
 └── history.xml
 ```
 
-Their roles are:
+Their additional roles are:
 
-- `neogeo.xml` identifies MVS/AES software and parent/clone relationships;
-- `neocd.xml` supplies Neo Geo CD metadata and MAME CHD disk SHA-1 values;
 - a valid Redump Neo Geo CD `.dat` supplies CUE track sizes and SHA-1 values;
 - the INI files add category, genre, player-count, and series data;
 - `history.xml` supplies the history shown in the details panel.
@@ -325,10 +337,9 @@ The scanner examines `.dat` files and accepts a catalog only when its XML
 header identifies the expected Redump Neo Geo CD data. The filename may include
 a catalog version and date.
 
-These catalogs are external runtime input and are intentionally ignored by
-Git. They come from multiple projects and must not be redistributed until each
-catalog's license and attribution requirements have been reviewed. Keeping
-`metadata/` untracked does not prevent Goliath from reading it.
+Supplemental catalogs come from independent projects and are not distributed
+by Goliath. Add only files you are entitled to use; placing them beside the
+baseline files does not change their licenses or make them part of Goliath.
 
 The scanner writes, rather than reads from the repository:
 
@@ -919,13 +930,8 @@ On a Wayland session with the GNOME desktop portal and PipeWire, Goliath uses
 ScreenCast to record the window selected in the desktop permission dialog.
 The picker appears each time recording starts, including from **Tools**. The
 GIF shortcut is registered through the GlobalShortcuts portal when the desktop
-supports it. The active desktop shortcut shown in **Settings -> Hotkeys** is
-authoritative. Choose **Open Desktop Shortcut Settings...** to change an
-existing binding. Goliath permits editing its initial preference only while no
-desktop shortcut is assigned. It uses portal v2 `ConfigureShortcuts` when
-available and opens GNOME's Applications settings when the active v1 backend
-does not implement that method.
-Ctrl+Alt+function keys may belong to the
+supports it; choose a free key in **Settings -> Hotkeys** and approve the
+shortcut in the desktop dialog. Ctrl+Alt+function keys may belong to the
 system. The PNG action remains Windows-only. Keep the game window selected
 throughout the recording; this feature does not depend on the JGRF renderer.
 
@@ -1079,14 +1085,15 @@ A clean deployment normally needs:
 - the configured JGRF executable and its runtime files;
 - `cores/geolith/geolith.dll` and its actual runtime dependencies;
 - JGRF `shaders/*.spv` files when Vulkan is enabled;
+- the bundled `metadata/` directory;
 - `LICENSE`, `THIRD-PARTY-NOTICES.md`, and the complete `licenses/` directory.
 
 ROMs, disc images, BIOS/firmware files, encryption keys, game artwork, and
-external metadata catalogs are not release payload files. Users add their own
-content after obtaining the software package.
+supplemental metadata catalogs are not release payload files. Users add their
+own content after obtaining the software package.
 
-The Goliath application target statically links the MinGW libgcc, libstdc++,
-and winpthread runtimes. Qt and SDL3 remain dynamic dependencies.
+The official MinGW build dynamically links libgcc, libstdc++, winpthread, Qt,
+and SDL3. Keep their matching DLLs and license material in Windows packages.
 
 Do not copy a CMake `build/` directory to another machine or source location.
 Its cache contains absolute paths and is not a runtime package.
@@ -1377,7 +1384,8 @@ Before calling a release checkpoint complete, confirm:
   Random, Benchmark, or a later normal launch;
 - Settings -> Info reports the installed JGRF/Geolith capabilities correctly;
 - the deploy package works without MSYS2;
-- no build directory, patch, backup, generated database, or external metadata
-  bundle is accidentally included in the source repository;
+- no build directory, patch, backup, generated database, or unreviewed
+  supplemental metadata bundle is accidentally included in the source
+  repository;
 - the final repository inventory contains only intentional source,
   documentation, assets, tests, and vendored dependencies.

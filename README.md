@@ -21,10 +21,11 @@ Jolly Good Reference Frontend (JGRF) and the Geolith core.
 
 Goliath is only a frontend. Emulation is provided by JGRF, JG, and Geolith.
 
-The project does **not** contain or provide download links for ROMs, disc
-images, BIOS or firmware files, encryption keys, proprietary game artwork, or
-external metadata catalogs. Users must supply their own legally obtained
-content.
+The project includes a small set of openly licensed reference catalogs under
+`metadata/`; their exact provenance and licenses are documented there. It does
+**not** contain or provide download links for ROMs, disc images, BIOS or
+firmware files, encryption keys, proprietary game artwork, or supplemental
+third-party catalogs. Users must supply their own legally obtained content.
 
 Windows with MSYS2 UCRT64 is the primary development and validation platform.
 Linux support is maintained where practical.
@@ -35,7 +36,7 @@ Linux support is maintained where practical.
 
 | Neo Geo Classic library view | Input configuration | About Goliath |
 | --- | --- | --- |
-| [![Goliath Neo Geo Classic library view](Screenshots/goliath-main-no-info.png)](Screenshots/goliath-main-no-info.png) | [![Goliath input configuration](Screenshots/goliath-input-settings.png)](Screenshots/goliath-input-settings.png) | [![About Goliath](Screenshots/goliath-about.png)](Screenshots/goliath-about.png) |
+| [![Goliath Neo Geo Classic library view](Screenshots/goliath-classic-view.png)](Screenshots/goliath-classic-view.png) | [![Goliath input configuration](Screenshots/goliath-input-settings.png)](Screenshots/goliath-input-settings.png) | [![About Goliath](Screenshots/goliath-about.png)](Screenshots/goliath-about.png) |
 
 ## Main features
 
@@ -43,7 +44,8 @@ Linux support is maintained where practical.
   images.
 - Parent and variant grouping for cartridge games.
 - Recursive Neo Geo CD discovery.
-- Optional local verification against MAME and Redump metadata.
+- Local `.neo`/CHD verification against the bundled Geolith and MAME reference
+  metadata, plus optional CUE verification against user-supplied Redump data.
 - Optional `command.dat` companion window for matching MAME game IDs. It is
   tied to the launched JGRF session and requires no JGRF modification.
 - Search, persistent exact-media Favorites and 1–5-star ratings, name/year/
@@ -71,7 +73,8 @@ Linux support is maintained where practical.
 - a compatible JGRF installation;
 - the Geolith core;
 - your own legally obtained BIOS and game media;
-- optional local metadata if you want identification and verification badges.
+- optional supplemental metadata if you want Redump verification, categories,
+  history, player counts, or command lists.
 
 JGRF and Geolith are runtime components. Goliath does not build, download, or
 update them.
@@ -135,8 +138,10 @@ Optional verification badges include:
 - `✓ MAME set` — the CHD internal combined SHA-1 matches;
 - metadata-only or unknown when content cannot be verified.
 
-External metadata is user-supplied runtime input and is not included in the
-Goliath repository or release packages.
+Goliath includes `geolith.xml`, `neogeo.xml`, `neocd.xml`, and
+`softwarelist.dtd` as its licensed baseline metadata. Redump DAT files,
+`command.dat`, history databases, artwork, and other supplemental catalogs are
+user-supplied and are not included.
 
 ## Everyday use
 
@@ -188,10 +193,7 @@ Use **Tools** or a game's context menu for:
   `recordings/<media>/<date>/`. Choose 5, 7, or 10 seconds in Settings >
   Hotkeys. On X11, Tools starts after a three-second return-to-game delay.
   On Wayland, the desktop asks which game window to capture for each recording;
-  a GIF shortcut requires desktop approval and existing bindings are changed
-  through **Open Desktop Shortcut Settings...**. The portal-reported active
-  shortcut is authoritative; Goliath's preference is used only before the
-  first approval. PNG capture remains Windows-only;
+  a GIF shortcut requires desktop approval. PNG capture remains Windows-only;
 - diagnostics and log controls;
 - opening relevant media or configuration folders.
 
@@ -344,7 +346,7 @@ stage=dist/Goliath
 mkdir -p "$stage"
 
 cp build/goliath-qt.exe LICENSE THIRD-PARTY-NOTICES.md "$stage/"
-cp -a licenses "$stage/"
+cp -a licenses metadata "$stage/"
 
 windeployqt6.exe --release --dir "$stage" "$stage/goliath-qt.exe"
 cp /ucrt64/bin/SDL3.dll "$stage/"
@@ -369,7 +371,7 @@ stage=dist/Goliath
 mkdir -p "$stage"
 
 cp build/goliath-qt LICENSE THIRD-PARTY-NOTICES.md "$stage/"
-cp -a licenses "$stage/"
+cp -a licenses metadata "$stage/"
 
 ldd "$stage/goliath-qt"
 ```
@@ -390,9 +392,10 @@ every top-level DLL owned by an installed package. The Linux artifact contains
 the Goliath binary, license materials, and an `ldd` dependency report; it is a
 build artifact, not an AppImage or distribution-independent package.
 
-These CI artifacts intentionally exclude JGRF, Geolith, BIOS, game media,
-metadata, configuration, and user data. A full release must add and validate
-the matching JGRF/Geolith runtime separately.
+These CI artifacts include the licensed baseline `metadata/` directory. They
+intentionally exclude JGRF, Geolith, BIOS, game media, supplemental metadata,
+configuration, and user data. A full release must add and validate the matching
+JGRF/Geolith runtime separately.
 
 ## Tests
 
@@ -438,7 +441,7 @@ Goliath/
 ├── bios/                    user-supplied
 ├── roms/                    user-supplied
 ├── neocd/                   user-supplied
-├── metadata/                optional user-supplied catalogs
+├── metadata/                bundled baseline plus optional user catalogs
 ├── config/                  generated configuration and profiles
 ├── database/                generated library and hash cache
 ├── data/                    JGRF data and Goliath backups/exports
@@ -458,6 +461,13 @@ Detailed Windows deployment instructions are in
 
 - Windows is the primary tested platform; Linux support is practical rather
   than release-certified.
+- On tested Windows 10 and Windows 11 systems, resizing a custom frameless
+  Goliath window from its left edge or left corners can briefly expose or
+  displace pixels at the opposite edge. The same Qt/Windows artifact is present
+  in older Goliath frameless releases; it does not affect emulation, saved data,
+  or the final window geometry. Native DWM-shadow removal, manual/native edge
+  hit-testing, and `WS_EX_COMPOSITED` did not correct it, so those experimental
+  workarounds are not enabled in normal builds.
 - Neo Geo CD CHD startup can take several seconds in both Goliath and direct
   JGRF use.
 - Stock JGRF keys live save/state files by a bounded media basename. Different

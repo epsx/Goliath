@@ -30,6 +30,15 @@ struct SoftwareEntry {
     std::optional<std::string> serial;
     std::optional<std::string> release;
     std::optional<std::string> alt_title;
+    std::optional<std::string> part_name;
+    std::optional<std::string> interface;
+    std::optional<std::uintmax_t> maincpu_width;
+    std::optional<std::string> maincpu_endianness;
+    std::optional<std::uintmax_t> maincpu_size;
+    std::optional<std::uintmax_t> fixed_size;
+    std::optional<std::uintmax_t> audio_cpu_size;
+    std::optional<std::uintmax_t> audio_data_size;
+    std::optional<std::uintmax_t> graphics_size;
     std::optional<std::string> release_types;
     std::optional<std::string> compatibility;
     std::optional<std::string> disk_name;

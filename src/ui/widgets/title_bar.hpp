@@ -71,6 +71,13 @@ void setupFramelessDialog(QDialog* dialog, const QString& title,
                           bool resizable = true, bool showMinMax = true,
                           bool showTitleBar = true);
 
+// Requests a native DWM shadow for a frameless Windows top-level without
+// making its Qt client surface translucent. Other platforms remain
+// compositor-owned until they have been validated independently.
+bool installFramelessWindowShadow(QWidget* window,
+                                  const QString& surfaceObjectName);
+int framelessWindowShadowMargin(const QWidget* window);
+
 // Apply the generated palette to both a combo's item view and the separate
 // native popup container created by Qt on Windows. The descendant overload is
 // intended for dialogs that own several QComboBox controls.

@@ -41,7 +41,12 @@
 /database/
 /icons/
 /jollygood/
-/metadata/
+/metadata/*
+!/metadata/README.md
+!/metadata/geolith.xml
+!/metadata/neocd.xml
+!/metadata/neogeo.xml
+!/metadata/softwarelist.dtd
 /neocd/
 /roms/
 /snaps/

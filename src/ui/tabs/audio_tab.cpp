@@ -93,7 +93,7 @@ void AudioTab::setupUi() {
     m_volumeSpin = new QSpinBox();
     m_volumeSpin->setRange(0, 100);
     m_volumeSpin->setSuffix(" %");
-    m_volumeSpin->setFixedWidth(80);
+    m_volumeSpin->setFixedWidth(96);
     volumeLayout->addWidget(m_volumeSpin);
 
     connect(m_volumeSlider, &QSlider::valueChanged, m_volumeSpin, &QSpinBox::setValue);

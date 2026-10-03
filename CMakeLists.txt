@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
-# Development versioning follows Patch NN[A-Z] -> 0.NN.letter-index.
-project(goliath-qt VERSION 0.32.25 LANGUAGES CXX C)
+# Public version shown by About and used by release packaging.
+project(goliath-qt VERSION 0.40.0 LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -69,6 +69,7 @@ add_library(goliath-core STATIC
     src/game/game_playtime.cpp
     src/game/game_profile.cpp
     src/game/game_profile_runtime.cpp
+    src/game/game_profile_summary.cpp
     src/game/save_data_manager.cpp
     src/game/video_settings.cpp
     src/common/filesystem_safety.cpp
@@ -79,6 +80,7 @@ add_library(goliath-core STATIC
     src/common/sha1.cpp
     src/game/sha1_cache.cpp
     src/game/filesystem_io.cpp
+    src/game/geolith_verification.cpp
     src/game/neogeo_metadata.cpp
     src/game/neocd_verification.cpp
     src/audio/audio_devices.cpp
@@ -140,6 +142,7 @@ add_executable(goliath-qt
     src/ui/main_window.cpp
     src/ui/game_screenshot.cpp
     src/ui/game_gallery.cpp
+    src/ui/library_item_delegate.cpp
     src/ui/main_window_ui.cpp
     src/ui/main_window_library.cpp
     src/ui/widgets/command_notation_view.cpp
@@ -175,7 +178,7 @@ target_link_libraries(goliath-qt PRIVATE
 )
 if(WIN32)
     target_sources(goliath-qt PRIVATE src/ui/windows_desktop_capture.cpp)
-    target_link_libraries(goliath-qt PRIVATE user32 d3d11 dxgi)
+    target_link_libraries(goliath-qt PRIVATE user32 d3d11 dxgi dwmapi)
 endif()
 if(UNIX AND NOT APPLE)
     option(GOLIATH_REQUIRE_WAYLAND_CAPTURE
@@ -221,7 +224,10 @@ add_custom_command(TARGET goliath-qt POST_BUILD
     COMMAND "${CMAKE_COMMAND}" -E copy_directory
         "${CMAKE_CURRENT_SOURCE_DIR}/licenses"
         "$<TARGET_FILE_DIR:goliath-qt>/licenses"
-    COMMENT "Copying Goliath and third-party license materials"
+    COMMAND "${CMAKE_COMMAND}" -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/metadata"
+        "$<TARGET_FILE_DIR:goliath-qt>/metadata"
+    COMMENT "Copying Goliath license and baseline metadata materials"
 )
 
 goliath_enable_warnings(goliath-qt)
@@ -239,7 +245,13 @@ if(WIN32)
     )
 endif()
 
-if(MINGW)
+# MSYS2's Qt libraries already use the dynamic MinGW runtimes. Keep Goliath on
+# the same runtime instance by default; embedding another complete winpthread
+# runtime can deadlock Qt worker threads after toolchain updates.
+option(GOLIATH_STATIC_MINGW_RUNTIME
+    "Statically link the MinGW GCC, C++ and winpthread runtimes" OFF)
+
+if(MINGW AND GOLIATH_STATIC_MINGW_RUNTIME)
     # Work from a build-local copy so the installed toolchain archive remains
     # untouched while its unrelated DLL VERSION resource is excluded.
     execute_process(
@@ -336,7 +348,7 @@ if(BUILD_TESTS)
 
     goliath_enable_warnings(goliath-qt-tests)
 
-    if(MINGW)
+    if(MINGW AND GOLIATH_STATIC_MINGW_RUNTIME)
         # Match the GUI target using the same filtered static archive.
         target_link_options(goliath-qt-tests PRIVATE
             -static-libgcc -static-libstdc++
@@ -344,7 +356,9 @@ if(BUILD_TESTS)
             "${GOLIATH_FILTERED_WINPTHREAD_ARCHIVE}"
             -Wl,--no-whole-archive
         )
+    endif()
 
+    if(MINGW)
         # Place -mconsole after Qt so it wins if Qt's import lib implies -mwindows.
         target_link_libraries(goliath-qt-tests PRIVATE -mconsole)
     endif()

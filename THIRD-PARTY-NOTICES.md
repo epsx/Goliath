@@ -25,6 +25,23 @@ Tenacious Software LLC, Martin Raiber, and the contributors identified in its
 source. TinyXML-2's original code is by Lee Thomason. Catch2's amalgamated
 header carries the notices of Two Blue Cubes Ltd. and the Catch2 authors.
 
+## Bundled reference metadata
+
+The repository and frontend artifacts include four non-executable reference
+files under `metadata/`. They contain catalog identifiers, checksums, and an XML
+schema; they do not contain game ROM or disc-image data.
+
+| File | Provenance | License material |
+| --- | --- | --- |
+| `metadata/geolith.xml` | Generated from Geolith `rename-neo.sh`, tag `0.4.2`, commit `d3104014927b5b72fc48e93c3d7e033754a61956` | Copyright 2024 orbea and the complete redistribution notice are embedded in the XML; see also `metadata/README.md` |
+| `metadata/neogeo.xml` | MAME `hash/neogeo.xml` software list | CC0-1.0; declaration embedded in the XML and full text retained as `licenses/upstream/jgrf/CC0-1.0.txt` |
+| `metadata/neocd.xml` | MAME `hash/neocd.xml` software list | CC0-1.0; declaration embedded in the XML and full text retained as `licenses/upstream/jgrf/CC0-1.0.txt` |
+| `metadata/softwarelist.dtd` | MAME `hash/softwarelist.dtd` schema | GPL-2.0-or-later; full text retained as `licenses/msys2/qt6-base/GPL-2.0-or-later.txt` |
+
+`metadata/README.md` records the exact SHA-256 of each bundled snapshot and the
+authoritative upstream URLs. MAME is a registered trademark of Gregory Ember;
+its name is used here only to identify file provenance and compatibility.
+
 ## Emulation runtime distributed beside Goliath
 
 These are separate upstream works. Goliath communicates with them through
@@ -75,9 +92,9 @@ project author's direction. It is not derived from the Jolly Good icon.
 
 ## Windows runtime packages
 
-The Windows frontend package uses the following audited MSYS2 UCRT64 runtime
-packages. CI checks these exact package versions before staging each Windows
-archive.
+The Windows frontend audited from GitHub Actions run `35733913007` uses the
+following MSYS2 UCRT64 runtime packages. CI checks these package versions
+before staging subsequent Windows archives.
 The staged Windows archive contains the installed license directories of its
 runtime DLL packages under `licenses/msys2/`; alternative license texts are
 preserved where an upstream package supplies more than one option.
@@ -100,10 +117,10 @@ preserved where an upstream package supplies more than one option.
 | libjpeg-turbo | 3.2.0-1 | BSD-style terms with the complete IJG and other upstream notices retained |
 | ICU | 78.3-4 | ICU license |
 | gettext runtime | 1.0-1 | LGPL-2.1-or-later for the runtime library; all package notices are retained |
-| md4c | 0.6.0-1 | MIT |
+| md4c | 0.5.3-1 | MIT |
 | PCRE2 | 10.48-3 | BSD-3-Clause with the package's binary-like-packages exception where applicable |
 | libpng | 1.6.58-1 | libpng license |
-| libwinpthread | 14.0.0.r426.g4564ee4b5-1 | MIT and BSD-3-Clause-Clear |
+| libwinpthread | 14.0.0.r420.g61d40c4c0-1 | MIT and BSD-3-Clause-Clear |
 | zstd | 1.5.7-2 | BSD-3-Clause selected from its BSD/GPL dual license |
 | zlib | 1.3.2-2 | Zlib |
 
@@ -117,10 +134,10 @@ package does not install an SPDX document. The corresponding Qt Base upstream
 source, MSYS2 recipe, and patches are available in
 `mingw-w64-qt6-base-6.11.2-2.src.tar.zst` alongside the release.
 
-Goliath's Windows build statically links eligible GCC runtime and winpthreads
-code under their runtime-library exceptions and license terms. JGRF and
-Geolith have their own runtime dependency relationships; the notices above
-cover the files redistributed with the audited portable package.
+Goliath's official Windows build dynamically links the staged GCC runtime,
+libstdc++, winpthreads, Qt, and SDL DLLs. JGRF and Geolith have their own
+runtime dependency relationships; the notices above cover the files
+redistributed with the audited portable package.
 
 The Windows Universal C Runtime, Windows system DLLs, the Vulkan loader
 provided by the operating system or graphics driver, and other system
@@ -129,10 +146,11 @@ components are not redistributed as Goliath project material.
 ## Content not distributed
 
 Goliath does not include game ROMs, optical-disc images, BIOS or firmware
-files, encryption keys, proprietary game artwork, or external metadata
-catalogs. It does not provide download links for that content. Users are
-responsible for supplying and using content for which they have the necessary
-rights.
+files, encryption keys, proprietary game artwork, or unreviewed supplemental
+metadata catalogs. The four baseline reference files documented above are the
+only bundled metadata. Goliath does not provide download links for excluded
+content. Users are responsible for supplying and using content for which they
+have the necessary rights.
 
 Product and project names are used only to identify compatibility or upstream
 components. Goliath is an independent project and is not affiliated with,
