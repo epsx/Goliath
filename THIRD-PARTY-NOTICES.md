@@ -112,15 +112,15 @@ preserved where an upstream package supplies more than one option.
 | GCC runtime libraries (libgcc, libstdc++) | 16.2.0-4 | GPL-3.0-or-later WITH GCC-exception-3.1 and applicable LGPL terms |
 | GLib | 2.90.0-1 | LGPL-2.1-or-later |
 | Graphite2 | 1.3.15-1 | LGPL-2.1-or-later |
-| HarfBuzz | 14.5.0-1 | MIT |
+| HarfBuzz | 14.5.1-1 | MIT |
 | GNU libiconv/libcharset | 1.19-1 | LGPL-2.1-or-later; package documentation retains its separate terms |
 | libjpeg-turbo | 3.2.0-1 | BSD-style terms with the complete IJG and other upstream notices retained |
 | ICU | 78.3-4 | ICU license |
 | gettext runtime | 1.0-1 | LGPL-2.1-or-later for the runtime library; all package notices are retained |
-| md4c | 0.5.3-1 | MIT |
-| PCRE2 | 10.48-3 | BSD-3-Clause with the package's binary-like-packages exception where applicable |
-| libpng | 1.6.58-1 | libpng license |
-| libwinpthread | 14.0.0.r420.g61d40c4c0-1 | MIT and BSD-3-Clause-Clear |
+| md4c | 0.6.0-1 | MIT |
+| PCRE2 | 10.49-1 | BSD-3-Clause with the package's binary-like-packages exception where applicable |
+| libpng | 1.6.59-1 | libpng license |
+| libwinpthread | 14.0.0.r426.g4564ee4b5-1 | MIT and BSD-3-Clause-Clear |
 | zstd | 1.5.7-2 | BSD-3-Clause selected from its BSD/GPL dual license |
 | zlib | 1.3.2-2 | Zlib |
 
