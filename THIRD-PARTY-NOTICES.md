@@ -102,7 +102,7 @@ preserved where an upstream package supplies more than one option.
 | Component | Audited package version | Selected/disclosed license |
 | --- | --- | --- |
 | Qt Base | 6.11.2-2 | LGPL-3.0-only for the redistributed Qt DLLs and plugins; Qt's bundled third-party material retains its own license terms |
-| SDL3 | 3.4.16-1 | Zlib |
+| SDL3 | 3.4.18-1 | Zlib |
 | libb2 | 0.98.1-3 | CC0-1.0 |
 | Brotli | 1.2.0-1 | MIT |
 | bzip2 | 1.0.8-4 | bzip2 license |
