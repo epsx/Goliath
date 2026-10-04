@@ -169,6 +169,8 @@ Config default_config() {
         {"window_width", "1200"},
         {"window_height", "800"},
         {"last_rom", ""},
+        {"last_rom_neogeo", ""},
+        {"last_rom_neogeocd", ""},
         {"library_system", "neogeo"},
     };
     return cfg;

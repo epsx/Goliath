@@ -805,10 +805,7 @@ void MainWindow::closeEvent(QCloseEvent* event) {
                  std::to_string(std::max(800, width() - shadowMargin * 2)));
     m_config.set("UI", "window_height",
                  std::to_string(std::max(600, height() - shadowMargin * 2)));
-    QString lastRom = selectedRomFile();
-    if (!lastRom.isEmpty()) {
-        m_config.set("UI", "last_rom", lastRom.toStdString());
-    }
+    rememberCurrentLibrarySelection();
     save_config(m_config);
 
     if (!m_trackedGameProcesses.empty()) {

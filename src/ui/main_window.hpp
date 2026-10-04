@@ -181,6 +181,7 @@ private:
     void showGalleryItem();
     QString selectedRomFile() const;   // bare filename of the currently selected rom, used for persistence
     QString selectedRomPath() const;   // full path of the currently selected rom, used for "Open ROM folder"
+    void rememberCurrentLibrarySelection();
     void restoreSelection(const QString& preferredRom = {});
     void launchItem(QTreeWidgetItem* item);
     void revealInExplorer(const QString& path);

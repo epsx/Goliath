@@ -697,6 +697,7 @@ void MainWindow::setLibrarySystem(const std::string& system) {
     if (system != "neogeo" && system != "neogeocd") return;
     if (!librarySystemChangeRequired(m_librarySystem, system)) return;
 
+    rememberCurrentLibrarySelection();
     m_librarySystem = system;
     if (m_mvsAesButton) m_mvsAesButton->setChecked(system == "neogeo");
     if (m_cdButton) m_cdButton->setChecked(system == "neogeocd");
@@ -2046,6 +2047,17 @@ QString MainWindow::selectedRomFile() const {
     return media.has_value() ? QString::fromStdString(*media) : QString();
 }
 
+void MainWindow::rememberCurrentLibrarySelection() {
+    const QString lastRom = selectedRomFile();
+    if (lastRom.isEmpty()) return;
+
+    const std::string value = lastRom.toStdString();
+    m_config.set(
+        "UI", std::string(librarySelectionConfigKey(m_librarySystem)), value);
+    // Keep the legacy key current for compatibility with older builds.
+    m_config.set("UI", "last_rom", value);
+}
+
 QString MainWindow::selectedRomPath() const {
     const QList<QTreeWidgetItem*> items = m_tree->selectedItems();
     if (items.isEmpty()) return {};
@@ -2280,10 +2292,12 @@ void MainWindow::updateStatus() {
 }
 
 void MainWindow::restoreSelection(const QString& preferredRom) {
-    std::string targetRom = preferredRom.toStdString();
-    if (targetRom.empty()) {
-        targetRom = m_config.get("UI", "last_rom", "");
-    }
+    const std::string selectionKey(
+        librarySelectionConfigKey(m_librarySystem));
+    const std::string targetRom = libraryRememberedSelection(
+        preferredRom.toStdString(),
+        m_config.get("UI", selectionKey, ""),
+        m_config.get("UI", "last_rom", ""));
 
     if (!targetRom.empty() && !m_games.empty()) {
         for (int i = 0; i < m_tree->topLevelItemCount(); ++i) {

@@ -24,6 +24,8 @@ using goliath::libraryPlaytimeFilterKey;
 using goliath::libraryRatingFilterFromKey;
 using goliath::libraryRatingFilterKey;
 using goliath::librarySelectionAllowed;
+using goliath::librarySelectionConfigKey;
+using goliath::libraryRememberedSelection;
 using goliath::librarySystemChangeRequired;
 using goliath::libraryVariantAllowed;
 using goliath::libraryVerificationPresentation;
@@ -85,6 +87,24 @@ TEST_CASE("reselecting the active library system is a no-op",
     CHECK_FALSE(librarySystemChangeRequired("neogeocd", "neogeocd"));
     CHECK(librarySystemChangeRequired("neogeo", "neogeocd"));
     CHECK(librarySystemChangeRequired("neogeocd", "neogeo"));
+}
+
+TEST_CASE("library selections are remembered separately for each system",
+          "[library-view][system]") {
+    CHECK(librarySelectionConfigKey("neogeo") == "last_rom_neogeo");
+    CHECK(librarySelectionConfigKey("neogeocd") == "last_rom_neogeocd");
+    CHECK(librarySelectionConfigKey("unknown") == "last_rom");
+}
+
+TEST_CASE("system selection memory keeps legacy configuration compatible",
+          "[library-view][system]") {
+    CHECK(libraryRememberedSelection("preferred.neo", "remembered.neo",
+                                    "legacy.neo") == "preferred.neo");
+    CHECK(libraryRememberedSelection("", "remembered.neo", "legacy.neo") ==
+          "remembered.neo");
+    CHECK(libraryRememberedSelection("", "", "legacy.neo") ==
+          "legacy.neo");
+    CHECK(libraryRememberedSelection("", "", "").empty());
 }
 
 TEST_CASE("hidden library selections choose a visible replacement",

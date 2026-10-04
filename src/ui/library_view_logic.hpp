@@ -250,6 +250,22 @@ constexpr bool librarySystemChangeRequired(
     return currentSystem != requestedSystem;
 }
 
+constexpr std::string_view librarySelectionConfigKey(
+        std::string_view system) noexcept {
+    if (system == "neogeo") return "last_rom_neogeo";
+    if (system == "neogeocd") return "last_rom_neogeocd";
+    return "last_rom";
+}
+
+inline std::string libraryRememberedSelection(
+        std::string_view preferredRom,
+        std::string_view systemRom,
+        std::string_view legacyRom) {
+    if (!preferredRom.empty()) return std::string(preferredRom);
+    if (!systemRom.empty()) return std::string(systemRom);
+    return std::string(legacyRom);
+}
+
 constexpr bool librarySelectionAllowed(bool effectivelyVisible,
                                        bool filteredView,
                                        bool exactMatch) noexcept {
