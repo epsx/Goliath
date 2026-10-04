@@ -257,7 +257,8 @@ QPushButton#launch_btn:disabled {
     color: @text_secondary@;
 }
 
-QTreeWidget {
+QTreeWidget,
+QListWidget {
     background-color: @bg_secondary@;
     border: 1px solid @border@;
     border-radius: @border_radius@px;
@@ -266,15 +267,22 @@ QTreeWidget {
     alternate-background-color: @bg_tertiary@;
 }
 
-QTreeWidget::item {
+QTreeWidget::item,
+QListWidget::item {
     padding: 6px;
     border-radius: 4px;
     margin: 1px 0px;
 }
 
-QTreeWidget::item:selected {
+QTreeWidget::item:selected,
+QListWidget::item:selected {
     background-color: @accent@;
     color: @on_accent@;
+}
+
+QListWidget::item:hover:!selected {
+    background-color: @bg_hover@;
+    color: @text_primary@;
 }
 
 QTableView,

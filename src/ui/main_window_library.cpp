@@ -33,6 +33,8 @@
 #include <QKeySequence>
 #include <QLabel>
 #include <QLineEdit>
+#include <QListWidget>
+#include <QListWidgetItem>
 #include <QMenu>
 #include <QMessageBox>
 #include <QPixmap>
@@ -42,6 +44,8 @@
 #include <QScrollBar>
 #include <QShortcut>
 #include <QSignalBlocker>
+#include <QSize>
+#include <QStackedWidget>
 #include <QStatusBar>
 #include <QStyle>
 #include <QStringList>
@@ -628,7 +632,6 @@ void MainWindow::populateTree() {
         if (game.icon.has_value() && fs::exists(*game.icon)) {
             QPixmap pixmap(QString::fromStdString(*game.icon));
             if (!pixmap.isNull()) {
-                pixmap = pixmap.scaled(32, 32, Qt::KeepAspectRatio, Qt::SmoothTransformation);
                 gameIcon = QIcon(pixmap);
             }
         }
@@ -715,6 +718,254 @@ void MainWindow::refreshLibraryView(
     }
     m_rebuildingLibraryView = false;
     ensureVisibleSelection(filtered);
+    refreshIconView();
+}
+
+void MainWindow::setLibraryDisplayMode(LibraryDisplayMode mode,
+                                       bool persist) {
+    m_libraryDisplayMode = mode;
+
+    if (m_iconView) {
+        const int iconPixels = libraryDisplayModeIconPixels(mode);
+        m_iconView->setIconSize(QSize(iconPixels, iconPixels));
+        const bool showLabels = libraryDisplayModeShowsLabels(mode);
+        const bool expandedMvsGrid =
+            mode == LibraryDisplayMode::Grid &&
+            m_librarySystem == "neogeo";
+        m_iconView->setWordWrap(showLabels);
+        m_iconView->setTextElideMode(
+            expandedMvsGrid ? Qt::ElideNone : Qt::ElideRight);
+        m_iconView->setUniformItemSizes(!expandedMvsGrid);
+        m_iconView->setGridSize(showLabels
+            ? QSize(132, 116)
+            : QSize(84, 84));
+    }
+
+    if (m_libraryViewStack && m_tree && m_iconView) {
+        if (mode == LibraryDisplayMode::List)
+            m_libraryViewStack->setCurrentWidget(m_tree);
+        else
+            m_libraryViewStack->setCurrentWidget(m_iconView);
+    }
+
+    refreshIconView();
+    if (persist) {
+        m_config.set("UI", "library_view",
+                     std::string(libraryDisplayModeKey(mode)));
+        save_config(m_config);
+    }
+}
+
+void MainWindow::refreshIconView() {
+    if (!m_iconView || !m_tree) return;
+
+    const QSignalBlocker blocker(m_iconView);
+    m_iconView->clear();
+    const bool showLabels = libraryDisplayModeShowsLabels(
+        m_libraryDisplayMode);
+    const bool expandedMvsGrid =
+        m_libraryDisplayMode == LibraryDisplayMode::Grid &&
+        m_librarySystem == "neogeo";
+    m_iconView->setTextElideMode(
+        expandedMvsGrid ? Qt::ElideNone : Qt::ElideRight);
+    m_iconView->setUniformItemSizes(!expandedMvsGrid);
+    m_iconView->setGridSize(showLabels
+        ? QSize(132, 116)
+        : QSize(84, 84));
+
+    struct IconTile {
+        QTreeWidgetItem* treeItem = nullptr;
+        QIcon icon;
+        QString title;
+        QString tooltip;
+        QString sortTitle;
+        std::int64_t numericSortValue = 0;
+    };
+    std::vector<IconTile> tiles;
+
+    const bool yearSort = m_sortKey == "year" ||
+                          m_sortKey == "year_desc";
+    const bool ratingSort = m_sortKey == "rating" ||
+                            m_sortKey == "rating_desc";
+    const bool playtimeSort = m_sortKey == "playtime" ||
+                              m_sortKey == "playtime_desc";
+    const bool metricSort = ratingSort || playtimeSort;
+
+    const auto collectTile = [this, &tiles, yearSort, ratingSort,
+                              playtimeSort](QTreeWidgetItem* treeItem,
+                                            const QIcon& icon) {
+        if (!treeItem) return;
+        const int gameIndex = treeItem->data(0, GameIndexRole).toInt();
+        const int romIndex = treeItem->data(0, RomIndexRole).toInt();
+        if (gameIndex < 0 || gameIndex >= static_cast<int>(m_games.size()))
+            return;
+
+        const Game& game = m_games[gameIndex];
+        const Rom* rom = romIndex >= 0 &&
+                         romIndex < static_cast<int>(game.roms.size())
+            ? &game.roms[romIndex] : nullptr;
+        QString title = rom
+            ? QString::fromStdString(libraryTileTitle(game, rom))
+            : treeItem->text(0);
+        const QString sortTitle = title.toCaseFolded();
+
+        if (rom) {
+            if (m_gameProfiles.find(game.system, rom->file))
+                title += QString::fromUtf8(" \xE2\x9A\x99");
+            if (hasCommands(game, romIndex))
+                title += QString::fromUtf8(" \xF0\x9F\x91\x8A");
+        }
+
+        QString tooltip = title;
+        if (rom && !rom->mame.empty()) {
+            tooltip += QStringLiteral("\nMAME ID: ") +
+                QString::fromStdString(rom->mame);
+        }
+
+        std::int64_t numericSortValue = 0;
+        if (yearSort) {
+            numericSortValue = libraryYearSortValue(game);
+        } else if (ratingSort || playtimeSort) {
+            const auto media = selected_launch_media(game, romIndex);
+            if (media.has_value()) {
+                numericSortValue = ratingSort
+                    ? static_cast<std::int64_t>(
+                          m_gameLibraryState.rating(game.system, *media))
+                    : mediaPlaytimeSeconds(game, *media);
+            }
+        }
+
+        tiles.push_back({
+            treeItem, icon, title, tooltip, sortTitle, numericSortValue,
+        });
+    };
+
+    for (int i = 0; i < m_tree->topLevelItemCount(); ++i) {
+        QTreeWidgetItem* parent = m_tree->topLevelItem(i);
+        if (!parent || parent->isHidden()) continue;
+
+        // Filter-only container parents exist so a matching variant can be
+        // reached in List mode; they are not themselves results/tiles.
+        if (parent->data(0, ExactMatchRole).toBool()) {
+            collectTile(parent, parent->icon(0));
+        }
+        for (int j = 0; j < parent->childCount(); ++j) {
+            QTreeWidgetItem* child = parent->child(j);
+            if (!child || child->isHidden() ||
+                !child->data(0, ExactMatchRole).toBool()) {
+                continue;
+            }
+            collectTile(child, parent->icon(0));
+        }
+    }
+
+    const auto titlePrecedes = [](const IconTile& left,
+                                  const IconTile& right) {
+        const int comparison = QString::compare(
+            left.sortTitle, right.sortTitle, Qt::CaseSensitive);
+        if (comparison != 0) return comparison < 0;
+        const int leftGame = left.treeItem->data(0, GameIndexRole).toInt();
+        const int rightGame = right.treeItem->data(0, GameIndexRole).toInt();
+        if (leftGame != rightGame) return leftGame < rightGame;
+        return left.treeItem->data(0, RomIndexRole).toInt() <
+               right.treeItem->data(0, RomIndexRole).toInt();
+    };
+    std::stable_sort(tiles.begin(), tiles.end(),
+                     [&](const IconTile& left, const IconTile& right) {
+        if (m_sortKey == "display_desc")
+            return titlePrecedes(right, left);
+        if (m_sortKey == "year" || m_sortKey == "year_desc") {
+            if (left.numericSortValue != right.numericSortValue) {
+                return m_sortKey == "year_desc"
+                    ? left.numericSortValue > right.numericSortValue
+                    : left.numericSortValue < right.numericSortValue;
+            }
+            return titlePrecedes(left, right);
+        }
+        if (metricSort) {
+            const bool descending = m_sortKey.endsWith("_desc");
+            if (libraryMetricPrecedes(left.numericSortValue,
+                                      right.numericSortValue,
+                                      descending)) {
+                return true;
+            }
+            if (libraryMetricPrecedes(right.numericSortValue,
+                                      left.numericSortValue,
+                                      descending)) {
+                return false;
+            }
+        }
+        return titlePrecedes(left, right);
+    });
+
+    const bool scaleBigIcons =
+        m_libraryDisplayMode == LibraryDisplayMode::BigIcons;
+    const QSize bigIconBounds(
+        libraryDisplayModeIconPixels(LibraryDisplayMode::BigIcons),
+        libraryDisplayModeIconPixels(LibraryDisplayMode::BigIcons));
+    for (const IconTile& tile : tiles) {
+        QIcon icon = tile.icon;
+        if (scaleBigIcons && !icon.isNull()) {
+            const QSize sourceSize = icon.actualSize(QSize(512, 512));
+            QPixmap pixmap = icon.pixmap(sourceSize);
+            if (!pixmap.isNull()) {
+                const bool enlarging =
+                    pixmap.width() < bigIconBounds.width() ||
+                    pixmap.height() < bigIconBounds.height();
+                pixmap = pixmap.scaled(
+                    bigIconBounds, Qt::KeepAspectRatio,
+                    enlarging ? Qt::FastTransformation
+                              : Qt::SmoothTransformation);
+                icon = QIcon(pixmap);
+            }
+        }
+
+        auto* item = new QListWidgetItem(
+            icon, showLabels ? tile.title : QString(), m_iconView);
+        item->setData(GameIndexRole,
+                      tile.treeItem->data(0, GameIndexRole));
+        item->setData(RomIndexRole,
+                      tile.treeItem->data(0, RomIndexRole));
+        item->setData(Qt::AccessibleTextRole, tile.title);
+        item->setToolTip(tile.tooltip);
+        item->setTextAlignment(Qt::AlignHCenter | Qt::AlignTop);
+    }
+    syncIconSelectionFromTree();
+}
+
+void MainWindow::syncIconSelectionFromTree() {
+    if (!m_iconView || !m_tree) return;
+    const QSignalBlocker blocker(m_iconView);
+    QTreeWidgetItem* current = m_tree->currentItem();
+    if (!current) {
+        m_iconView->setCurrentItem(nullptr);
+        m_iconView->clearSelection();
+        return;
+    }
+
+    const int gameIndex = current->data(0, GameIndexRole).toInt();
+    const int romIndex = current->data(0, RomIndexRole).toInt();
+    for (int i = 0; i < m_iconView->count(); ++i) {
+        QListWidgetItem* item = m_iconView->item(i);
+        if (item && item->data(GameIndexRole).toInt() == gameIndex &&
+            item->data(RomIndexRole).toInt() == romIndex) {
+            m_iconView->setCurrentItem(item);
+            m_iconView->scrollToItem(item);
+            return;
+        }
+    }
+    m_iconView->setCurrentItem(nullptr);
+    m_iconView->clearSelection();
+}
+
+void MainWindow::selectIconItem(QListWidgetItem* item) {
+    if (!item || !m_tree) return;
+    QTreeWidgetItem* treeItem = treeItemForIndexes(
+        m_tree, item->data(GameIndexRole).toInt(),
+        item->data(RomIndexRole).toInt());
+    if (!treeItem) return;
+    if (treeItem->parent()) treeItem->parent()->setExpanded(true);
+    m_tree->setCurrentItem(treeItem);
 }
 
 void MainWindow::setLibrarySystem(const std::string& system) {
@@ -876,6 +1127,7 @@ void MainWindow::clearDetailsForNoSelection(bool filtered) {
 }
 
 void MainWindow::updateSelection() {
+    syncIconSelectionFromTree();
     const QList<QTreeWidgetItem*> items = m_tree->selectedItems();
     if (items.isEmpty()) {
         setSelectionActionsEnabled(false);
@@ -1218,6 +1470,7 @@ void MainWindow::filterGames(const QString& text) {
     if (!m_rebuildingLibraryView) {
         ensureVisibleSelection(!needle.isEmpty() || m_favoritesOnly ||
                                personalFiltersActive);
+        refreshIconView();
     }
     updateStatus();
 }
@@ -1634,6 +1887,20 @@ void MainWindow::selectFirstSortedResult() {
         (m_searchEntry && !m_searchEntry->text().trimmed().isEmpty()) ||
         m_favoritesOnly ||
         libraryPersonalFiltersActive(m_ratingFilter, m_playtimeFilter);
+    if (m_libraryDisplayMode != LibraryDisplayMode::List && m_iconView) {
+        if (m_iconView->count() > 0) {
+            QListWidgetItem* first = m_iconView->item(0);
+            m_iconView->setCurrentItem(first);
+            m_iconView->scrollToItem(
+                first, QAbstractItemView::PositionAtTop);
+            selectIconItem(first);
+        } else {
+            m_tree->setCurrentItem(nullptr);
+            m_tree->clearSelection();
+            clearDetailsForNoSelection(filtered);
+        }
+        return;
+    }
     const bool ratingSort = m_sortKey == "rating" ||
                             m_sortKey == "rating_desc";
     const bool playtimeSort = m_sortKey == "playtime" ||
@@ -1799,8 +2066,9 @@ void MainWindow::updateFiltersButton() {
     m_filtersButton->setText(m_filtersButton->text() + QString::fromUtf8(" \xE2\x96\xBC"));
 #endif
     m_filtersButton->setToolTip(activeCount == 0
-        ? "Sort the library, show variants, or filter by rating or playtime"
-        : QString("Sort and filter the library\n%1")
+        ? "Choose the library view, sort, show variants, or filter by rating "
+          "or playtime"
+        : QString("Choose the view, sort, and filter the library\n%1")
               .arg(descriptions.join("\n")));
     if (m_clearFiltersAction) {
         m_clearFiltersAction->setEnabled(activeCount > 0);
@@ -2169,11 +2437,32 @@ void MainWindow::openSnapshotFolder() {
 void MainWindow::showTreeContextMenu(const QPoint& pos) {
     QTreeWidgetItem* item = m_tree->itemAt(pos);
     if (!item) return;
+    showLibraryContextMenu(
+        item, m_tree->viewport()->mapToGlobal(pos), true);
+}
+
+void MainWindow::showIconContextMenu(const QPoint& pos) {
+    if (!m_iconView) return;
+    QListWidgetItem* iconItem = m_iconView->itemAt(pos);
+    if (!iconItem) return;
+    QTreeWidgetItem* treeItem = treeItemForIndexes(
+        m_tree, iconItem->data(GameIndexRole).toInt(),
+        iconItem->data(RomIndexRole).toInt());
+    if (!treeItem) return;
+    m_iconView->setCurrentItem(iconItem);
+    showLibraryContextMenu(
+        treeItem, m_iconView->viewport()->mapToGlobal(pos), false);
+}
+
+void MainWindow::showLibraryContextMenu(
+        QTreeWidgetItem* item, const QPoint& globalPos,
+        bool allowExpansionActions) {
+    if (!item) return;
     m_tree->setCurrentItem(item);
     int romIdx = item->data(0, RomIndexRole).toInt();
     const int gameIdx = item->data(0, GameIndexRole).toInt();
 
-    QMenu menu(m_tree);
+    QMenu menu(this);
     menu.addAction("Launch", this, &MainWindow::launchSelected);
     if (gameIdx >= 0 && gameIdx < static_cast<int>(m_games.size())) {
         const Game& game = m_games[gameIdx];
@@ -2223,7 +2512,7 @@ void MainWindow::showTreeContextMenu(const QPoint& pos) {
     }
 
     menu.addSeparator();
-    if (romIdx < 0) {
+    if (allowExpansionActions && romIdx < 0) {
         if (treeItemHasExpandableChildren(item->childCount())) {
             if (item->isExpanded()) {
                 menu.addAction("Collapse", [item]() { item->setExpanded(false); });
@@ -2234,7 +2523,7 @@ void MainWindow::showTreeContextMenu(const QPoint& pos) {
         menu.addAction("Expand all", this, &MainWindow::expandAll);
         menu.addAction("Collapse all", this, &MainWindow::collapseAll);
     }
-    menu.exec(m_tree->viewport()->mapToGlobal(pos));
+    menu.exec(globalPos);
 }
 
 void MainWindow::updateStatus() {

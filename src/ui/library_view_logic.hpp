@@ -13,6 +13,41 @@
 
 namespace goliath {
 
+enum class LibraryDisplayMode {
+    List,
+    Grid,
+    BigIcons,
+};
+
+constexpr std::string_view libraryDisplayModeKey(LibraryDisplayMode mode) {
+    switch (mode) {
+    case LibraryDisplayMode::List: return "list";
+    case LibraryDisplayMode::Grid: return "grid";
+    case LibraryDisplayMode::BigIcons: return "big_icons";
+    }
+    return "list";
+}
+
+constexpr LibraryDisplayMode libraryDisplayModeFromKey(
+        std::string_view key) {
+    if (key == "grid") return LibraryDisplayMode::Grid;
+    if (key == "big_icons") return LibraryDisplayMode::BigIcons;
+    return LibraryDisplayMode::List;
+}
+
+constexpr int libraryDisplayModeIconPixels(LibraryDisplayMode mode) {
+    switch (mode) {
+    case LibraryDisplayMode::List: return 32;
+    case LibraryDisplayMode::Grid: return 64;
+    case LibraryDisplayMode::BigIcons: return 64;
+    }
+    return 32;
+}
+
+constexpr bool libraryDisplayModeShowsLabels(LibraryDisplayMode mode) {
+    return mode != LibraryDisplayMode::BigIcons;
+}
+
 enum class VisibleSelectionDecision {
     KeepCurrent,
     SelectVisibleReplacement,
@@ -374,6 +409,24 @@ inline std::string libraryMvsAesHumanTitle(
     if (first == std::string::npos) return displayName;
     const std::size_t last = title.find_last_not_of(" \t\r\n");
     return title.substr(first, last - first + 1);
+}
+
+inline std::string libraryTileTitle(const Game& game, const Rom* rom) {
+    if (!rom) return game.display;
+
+    std::string title;
+    if (rom->name.has_value() && !rom->name->empty())
+        title = *rom->name;
+    else if (rom->label.has_value() && !rom->label->empty())
+        title = *rom->label;
+    else if (!rom->mame.empty())
+        title = rom->mame;
+    else
+        title = rom->file;
+
+    if (game.system == "neogeocd")
+        return title.empty() ? game.display : title;
+    return libraryMvsAesHumanTitle(title, game.display);
 }
 
 inline std::string libraryDetailsTitle(

@@ -85,6 +85,7 @@ TEST_CASE("Neo Geo CD path and library selector have safe defaults", "[config][s
     const auto cfg = default_config();
     REQUIRE(cfg.get("Paths", "neocd", "") == "neocd");
     REQUIRE(cfg.get("UI", "library_system", "") == "neogeo");
+    REQUIRE(cfg.get("UI", "library_view", "") == "list");
     REQUIRE(cfg.get("UI", "last_rom_neogeo", "missing").empty());
     REQUIRE(cfg.get("UI", "last_rom_neogeocd", "missing").empty());
     REQUIRE(cfg.get("Updates", "check_interval", "missing") == "disabled");

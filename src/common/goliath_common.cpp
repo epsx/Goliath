@@ -172,6 +172,7 @@ Config default_config() {
         {"last_rom_neogeo", ""},
         {"last_rom_neogeocd", ""},
         {"library_system", "neogeo"},
+        {"library_view", "list"},
     };
     cfg.sections["Updates"] = {
         {"check_interval", "disabled"},

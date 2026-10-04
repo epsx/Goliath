@@ -43,6 +43,9 @@ class QResizeEvent;
 class QSplitter;
 class QScrollArea;
 class QComboBox;
+class QListWidget;
+class QListWidgetItem;
+class QStackedWidget;
 class QTreeWidget;
 class QTreeWidgetItem;
 class QLineEdit;
@@ -133,6 +136,14 @@ private:
     void setPlaytimeFilter(LibraryPlaytimeFilter filter);
     void clearLibraryFilters();
     void updateFiltersButton();
+    void setLibraryDisplayMode(LibraryDisplayMode mode, bool persist = true);
+    void refreshIconView();
+    void syncIconSelectionFromTree();
+    void selectIconItem(QListWidgetItem* item);
+    void showIconContextMenu(const QPoint& pos);
+    void showLibraryContextMenu(QTreeWidgetItem* item,
+                                const QPoint& globalPos,
+                                bool allowExpansionActions);
     void selectFirstSortedResult();
     bool mediaMatchesPersonalFilters(const Game& game,
                                      const std::string& media) const;
@@ -242,6 +253,7 @@ private:
     bool m_favoritesOnly = false;
     LibraryRatingFilter m_ratingFilter = LibraryRatingFilter::Any;
     LibraryPlaytimeFilter m_playtimeFilter = LibraryPlaytimeFilter::Any;
+    LibraryDisplayMode m_libraryDisplayMode = LibraryDisplayMode::List;
     bool m_rebuildingLibraryView = false;
     std::string m_librarySystem = "neogeo";
 
@@ -249,6 +261,7 @@ private:
     QComboBox* m_themeCombo = nullptr;
     QPushButton* m_filtersButton = nullptr;
     QActionGroup* m_sortGroup = nullptr;
+    QActionGroup* m_libraryDisplayGroup = nullptr;
     QActionGroup* m_ratingFilterGroup = nullptr;
     QActionGroup* m_playtimeFilterGroup = nullptr;
     QAction* m_clearFiltersAction = nullptr;
@@ -259,6 +272,8 @@ private:
     QPushButton* m_mvsAesButton = nullptr;
     QPushButton* m_cdButton = nullptr;
     QTreeWidget* m_tree = nullptr;
+    QStackedWidget* m_libraryViewStack = nullptr;
+    QListWidget* m_iconView = nullptr;
     QLineEdit* m_searchEntry = nullptr;
     std::vector<QAction*> m_selectionActions;
     QLabel* m_libraryStatusLabel = nullptr;

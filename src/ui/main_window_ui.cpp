@@ -26,6 +26,8 @@
 #include <QKeySequence>
 #include <QLabel>
 #include <QLineEdit>
+#include <QListView>
+#include <QListWidget>
 #include <QMenu>
 #include <QModelIndex>
 #include <QMouseEvent>
@@ -41,6 +43,7 @@
 #include <QSize>
 #include <QSizePolicy>
 #include <QSplitter>
+#include <QStackedWidget>
 #include <QStatusBar>
 #include <QStyle>
 #include <QStyleOption>
@@ -743,6 +746,33 @@ void MainWindow::buildUi() {
     m_filtersButton->setMinimumWidth(90);
     auto* filtersMenu = new QMenu(m_filtersButton);
 
+    struct ViewOption {
+        LibraryDisplayMode mode;
+        const char* label;
+    };
+    static const ViewOption viewOptions[] = {
+        {LibraryDisplayMode::List, "List"},
+        {LibraryDisplayMode::Grid, "Grid"},
+        {LibraryDisplayMode::BigIcons, "Big Icons"},
+    };
+    auto* viewMenu = filtersMenu->addMenu("View");
+    m_libraryDisplayGroup = new QActionGroup(viewMenu);
+    m_libraryDisplayGroup->setExclusive(true);
+    for (const ViewOption& option : viewOptions) {
+        QAction* action = viewMenu->addAction(option.label);
+        action->setCheckable(true);
+        action->setData(static_cast<int>(option.mode));
+        action->setChecked(m_libraryDisplayMode == option.mode);
+        m_libraryDisplayGroup->addAction(action);
+    }
+    connect(m_libraryDisplayGroup, &QActionGroup::triggered, this,
+            [this](QAction* action) {
+                if (!action) return;
+                setLibraryDisplayMode(static_cast<LibraryDisplayMode>(
+                    action->data().toInt()));
+            });
+    filtersMenu->addSeparator();
+
     auto* sortMenu = filtersMenu->addMenu("Sort");
     m_sortGroup = new QActionGroup(sortMenu);
     m_sortGroup->setExclusive(true);
@@ -985,6 +1015,8 @@ void MainWindow::buildUi() {
 
     leftLayout->addWidget(systemSelector);
 
+    m_libraryViewStack = new QStackedWidget();
+
     m_tree = new QTreeWidget();
     m_tree->setProperty("goliathEngravedSurface", true);
     m_tree->setItemDelegateForColumn(
@@ -1013,7 +1045,35 @@ void MainWindow::buildUi() {
             [this](QTreeWidgetItem*) { ensureVisibleSelection(false); });
     m_tree->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(m_tree, &QTreeWidget::customContextMenuRequested, this, &MainWindow::showTreeContextMenu);
-    leftLayout->addWidget(m_tree, 1);
+    m_libraryViewStack->addWidget(m_tree);
+
+    m_iconView = new QListWidget();
+    m_iconView->setObjectName("library_icon_view");
+    m_iconView->setProperty("goliathEngravedSurface", true);
+    addPanelElevation(m_iconView);
+    m_iconView->setViewMode(QListView::IconMode);
+    m_iconView->setResizeMode(QListView::Adjust);
+    m_iconView->setMovement(QListView::Static);
+    m_iconView->setWrapping(true);
+    m_iconView->setUniformItemSizes(true);
+    m_iconView->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_iconView->setTextElideMode(Qt::ElideRight);
+    m_iconView->setSpacing(4);
+    m_iconView->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_iconView, &QListWidget::currentItemChanged, this,
+            [this](QListWidgetItem* current, QListWidgetItem*) {
+                selectIconItem(current);
+            });
+    connect(m_iconView, &QListWidget::itemDoubleClicked, this,
+            [this](QListWidgetItem* item) {
+                selectIconItem(item);
+                launchSelected();
+            });
+    connect(m_iconView, &QListWidget::customContextMenuRequested,
+            this, &MainWindow::showIconContextMenu);
+    m_libraryViewStack->addWidget(m_iconView);
+    leftLayout->addWidget(m_libraryViewStack, 1);
+    setLibraryDisplayMode(m_libraryDisplayMode, false);
 
     m_searchEntry = new QLineEdit();
     addPanelElevation(m_searchEntry);

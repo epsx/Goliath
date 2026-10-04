@@ -8,11 +8,16 @@
 #include <QTemporaryDir>
 
 using goliath::VisibleSelectionDecision;
+using goliath::LibraryDisplayMode;
 using goliath::LibraryPlaytimeFilter;
 using goliath::LibraryRatingFilter;
 using goliath::detailsScrollTarget;
 using goliath::libraryCatalogIdPresentation;
 using goliath::libraryDetailsTitle;
+using goliath::libraryDisplayModeFromKey;
+using goliath::libraryDisplayModeIconPixels;
+using goliath::libraryDisplayModeKey;
+using goliath::libraryDisplayModeShowsLabels;
 using goliath::libraryExpansionShouldBePreserved;
 using goliath::libraryGameListTitles;
 using goliath::libraryMetricPrecedes;
@@ -27,12 +32,60 @@ using goliath::librarySelectionAllowed;
 using goliath::librarySelectionConfigKey;
 using goliath::libraryRememberedSelection;
 using goliath::librarySystemChangeRequired;
+using goliath::libraryTileTitle;
 using goliath::libraryVariantAllowed;
 using goliath::libraryVerificationPresentation;
 using goliath::VerificationTone;
 using goliath::treeItemHasExpandableChildren;
 using goliath::visibleSelectionDecision;
 using goliath::visibleSelectionShouldBeRevealed;
+
+TEST_CASE("library display modes have stable persisted keys",
+          "[library-view][display-mode]") {
+    CHECK(libraryDisplayModeKey(LibraryDisplayMode::List) == "list");
+    CHECK(libraryDisplayModeKey(LibraryDisplayMode::Grid) == "grid");
+    CHECK(libraryDisplayModeKey(LibraryDisplayMode::BigIcons) ==
+          "big_icons");
+    CHECK(libraryDisplayModeFromKey("list") == LibraryDisplayMode::List);
+    CHECK(libraryDisplayModeFromKey("grid") == LibraryDisplayMode::Grid);
+    CHECK(libraryDisplayModeFromKey("big_icons") ==
+          LibraryDisplayMode::BigIcons);
+    CHECK(libraryDisplayModeFromKey("unsupported") ==
+          LibraryDisplayMode::List);
+}
+
+TEST_CASE("library display modes expose their presentation contract",
+          "[library-view][display-mode]") {
+    CHECK(libraryDisplayModeIconPixels(LibraryDisplayMode::List) == 32);
+    CHECK(libraryDisplayModeIconPixels(LibraryDisplayMode::Grid) == 64);
+    CHECK(libraryDisplayModeIconPixels(LibraryDisplayMode::BigIcons) == 64);
+    CHECK(libraryDisplayModeShowsLabels(LibraryDisplayMode::List));
+    CHECK(libraryDisplayModeShowsLabels(LibraryDisplayMode::Grid));
+    CHECK_FALSE(libraryDisplayModeShowsLabels(
+        LibraryDisplayMode::BigIcons));
+}
+
+TEST_CASE("flat library tiles use human media names instead of catalog IDs",
+          "[library-view][display-mode]") {
+    goliath::Game game;
+    game.display = "2020 Super Baseball";
+    game.system = "neogeo";
+
+    goliath::Rom named;
+    named.mame = "2020bba";
+    named.name = "2020 Super Baseball (set 2)";
+    CHECK(libraryTileTitle(game, &named) ==
+          "2020 Super Baseball (set 2)");
+
+    goliath::Rom catalogOnly;
+    catalogOnly.mame = "2020bbh";
+    CHECK(libraryTileTitle(game, &catalogOnly) == "2020bbh");
+
+    game.system = "neogeocd";
+    named.name = "2020 Super Baseball (Japan) (En,Ja)";
+    CHECK(libraryTileTitle(game, &named) ==
+          "2020 Super Baseball (Japan) (En,Ja)");
+}
 
 TEST_CASE("recording folders follow exact media filenames for Neo Geo CD",
           "[library-view][gallery]") {

@@ -98,6 +98,8 @@ MainWindow::MainWindow(Config config, QWidget* parent)
         m_config.get("UI", "rating_filter", "any"));
     m_playtimeFilter = libraryPlaytimeFilterFromKey(
         m_config.get("UI", "playtime_filter", "any"));
+    m_libraryDisplayMode = libraryDisplayModeFromKey(
+        m_config.get("UI", "library_view", "list"));
     m_librarySystem = m_config.get("UI", "library_system", "neogeo");
     if (m_librarySystem != "neogeo" && m_librarySystem != "neogeocd") {
         m_librarySystem = "neogeo";
