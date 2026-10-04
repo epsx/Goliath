@@ -122,7 +122,9 @@ private:
     // Apply a built-in theme by key; unknown keys fall back to Dark Modern.
     void applyTheme(const QString& themeName);
     void loadGames();
-    std::vector<int> sortedGameOrder() const; // indices into m_games
+    // Returns indices into m_games.
+    std::vector<int> sortedGameOrder(
+        const std::vector<std::string>& listTitles) const;
     void populateTree();
     void refreshLibraryView(bool preserveSelection,
                             const QString& preferredRomOverride = {});

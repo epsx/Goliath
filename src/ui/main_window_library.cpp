@@ -506,11 +506,10 @@ std::vector<int> MainWindow::sortedVariantOrder(const Game& game) const {
     return order;
 }
 
-std::vector<int> MainWindow::sortedGameOrder() const {
+std::vector<int> MainWindow::sortedGameOrder(
+        const std::vector<std::string>& listTitles) const {
     std::vector<int> idx(m_games.size());
     for (std::size_t i = 0; i < idx.size(); ++i) idx[i] = static_cast<int>(i);
-    const std::vector<std::string> listTitles =
-        libraryGameListTitles(m_games);
 
     auto yearValue = [&](const Game& game) -> int {
         if (!game.year.has_value() || game.year->empty()) return 0;
@@ -569,7 +568,7 @@ void MainWindow::populateTree() {
     m_tree->clear();
     const std::vector<std::string> listTitles =
         libraryGameListTitles(m_games);
-    for (int idx : sortedGameOrder()) {
+    for (int idx : sortedGameOrder(listTitles)) {
         const Game& game = m_games[idx];
         if (game.system != m_librarySystem) continue;
 
