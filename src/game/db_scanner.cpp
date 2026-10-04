@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -418,6 +419,13 @@ static std::unordered_set<std::string> build_supplemental_metadata_ids(
 ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callback,
                      const std::atomic<bool>* cancel) {
     ScanResult result;
+    using ScanClock = std::chrono::steady_clock;
+    const auto scan_started = ScanClock::now();
+    const auto elapsed_ms = [](ScanClock::time_point begin,
+                               ScanClock::time_point end) {
+        return std::chrono::duration_cast<std::chrono::milliseconds>(
+            end - begin).count();
+    };
 
     // Stop promptly when cancellation is requested.
     auto is_canceled = [cancel]() { return cancel && cancel->load(std::memory_order_acquire); };
@@ -466,6 +474,7 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
     const MameChdHashCatalog mame_chd_hashes =
         build_mame_chd_hash_catalog(neocd_metadata);
     const RedumpLayoutIndex redump_layout_index(redump_metadata);
+    const auto metadata_finished = ScanClock::now();
 
     if (is_canceled()) {
         result.error_message = "Scan canceled.";
@@ -523,6 +532,7 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
 
     if (progress_callback)
         progress_callback("Neo Geo CD image files found: " + std::to_string(cd_files.size()) + "\n");
+    const auto discovery_finished = ScanClock::now();
 
     std::unordered_map<std::string, GameEntry> games;
     games.reserve(rom_files.size());
@@ -683,6 +693,7 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
             game_it->second.main_rom = rom;
         }
     }
+    const auto cartridge_finished = ScanClock::now();
 
     std::vector<GameEntry> game_list;
     game_list.reserve(games.size() + cd_files.size());
@@ -953,6 +964,7 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
         progress_callback("Warning: could not write Redump SHA-1 cache: " +
                           redump_sha1_cache.path().string() + "\n");
     }
+    const auto cd_finished = ScanClock::now();
 
     std::sort(game_list.begin(), game_list.end(), [](const GameEntry& a, const GameEntry& b) {
         return to_lower(a.display) < to_lower(b.display);
@@ -1072,6 +1084,7 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
             ": " + output.errorString().toStdString();
         return result;
     }
+    const auto database_finished = ScanClock::now();
 
     std::string msg = "\nCreated: " + p.out_json.string() + "\n";
     if (progress_callback) progress_callback(msg);
@@ -1139,6 +1152,7 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
         result.rom_file_count >= result.game_count
             ? result.rom_file_count - result.game_count
             : 0;
+    const auto scan_finished = ScanClock::now();
 
     std::string summary = "\n========== GOLIATH DATABASE ==========\n\n";
     summary += "Neo Geo MVS/AES\n\n";
@@ -1168,6 +1182,30 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
     summary += "Redump SHA-1 calculated  : " + std::to_string(result.cd_redump_sha1_calculated_files) + "\n";
     summary += "Redump SHA-1 cache rows  : " + std::to_string(result.cd_redump_sha1_cache_entries) + "\n";
     summary += "Redump SHA-1 pruned      : " + std::to_string(result.cd_redump_sha1_cache_pruned) + "\n\n";
+    summary += "Scan timing (ms)\n\n";
+    summary += "Metadata and indexes     : " +
+               std::to_string(elapsed_ms(scan_started, metadata_finished)) +
+               "\n";
+    summary += "File discovery           : " +
+               std::to_string(elapsed_ms(metadata_finished,
+                                         discovery_finished)) +
+               "\n";
+    summary += "MVS/AES verification     : " +
+               std::to_string(elapsed_ms(discovery_finished,
+                                         cartridge_finished)) +
+               "\n";
+    summary += "Neo Geo CD verification  : " +
+               std::to_string(elapsed_ms(cartridge_finished, cd_finished)) +
+               "\n";
+    summary += "Database build/write     : " +
+               std::to_string(elapsed_ms(cd_finished, database_finished)) +
+               "\n";
+    summary += "Statistics               : " +
+               std::to_string(elapsed_ms(database_finished, scan_finished)) +
+               "\n";
+    summary += "Total                    : " +
+               std::to_string(elapsed_ms(scan_started, scan_finished)) +
+               "\n\n";
     summary += "======================================\n";
 
 

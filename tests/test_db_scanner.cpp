@@ -1190,6 +1190,10 @@ TEST_CASE("db scanner loads dedicated Neo Geo metadata catalogs", "[db][metadata
     REQUIRE(progress.find("Neo Geo CD software entries: 3") != std::string::npos);
     REQUIRE(progress.find("History entries (Neo Geo): 4") != std::string::npos);
     REQUIRE(progress.find("History entries (Neo Geo CD): 1") != std::string::npos);
+    REQUIRE((progress.find("Scan timing (ms)") != std::string::npos &&
+             progress.find("MVS/AES verification") != std::string::npos &&
+             progress.find("Neo Geo CD verification") != std::string::npos &&
+             progress.find("Total") != std::string::npos));
 
     fs::remove_all(root);
 }
