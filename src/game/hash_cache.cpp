@@ -76,6 +76,17 @@ std::optional<std::int64_t> file_mtime_ticks(const fs::path& path) {
     return duration_cast<nanoseconds>(mtime.time_since_epoch()).count();
 }
 
+bool file_fingerprint_matches(const fs::path& path,
+                              std::uintmax_t size,
+                              std::int64_t mtime_ticks) {
+    std::error_code ec;
+    const std::uintmax_t current_size = fs::file_size(path, ec);
+    if (ec || current_size != size)
+        return false;
+    const auto current_mtime = file_mtime_ticks(path);
+    return current_mtime.has_value() && *current_mtime == mtime_ticks;
+}
+
 } // namespace
 
 HashCache::HashCache(fs::path path,
@@ -175,6 +186,15 @@ std::optional<std::string> HashCache::file_hash(
         return std::nullopt;
 
     ++m_calculated;
+    // Large images can take long enough to hash that another process may
+    // replace or modify them mid-read. Never persist a digest under the
+    // fingerprint captured before calculation unless it is still current.
+    if (!file_fingerprint_matches(file, size, *mtime)) {
+        if (m_entries.erase(key) != 0)
+            m_dirty = true;
+        return std::nullopt;
+    }
+
     m_entries[key] = Entry{size, *mtime, digest};
     m_dirty = true;
     return m_entries[key].digest;
