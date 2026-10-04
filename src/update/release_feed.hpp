@@ -21,6 +21,7 @@ struct PublishedRelease {
     std::string name;
     std::string page_url;
     std::string published_at;
+    std::string body;
 };
 
 std::optional<ReleaseVersion> parse_release_version(std::string_view text);

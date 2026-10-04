@@ -1,6 +1,7 @@
-// info_tab.hpp — read-only information about the exact JGRF/Geolith/JG
-// components installed next to the frontend. Probes are lazy/asynchronous so
-// opening Settings is never blocked by executable or shared-library I/O.
+// info_tab.hpp — update preferences plus information about the exact
+// JGRF/Geolith/JG components installed next to the frontend. Component probes
+// are lazy/asynchronous so opening Settings is never blocked by executable or
+// shared-library I/O.
 #pragma once
 
 #include <QString>
@@ -10,6 +11,7 @@
 class QLabel;
 class QProcess;
 class QPushButton;
+class QComboBox;
 
 namespace goliath {
 
@@ -18,7 +20,7 @@ class Config;
 class InfoTab : public QWidget {
     Q_OBJECT
 public:
-    InfoTab(std::filesystem::path jollygoodExe, const Config& config,
+    InfoTab(std::filesystem::path jollygoodExe, Config& config,
             QWidget* parent = nullptr);
 
     // Called when the tab becomes visible. The first activation probes the
@@ -38,9 +40,18 @@ private:
     void finishCoreProbe();
     void finishLithogenProbe();
     void updateRefreshState();
+    void saveUpdatePreference();
+    void checkUpdatesNow();
+    void rememberSuccessfulUpdateCheck();
+    void refreshLastUpdateCheck();
 
     std::filesystem::path m_jollygoodExe;
-    const Config& m_config;
+    Config& m_config;
+
+    QComboBox* m_updateInterval = nullptr;
+    QLabel* m_lastUpdateCheck = nullptr;
+    QLabel* m_updatePreferenceStatus = nullptr;
+    QPushButton* m_checkUpdatesButton = nullptr;
 
     QLabel* m_jgrfVersion = nullptr;
     QLabel* m_jgrfExecutable = nullptr;

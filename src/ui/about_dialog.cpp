@@ -1,5 +1,6 @@
 #include "ui/about_dialog.hpp"
 
+#include "common/goliath_common.hpp"
 #include "common/project_legal.hpp"
 #include "ui/update_check.hpp"
 #include "ui/widgets/title_bar.hpp"
@@ -80,8 +81,8 @@ QPushButton* makeExternalLinkButton(const QString& label,
 
 } // namespace
 
-AboutDialog::AboutDialog(QWidget* parent)
-    : QDialog(parent) {
+AboutDialog::AboutDialog(Config& config, QWidget* parent)
+    : QDialog(parent), m_config(config) {
     const QString configuredProjectUrl = QString::fromUtf8(GOLIATH_PROJECT_URL);
     const QString projectUrl = configuredProjectUrl.isEmpty()
         ? QString::fromUtf8(kProjectUrl.data())
@@ -283,7 +284,11 @@ AboutDialog::AboutDialog(QWidget* parent)
     auto* checkUpdates = new QPushButton("Check for Updates...", this);
     checkUpdates->setObjectName("about_link_button");
     connect(checkUpdates, &QPushButton::clicked, this,
-            [this]() { checkForUpdates(this); });
+            [this]() {
+                if (checkForUpdates(this)) {
+                    recordSuccessfulUpdateCheck(m_config);
+                }
+            });
     actionRow->addWidget(checkUpdates);
 
     auto* qtWebsite = makeExternalLinkButton(

@@ -148,6 +148,7 @@ private:
     void updateStatus();
     void centerWindow();
     void refreshResolvedPaths();
+    void startAutomaticUpdateCheckIfDue();
     void loadGameProfiles();
     void loadGamePlaytime();
     void loadGameLibraryState();
@@ -209,6 +210,7 @@ private:
     GameLibraryStateStore m_gameLibraryState;
     bool m_gamePlaytimePersistenceAvailable = true;
     bool m_gameLibraryStatePersistenceAvailable = true;
+    bool m_automaticUpdateCheckPending = false;
     // Diagnostics toggle for this Goliath session only. It is intentionally
     // absent from goliath.ini and exact-media profiles.
     bool m_verboseJgrfLogging = false;

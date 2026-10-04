@@ -1,9 +1,12 @@
 #include "ui/update_check.hpp"
 
+#include "common/debug_logger.hpp"
+#include "common/goliath_common.hpp"
 #include "ui/widgets/title_bar.hpp"
 #include "update/release_feed.hpp"
 
 #include <QDesktopServices>
+#include <QDateTime>
 #include <QDialog>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -13,9 +16,14 @@
 #include <QNetworkRequest>
 #include <QProgressBar>
 #include <QPushButton>
+#include <QSize>
+#include <QTextBrowser>
+#include <QTextDocument>
 #include <QUrl>
 #include <QVariant>
 #include <QVBoxLayout>
+
+#include <utility>
 
 #ifndef GOLIATH_VERSION
 #define GOLIATH_VERSION "development"
@@ -30,6 +38,7 @@ namespace goliath {
 namespace {
 
 constexpr qint64 kMaximumReleaseResponseBytes = 1024 * 1024;
+constexpr qsizetype kMaximumDisplayedReleaseNotesCharacters = 32 * 1024;
 
 QString display_release_date(const std::string& publishedAt) {
     const QString value = QString::fromStdString(publishedAt);
@@ -39,6 +48,64 @@ QString display_release_date(const std::string& publishedAt) {
 bool is_trusted_release_url(const QUrl& url) {
     return url.isValid() && url.scheme() == "https" &&
            url.host().compare("github.com", Qt::CaseInsensitive) == 0;
+}
+
+QUrl releases_api_url() {
+    return QUrl(QString::fromUtf8(GOLIATH_RELEASES_API_URL));
+}
+
+bool is_valid_releases_api_url(const QUrl& url) {
+    return url.isValid() && url.scheme() == "https" &&
+           url.host().compare("api.github.com", Qt::CaseInsensitive) == 0;
+}
+
+QNetworkRequest release_request(const QUrl& apiUrl) {
+    QNetworkRequest request(apiUrl);
+    request.setRawHeader("Accept", "application/vnd.github+json");
+    request.setRawHeader("X-GitHub-Api-Version", "2022-11-28");
+    request.setRawHeader(
+        "User-Agent", QByteArray("Goliath/") + QByteArray(GOLIATH_VERSION));
+    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+                         QNetworkRequest::NoLessSafeRedirectPolicy);
+    request.setTransferTimeout(15000);
+    return request;
+}
+
+std::optional<PublishedRelease> release_from_reply(
+        QNetworkReply* reply, QString* error) {
+    if (error) error->clear();
+    if (!reply) {
+        if (error) *error = "The update request did not return a reply.";
+        return std::nullopt;
+    }
+
+    const int statusCode = reply->attribute(
+        QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    if (reply->error() != QNetworkReply::NoError || statusCode != 200) {
+        if (error) {
+            *error = QString("HTTP status: %1\n%2")
+                         .arg(statusCode)
+                         .arg(reply->errorString());
+        }
+        return std::nullopt;
+    }
+
+    const QByteArray response = reply->readAll();
+    if (response.isEmpty() || response.size() > kMaximumReleaseResponseBytes) {
+        if (error) {
+            *error = "GitHub returned an empty or unexpectedly large "
+                     "release list.";
+        }
+        return std::nullopt;
+    }
+
+    std::string parseError;
+    auto release = select_newest_published_release(
+        std::string_view(response.constData(),
+                         static_cast<std::size_t>(response.size())),
+        &parseError);
+    if (!release && error) *error = QString::fromStdString(parseError);
+    return release;
 }
 
 void show_update_notice(QWidget* parent, const QString& heading,
@@ -97,6 +164,23 @@ void open_release_page(QWidget* parent, const std::string& pageUrl) {
     }
 }
 
+void open_changelog_link(QWidget* parent, const QUrl& releaseUrl,
+                         const QUrl& selectedUrl) {
+    const QUrl target = selectedUrl.isRelative()
+        ? releaseUrl.resolved(selectedUrl)
+        : selectedUrl;
+    if (!target.isValid() || target.scheme() != "https") {
+        show_update_notice(parent, "The changelog link could not be opened.",
+                           "Only valid HTTPS links are allowed.");
+        return;
+    }
+    if (!QDesktopServices::openUrl(target)) {
+        show_update_notice(
+            parent, "The changelog link could not be opened.",
+            "Goliath could not open it in the default browser.");
+    }
+}
+
 void show_release_result(QWidget* parent, const PublishedRelease& release,
                          const std::optional<ReleaseVersion>& current) {
     const QString currentText = QString::fromUtf8(GOLIATH_VERSION);
@@ -107,15 +191,23 @@ void show_release_result(QWidget* parent, const PublishedRelease& release,
     const bool trustedUrl = is_trusted_release_url(releaseUrl);
     const bool upToDate = current &&
         compare_release_versions(release.version, *current) <= 0;
+    QString releaseNotes = QString::fromStdString(release.body).trimmed();
+    const bool showReleaseNotes = !releaseNotes.isEmpty();
+    if (releaseNotes.size() > kMaximumDisplayedReleaseNotesCharacters) {
+        releaseNotes.truncate(kMaximumDisplayedReleaseNotesCharacters);
+        releaseNotes += "\n\n_Release notes truncated. Open the release page "
+                        "to read the complete changelog._";
+    }
 
     QDialog dialog(parent);
-    dialog.resize(560, 290);
+    dialog.resize(showReleaseNotes ? QSize(720, 590) : QSize(560, 290));
     dialog.setMinimumWidth(460);
     dialog.setModal(true);
     dialog.setSizeGripEnabled(false);
 
     QVBoxLayout* layout = nullptr;
-    setupFramelessDialog(&dialog, "Goliath Update", &layout, false, false);
+    setupFramelessDialog(
+        &dialog, "Goliath Update", &layout, showReleaseNotes, false);
 
     auto* card = new QFrame(&dialog);
     card->setObjectName("about_information_card");
@@ -167,6 +259,29 @@ void show_release_result(QWidget* parent, const PublishedRelease& release,
         });
     }
     cardLayout->addWidget(detailLabel);
+
+    if (showReleaseNotes) {
+        auto* notesHeading = new QLabel("What's changed", card);
+        notesHeading->setObjectName("about_section_heading");
+        cardLayout->addWidget(notesHeading);
+
+        auto* notes = new QTextBrowser(card);
+        notes->setObjectName("update_release_notes");
+        notes->setOpenLinks(false);
+        notes->setOpenExternalLinks(false);
+        notes->setTextInteractionFlags(Qt::TextBrowserInteraction);
+        notes->setMinimumHeight(190);
+        QTextDocument::MarkdownFeatures markdownFeatures(
+            QTextDocument::MarkdownDialectGitHub);
+        markdownFeatures.setFlag(QTextDocument::MarkdownNoHTML);
+        notes->document()->setMarkdown(releaseNotes, markdownFeatures);
+        QObject::connect(
+            notes, &QTextBrowser::anchorClicked, &dialog,
+            [&dialog, releaseUrl](const QUrl& selectedUrl) {
+            open_changelog_link(&dialog, releaseUrl, selectedUrl);
+        });
+        cardLayout->addWidget(notes, 1);
+    }
     layout->addWidget(card);
 
     auto* buttonRow = new QHBoxLayout();
@@ -194,13 +309,12 @@ void show_release_result(QWidget* parent, const PublishedRelease& release,
 
 } // namespace
 
-void checkForUpdates(QWidget* parent) {
-    const QUrl apiUrl(QString::fromUtf8(GOLIATH_RELEASES_API_URL));
-    if (!apiUrl.isValid() || apiUrl.scheme() != "https" ||
-        apiUrl.host().compare("api.github.com", Qt::CaseInsensitive) != 0) {
+bool checkForUpdates(QWidget* parent) {
+    const QUrl apiUrl = releases_api_url();
+    if (!is_valid_releases_api_url(apiUrl)) {
         show_update_notice(parent, "Update check unavailable.",
                            "The Goliath release service is not configured.");
-        return;
+        return false;
     }
 
     QDialog progress(parent);
@@ -229,16 +343,7 @@ void checkForUpdates(QWidget* parent) {
     layout->addLayout(buttonRow);
 
     QNetworkAccessManager network(&progress);
-    QNetworkRequest request(apiUrl);
-    request.setRawHeader("Accept", "application/vnd.github+json");
-    request.setRawHeader("X-GitHub-Api-Version", "2022-11-28");
-    request.setRawHeader(
-        "User-Agent", QByteArray("Goliath/") + QByteArray(GOLIATH_VERSION));
-    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
-                         QNetworkRequest::NoLessSafeRedirectPolicy);
-    request.setTransferTimeout(15000);
-
-    QNetworkReply* reply = network.get(request);
+    QNetworkReply* reply = network.get(release_request(apiUrl));
     bool canceled = false;
     QObject::connect(reply, &QNetworkReply::finished,
                      &progress, &QDialog::accept);
@@ -253,41 +358,65 @@ void checkForUpdates(QWidget* parent) {
         canceled = true;
         reply->abort();
     }
-    if (canceled) return;
+    if (canceled) return false;
 
-    const int statusCode = reply->attribute(
-        QNetworkRequest::HttpStatusCodeAttribute).toInt();
-    if (reply->error() != QNetworkReply::NoError || statusCode != 200) {
-        show_update_notice(
-            parent, "The update check failed.",
-            QString("HTTP status: %1\n%2")
-                .arg(statusCode)
-                .arg(reply->errorString()));
-        return;
-    }
-
-    const QByteArray response = reply->readAll();
-    if (response.isEmpty() || response.size() > kMaximumReleaseResponseBytes) {
-        show_update_notice(
-            parent, "The update check failed.",
-            "GitHub returned an empty or unexpectedly large release list.");
-        return;
-    }
-
-    std::string parseError;
-    const auto release = select_newest_published_release(
-        std::string_view(response.constData(),
-                         static_cast<std::size_t>(response.size())),
-        &parseError);
+    QString error;
+    const auto release = release_from_reply(reply, &error);
     if (!release) {
         show_update_notice(parent, "The update check failed.",
-                           QString::fromStdString(parseError));
-        return;
+                           error);
+        return false;
     }
 
     show_release_result(
         parent, *release,
         parse_release_version(std::string_view(GOLIATH_VERSION)));
+    return true;
+}
+
+void checkForUpdatesAutomatically(
+        QWidget* parent, UpdateCheckCompletion completion) {
+    const QUrl apiUrl = releases_api_url();
+    if (!parent || !is_valid_releases_api_url(apiUrl)) {
+        DebugLogger::logWarn(
+            "automatic update check skipped: release service is not configured");
+        if (completion) completion(false);
+        return;
+    }
+
+    auto* network = new QNetworkAccessManager(parent);
+    QNetworkReply* reply = network->get(release_request(apiUrl));
+    QObject::connect(
+        reply, &QNetworkReply::finished, parent,
+        [parent, network, reply, completion = std::move(completion)]() {
+        QString error;
+        const auto release = release_from_reply(reply, &error);
+        if (!release) {
+            DebugLogger::logWarn(
+                "automatic update check failed: " + error);
+            if (completion) completion(false);
+        } else {
+            const auto current = parse_release_version(
+                std::string_view(GOLIATH_VERSION));
+            if (!current ||
+                compare_release_versions(release->version, *current) > 0) {
+                show_release_result(parent, *release, current);
+            }
+            DebugLogger::logInfo(
+                QString("automatic update check completed: latest=%1")
+                    .arg(QString::fromStdString(release->tag)));
+            if (completion) completion(true);
+        }
+        reply->deleteLater();
+        network->deleteLater();
+    });
+}
+
+void recordSuccessfulUpdateCheck(Config& config) {
+    config.set(
+        "Updates", "last_successful_check_epoch",
+        std::to_string(QDateTime::currentSecsSinceEpoch()));
+    save_config(config);
 }
 
 } // namespace goliath

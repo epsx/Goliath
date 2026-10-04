@@ -4,17 +4,24 @@
 #include "game/jollygood_executable.hpp"
 #include "game/geolith_capabilities.hpp"
 #include "common/goliath_common.hpp"
+#include "ui/update_check.hpp"
+#include "update/update_schedule.hpp"
 
 #include <QCryptographicHash>
+#include <QComboBox>
+#include <QDateTime>
 #include <QFile>
 #include <QFileInfo>
 #include <QFormLayout>
+#include <QFrame>
 #include <QGroupBox>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QLibrary>
 #include <QProcess>
 #include <QPushButton>
 #include <QRegularExpression>
+#include <QScrollArea>
 #include <QThread>
 #include <QStringList>
 #include <QTimer>
@@ -58,14 +65,71 @@ bool hasVerifiedEsBgraPair(const fs::path& jgrfExe) {
 
 } // namespace
 
-InfoTab::InfoTab(fs::path jollygoodExe, const Config& config, QWidget* parent)
+InfoTab::InfoTab(fs::path jollygoodExe, Config& config, QWidget* parent)
     : QWidget(parent), m_jollygoodExe(std::move(jollygoodExe)),
       m_config(config) {
     setupUi();
 }
 
 void InfoTab::setupUi() {
-    auto* layout = new QVBoxLayout(this);
+    auto* rootLayout = new QVBoxLayout(this);
+    rootLayout->setContentsMargins(0, 0, 0, 0);
+    auto* scroll = new QScrollArea(this);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    auto* content = new QWidget(scroll);
+    auto* layout = new QVBoxLayout(content);
+    scroll->setWidget(content);
+    rootLayout->addWidget(scroll);
+
+    auto* updatesGroup = new QGroupBox("Goliath Updates");
+    auto* updatesLayout = new QVBoxLayout(updatesGroup);
+    auto* updatesForm = new QFormLayout();
+    m_updateInterval = new QComboBox(updatesGroup);
+    m_updateInterval->addItem(
+        "Disabled (manual checks only)", QStringLiteral("disabled"));
+    m_updateInterval->addItem("Daily", QStringLiteral("daily"));
+    m_updateInterval->addItem("Weekly", QStringLiteral("weekly"));
+    const QString savedInterval = QString::fromStdString(
+        std::string(update_check_interval_key(parse_update_check_interval(
+            m_config.get("Updates", "check_interval", "disabled")))));
+    const int intervalIndex = m_updateInterval->findData(savedInterval);
+    m_updateInterval->setCurrentIndex(intervalIndex < 0 ? 0 : intervalIndex);
+    updatesForm->addRow("Automatic check:", m_updateInterval);
+
+    m_lastUpdateCheck = valueLabel("Never");
+    updatesForm->addRow("Last successful check:", m_lastUpdateCheck);
+    updatesLayout->addLayout(updatesForm);
+    refreshLastUpdateCheck();
+
+    auto* updateNote = new QLabel(
+        "Automatic checks are opt-in. They run silently when Goliath is up "
+        "to date or the network is unavailable, and show a dialog only when "
+        "a newer release exists. Manual checks remain available at any time.",
+        updatesGroup);
+    updateNote->setWordWrap(true);
+    updateNote->setObjectName("themed_note");
+    updatesLayout->addWidget(updateNote);
+
+    auto* updateButtons = new QHBoxLayout();
+    m_checkUpdatesButton = new QPushButton("Check Now...", updatesGroup);
+    auto* saveUpdatePreference = new QPushButton(
+        "Save Update Preference", updatesGroup);
+    updateButtons->addWidget(m_checkUpdatesButton);
+    updateButtons->addStretch();
+    updateButtons->addWidget(saveUpdatePreference);
+    updatesLayout->addLayout(updateButtons);
+
+    m_updatePreferenceStatus = new QLabel(updatesGroup);
+    m_updatePreferenceStatus->setWordWrap(true);
+    m_updatePreferenceStatus->setObjectName("secondary_text");
+    updatesLayout->addWidget(m_updatePreferenceStatus);
+
+    connect(m_checkUpdatesButton, &QPushButton::clicked,
+            this, &InfoTab::checkUpdatesNow);
+    connect(saveUpdatePreference, &QPushButton::clicked,
+            this, &InfoTab::saveUpdatePreference);
+    layout->addWidget(updatesGroup);
 
     auto* jgrfGroup = new QGroupBox("JollyGood Reference Frontend (JGRF)");
     auto* jgrfForm = new QFormLayout(jgrfGroup);
@@ -127,6 +191,52 @@ void InfoTab::activate() {
     if (m_activated) return;
     m_activated = true;
     refresh();
+}
+
+void InfoTab::saveUpdatePreference() {
+    const QString key = m_updateInterval
+        ? m_updateInterval->currentData().toString()
+        : QStringLiteral("disabled");
+    const UpdateCheckInterval interval = parse_update_check_interval(
+        key.toStdString());
+    m_config.set("Updates", "check_interval",
+                 std::string(update_check_interval_key(interval)));
+    save_config(m_config);
+    if (m_updatePreferenceStatus) {
+        m_updatePreferenceStatus->setText(
+            interval == UpdateCheckInterval::Disabled
+                ? "Automatic update checks are disabled."
+                : QString("Automatic update checks saved: %1.")
+                      .arg(interval == UpdateCheckInterval::Daily
+                               ? "daily"
+                               : "weekly"));
+    }
+}
+
+void InfoTab::checkUpdatesNow() {
+    if (m_checkUpdatesButton) m_checkUpdatesButton->setEnabled(false);
+    const bool successful = checkForUpdates(this);
+    if (successful) rememberSuccessfulUpdateCheck();
+    if (m_checkUpdatesButton) m_checkUpdatesButton->setEnabled(true);
+}
+
+void InfoTab::rememberSuccessfulUpdateCheck() {
+    recordSuccessfulUpdateCheck(m_config);
+    refreshLastUpdateCheck();
+}
+
+void InfoTab::refreshLastUpdateCheck() {
+    if (!m_lastUpdateCheck) return;
+    const auto epoch = parse_update_check_epoch(m_config.get(
+        "Updates", "last_successful_check_epoch", "0"));
+    if (!epoch) {
+        m_lastUpdateCheck->setText("Never");
+        return;
+    }
+    m_lastUpdateCheck->setText(
+        QDateTime::fromSecsSinceEpoch(*epoch)
+            .toLocalTime()
+            .toString("yyyy-MM-dd HH:mm"));
 }
 
 void InfoTab::refresh() {

@@ -87,6 +87,9 @@ TEST_CASE("Neo Geo CD path and library selector have safe defaults", "[config][s
     REQUIRE(cfg.get("UI", "library_system", "") == "neogeo");
     REQUIRE(cfg.get("UI", "last_rom_neogeo", "missing").empty());
     REQUIRE(cfg.get("UI", "last_rom_neogeocd", "missing").empty());
+    REQUIRE(cfg.get("Updates", "check_interval", "missing") == "disabled");
+    REQUIRE(cfg.get("Updates", "last_successful_check_epoch", "missing") ==
+            "0");
 }
 
 TEST_CASE("game model accepts unidentified Neo Geo CD entries", "[game_model][system][neocd]") {

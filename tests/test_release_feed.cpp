@@ -48,7 +48,8 @@ TEST_CASE("release feed selects the highest non-draft Goliath version",
     "tag_name": "v0.41.0-preview",
     "name": "Goliath 0.41.0 Preview",
     "html_url": "https://github.com/epsx/Goliath/releases/tag/v0.41.0-preview",
-    "published_at": "2026-10-08T12:00:00Z"
+    "published_at": "2026-10-08T12:00:00Z",
+    "body": "## Changes\n\n- Faster startup"
   },
   {
     "draft": true,
@@ -82,6 +83,7 @@ TEST_CASE("release feed selects the highest non-draft Goliath version",
     CHECK(release->tag == "v0.41.0-preview");
     CHECK(release->name == "Goliath 0.41.0 Preview");
     CHECK(release->published_at == "2026-10-08T12:00:00Z");
+    CHECK(release->body == "## Changes\n\n- Faster startup");
 }
 
 TEST_CASE("stable release wins over preview with the same version",

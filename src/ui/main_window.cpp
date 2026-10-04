@@ -13,9 +13,12 @@
 #include "game/bios_verify.hpp"
 #include "game/rescan_worker.hpp"
 #include "ui/rescan_dialog.hpp"
+#include "ui/update_check.hpp"
+#include "update/update_schedule.hpp"
 
 #include <QCloseEvent>
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QResizeEvent>
 #include <QDialog>
 #include <QFont>
@@ -121,6 +124,11 @@ MainWindow::MainWindow(Config config, QWidget* parent)
             this, &MainWindow::pollTrackedGameProcesses);
     refreshLibraryView(false);
     applyTheme(QString::fromStdString(m_config.get("UI", "theme", "Dark Modern")));
+    // Automatic checks are opt-in and never block the first paint. The
+    // checker itself stays silent unless a newer release exists.
+    QTimer::singleShot(0, this, [this]() {
+        startAutomaticUpdateCheckIfDue();
+    });
 }
 
 void MainWindow::refreshResolvedPaths() {
@@ -128,6 +136,27 @@ void MainWindow::refreshResolvedPaths() {
     m_romDir = resolve_path(m_config, "roms");
     m_neocdDir = resolve_path(m_config, "neocd");
     m_snapDir = resolve_path(m_config, "snaps");
+}
+
+void MainWindow::startAutomaticUpdateCheckIfDue() {
+    if (m_automaticUpdateCheckPending) return;
+
+    const UpdateCheckInterval interval = parse_update_check_interval(
+        m_config.get("Updates", "check_interval", "disabled"));
+    const auto lastSuccessfulCheck = parse_update_check_epoch(m_config.get(
+        "Updates", "last_successful_check_epoch", "0"));
+    if (!automatic_update_check_due(
+            interval, lastSuccessfulCheck,
+            QDateTime::currentSecsSinceEpoch())) {
+        return;
+    }
+
+    m_automaticUpdateCheckPending = true;
+    DebugLogger::logInfo("starting automatic update check");
+    checkForUpdatesAutomatically(this, [this](bool successful) {
+        m_automaticUpdateCheckPending = false;
+        if (successful) recordSuccessfulUpdateCheck(m_config);
+    });
 }
 
 void MainWindow::loadGames() {
@@ -656,6 +685,9 @@ void MainWindow::openSettings() {
             return applyCaptureHotkeys(gif, png, error);
         }, this);
     dialog.exec();
+    // A newly enabled preference takes effect immediately after Settings
+    // closes. Disabled or not-yet-due schedules return without network I/O.
+    startAutomaticUpdateCheckIfDue();
     // Path tab edits (e.g. BIOS Folder) must apply to this session too,
     // without waiting for a rescan.
     refreshResolvedPaths();
@@ -703,7 +735,7 @@ void MainWindow::openLogging() {
 }
 
 void MainWindow::openAbout() {
-    AboutDialog dialog(this);
+    AboutDialog dialog(m_config, this);
     dialog.exec();
 }
 

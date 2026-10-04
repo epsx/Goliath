@@ -7,9 +7,14 @@
 
 namespace goliath {
 
+class Config;
+
 class AboutDialog final : public QDialog {
 public:
-    explicit AboutDialog(QWidget* parent = nullptr);
+    AboutDialog(Config& config, QWidget* parent = nullptr);
+
+private:
+    Config& m_config;
 };
 
 } // namespace goliath

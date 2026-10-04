@@ -115,6 +115,7 @@ std::optional<PublishedRelease> select_newest_published_release(
             if (candidate.name.empty()) candidate.name = candidate.tag;
             candidate.page_url = *pageUrl;
             candidate.published_at = optional_string(item, "published_at");
+            candidate.body = optional_string(item, "body");
 
             if (!newest ||
                 compare_release_versions(candidate.version,

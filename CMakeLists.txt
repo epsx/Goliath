@@ -82,6 +82,7 @@ add_library(goliath-core STATIC
     src/common/window_geometry.cpp
     src/common/sha1.cpp
     src/update/release_feed.cpp
+    src/update/update_schedule.cpp
     src/game/hash_cache.cpp
     src/game/crc32_cache.cpp
     src/game/sha1_cache.cpp
@@ -341,6 +342,7 @@ if(BUILD_TESTS)
         tests/test_window_geometry.cpp
         tests/test_project_legal.cpp
         tests/test_release_feed.cpp
+        tests/test_update_schedule.cpp
         src/common/theme.cpp
     )
 
