@@ -1,13 +1,10 @@
 #include "geolith_verification.hpp"
 
-#include "miniz.h"
+#include "crc32_cache.hpp"
 #include "tinyxml2.h"
 
 #include <algorithm>
-#include <array>
 #include <cctype>
-#include <cstdio>
-#include <fstream>
 #include <string>
 
 namespace fs = std::filesystem;
@@ -28,13 +25,6 @@ bool valid_crc32(const std::string& value) {
            std::all_of(value.begin(), value.end(), [](unsigned char c) {
                return std::isxdigit(c) != 0;
            });
-}
-
-std::string crc32_hex(mz_ulong crc) {
-    char value[9]{};
-    std::snprintf(value, sizeof(value), "%08x",
-                  static_cast<unsigned int>(crc));
-    return value;
 }
 
 } // namespace
@@ -118,7 +108,8 @@ std::optional<GeolithCrcVerification> verify_geolith_neo(
     const fs::path& neo_path,
     const std::string& catalog_filename,
     const GeolithCrcCatalog& catalog,
-    const std::atomic<bool>* cancel) {
+    const std::atomic<bool>* cancel,
+    Crc32Cache* cache) {
     const auto expected = catalog.find(to_lower(catalog_filename));
     if (expected == catalog.end())
         return std::nullopt;
@@ -126,32 +117,24 @@ std::optional<GeolithCrcVerification> verify_geolith_neo(
     if (cancel && cancel->load(std::memory_order_acquire))
         return std::nullopt;
 
-    std::ifstream input(neo_path, std::ios::binary);
-    if (!input)
-        return std::nullopt;
-
-    mz_ulong crc = MZ_CRC32_INIT;
-    std::array<char, 1024 * 1024> buffer{};
-    while (input) {
-        if (cancel && cancel->load(std::memory_order_acquire))
+    std::optional<std::string> actual_crc32;
+    if (cache) {
+        std::error_code ec;
+        const std::uintmax_t size = fs::file_size(neo_path, ec);
+        if (ec)
             return std::nullopt;
-
-        input.read(buffer.data(),
-                   static_cast<std::streamsize>(buffer.size()));
-        const std::streamsize count = input.gcount();
-        if (count > 0) {
-            crc = mz_crc32(
-                crc,
-                reinterpret_cast<const mz_uint8*>(buffer.data()),
-                static_cast<std::size_t>(count));
-        }
+        actual_crc32 = cache->file_crc32(neo_path, size, cancel);
+    } else {
+        // Preserve the standalone verifier's original behavior. Only scanner
+        // calls opt into persistence by supplying its cache explicitly.
+        actual_crc32 = Crc32Cache::calculate_file_crc32(neo_path, cancel);
     }
-    if (input.bad())
+    if (!actual_crc32.has_value())
         return std::nullopt;
 
     return GeolithCrcVerification{
         expected->second,
-        crc32_hex(crc),
+        *actual_crc32,
     };
 }
 

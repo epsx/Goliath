@@ -78,6 +78,8 @@ add_library(goliath-core STATIC
     src/common/log_file.cpp
     src/common/window_geometry.cpp
     src/common/sha1.cpp
+    src/game/hash_cache.cpp
+    src/game/crc32_cache.cpp
     src/game/sha1_cache.cpp
     src/game/filesystem_io.cpp
     src/game/geolith_verification.cpp

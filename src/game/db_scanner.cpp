@@ -2,6 +2,7 @@
 
 #include "db_scanner.hpp"
 #include "common/goliath_common.hpp"
+#include "crc32_cache.hpp"
 #include "geolith_verification.hpp"
 #include "sha1_cache.hpp"
 #include "neogeo_metadata.hpp"
@@ -460,6 +461,8 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
         load_redump_neocd_dat(*redump_dat, redump_metadata, progress_callback);
     }
 
+    Crc32Cache geolith_crc32_cache =
+        Crc32Cache::load(p.outdir / "crc32_cache.json");
     Sha1Cache redump_sha1_cache = Sha1Cache::load(p.outdir / "hash_cache.json");
 
     apply_cartridge_compatibility(neogeo_metadata, progress_callback);
@@ -536,6 +539,9 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
 
     std::unordered_map<std::string, GameEntry> games;
     games.reserve(rom_files.size());
+
+    if (progress_callback)
+        progress_callback("Verifying MVS/AES cartridge images...\n");
 
     for (const std::string& rom : rom_files) {
         if (is_canceled()) {
@@ -655,7 +661,7 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
                 verify_geolith_neo(
                     filesystem_io_path(p.romdir / fs::path(rom)),
                     geolith_catalog_file,
-                    geolith_crc_catalog, cancel);
+                    geolith_crc_catalog, cancel, &geolith_crc32_cache);
             if (is_canceled()) {
                 result.error_message = "Scan canceled.";
                 return result;
@@ -693,6 +699,13 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
             game_it->second.main_rom = rom;
         }
     }
+
+    if (!geolith_crc_catalog.empty() && !is_canceled())
+        geolith_crc32_cache.prune_untouched();
+    if (!geolith_crc32_cache.save() && progress_callback) {
+        progress_callback("Warning: could not write Geolith CRC-32 cache: " +
+                          geolith_crc32_cache.path().string() + "\n");
+    }
     const auto cartridge_finished = ScanClock::now();
 
     std::vector<GameEntry> game_list;
@@ -702,6 +715,9 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
     // Each discovered CD image is a standalone top-level entry. Filename/title
     // metadata is provisional: verified CUE/CHD content identity may override
     // it or identify a Redump-only disc that is absent from neocd.xml.
+    if (progress_callback)
+        progress_callback("Verifying Neo Geo CD images...\n");
+
     for (const fs::path& rel_path : cd_files) {
         if (is_canceled()) {
             result.error_message = "Scan canceled.";
@@ -1097,6 +1113,11 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
     result.neo_geolith_crc32_verified_files = 0;
     result.neo_geolith_crc32_mismatch_files = 0;
     result.neo_metadata_only_files = 0;
+    result.neo_geolith_crc32_cache_hits = geolith_crc32_cache.hits();
+    result.neo_geolith_crc32_calculated_files =
+        geolith_crc32_cache.calculated();
+    result.neo_geolith_crc32_cache_entries = geolith_crc32_cache.entries();
+    result.neo_geolith_crc32_cache_pruned = geolith_crc32_cache.pruned();
     result.cd_image_count = 0;
     result.cd_game_count = 0;
     result.cd_identified_games = 0;
@@ -1168,6 +1189,17 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
                "\n";
     summary += "Metadata only            : " +
                std::to_string(result.neo_metadata_only_files) + "\n\n";
+    summary += "Geolith CRC-32 cache hits: " +
+               std::to_string(result.neo_geolith_crc32_cache_hits) + "\n";
+    summary += "Geolith CRC-32 calculated: " +
+               std::to_string(result.neo_geolith_crc32_calculated_files) +
+               "\n";
+    summary += "Geolith CRC-32 cache rows: " +
+               std::to_string(result.neo_geolith_crc32_cache_entries) +
+               "\n";
+    summary += "Geolith CRC-32 pruned    : " +
+               std::to_string(result.neo_geolith_crc32_cache_pruned) +
+               "\n\n";
     summary += "Neo Geo CD\n\n";
     summary += "Images                   : " + std::to_string(result.cd_image_count) + "\n";
     summary += "Games                    : " + std::to_string(result.cd_game_count) + "\n";

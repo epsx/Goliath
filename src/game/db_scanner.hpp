@@ -29,6 +29,10 @@ struct ScanResult {
     std::size_t neo_geolith_crc32_verified_files = 0;
     std::size_t neo_geolith_crc32_mismatch_files = 0;
     std::size_t neo_metadata_only_files = 0;
+    std::size_t neo_geolith_crc32_cache_hits = 0;
+    std::size_t neo_geolith_crc32_calculated_files = 0;
+    std::size_t neo_geolith_crc32_cache_entries = 0;
+    std::size_t neo_geolith_crc32_cache_pruned = 0;
 
     // Neo Geo CD statistics are kept separate from the legacy cartridge
     // counters above so existing callers/tests retain their established

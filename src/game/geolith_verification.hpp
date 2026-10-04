@@ -10,6 +10,8 @@
 
 namespace goliath {
 
+class Crc32Cache;
+
 using GeolithCrcCatalog = std::unordered_map<std::string, std::string>;
 
 struct GeolithCrcVerification {
@@ -34,6 +36,7 @@ std::optional<GeolithCrcVerification> verify_geolith_neo(
     const std::filesystem::path& neo_path,
     const std::string& catalog_filename,
     const GeolithCrcCatalog& catalog,
-    const std::atomic<bool>* cancel = nullptr);
+    const std::atomic<bool>* cancel = nullptr,
+    Crc32Cache* cache = nullptr);
 
 } // namespace goliath

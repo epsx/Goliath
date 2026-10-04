@@ -1361,11 +1361,23 @@ TEST_CASE("db scanner verifies each neo variant against geolith crc32",
     CHECK(result.neo_geolith_crc32_verified_files == 1);
     CHECK(result.neo_geolith_crc32_mismatch_files == 1);
     CHECK(result.neo_metadata_only_files == 0);
+    CHECK(result.neo_geolith_crc32_cache_hits == 0);
+    CHECK(result.neo_geolith_crc32_calculated_files == 2);
+    CHECK(result.neo_geolith_crc32_cache_entries == 2);
+    CHECK(result.neo_geolith_crc32_cache_pruned == 0);
+    CHECK(fs::is_regular_file(root / "database/crc32_cache.json"));
     CHECK(progress.find("Geolith CRC-32 entries: 2") != std::string::npos);
     CHECK(progress.find("Geolith CRC-32 verified  : 1") !=
           std::string::npos);
     CHECK(progress.find("CRC-32 mismatches        : 1") !=
           std::string::npos);
+    const std::size_t cartridge_progress =
+        progress.find("Verifying MVS/AES cartridge images...");
+    const std::size_t cd_progress =
+        progress.find("Verifying Neo Geo CD images...");
+    CHECK(cartridge_progress != std::string::npos);
+    CHECK(cd_progress != std::string::npos);
+    CHECK(cartridge_progress < cd_progress);
 
     const auto games = goliath::load_games(root / "database/games.json");
     REQUIRE(games.size() == 1);
@@ -1402,6 +1414,43 @@ TEST_CASE("db scanner verifies each neo variant against geolith crc32",
     CHECK(mismatch->crc32 == std::optional<std::string>("352441c2"));
     REQUIRE(mismatch->hashes.size() == 1);
     CHECK_FALSE(mismatch->hashes.front().matched);
+
+    // A fresh scan_roms() call must reuse the persisted CRC-32 values rather
+    // than merely retaining them in memory.
+    ScanResult second = scan_roms(cfg);
+    REQUIRE(second.success);
+    CHECK(second.neo_geolith_crc32_cache_hits == 2);
+    CHECK(second.neo_geolith_crc32_calculated_files == 0);
+    CHECK(second.neo_geolith_crc32_cache_entries == 2);
+    CHECK(second.neo_geolith_crc32_cache_pruned == 0);
+
+    // Rows no longer present in a complete cartridge scan are removed.
+    std::error_code remove_ec;
+    fs::remove(root / "roms/Metal Slug (prototype).neo", remove_ec);
+    REQUIRE_FALSE(remove_ec);
+    ScanResult third = scan_roms(cfg);
+    REQUIRE(third.success);
+    CHECK(third.neo_geolith_crc32_cache_hits == 1);
+    CHECK(third.neo_geolith_crc32_calculated_files == 0);
+    CHECK(third.neo_geolith_crc32_cache_entries == 1);
+    CHECK(third.neo_geolith_crc32_cache_pruned == 1);
+
+    // A same-size content change with a newer timestamp invalidates the row.
+    const fs::path cartridge = root / "roms/mslug.neo";
+    std::error_code ec;
+    const fs::file_time_type old_mtime = fs::last_write_time(cartridge, ec);
+    REQUIRE_FALSE(ec);
+    write_file(cartridge, "xyz");
+    fs::last_write_time(cartridge, old_mtime + std::chrono::seconds(2), ec);
+    REQUIRE_FALSE(ec);
+
+    ScanResult fourth = scan_roms(cfg);
+    REQUIRE(fourth.success);
+    CHECK(fourth.neo_geolith_crc32_verified_files == 0);
+    CHECK(fourth.neo_geolith_crc32_mismatch_files == 1);
+    CHECK(fourth.neo_geolith_crc32_cache_hits == 0);
+    CHECK(fourth.neo_geolith_crc32_calculated_files == 1);
+    CHECK(fourth.neo_geolith_crc32_cache_entries == 1);
 
     fs::remove_all(root);
 }

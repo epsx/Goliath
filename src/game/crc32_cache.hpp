@@ -6,12 +6,14 @@
 
 namespace goliath {
 
-// Persistent SHA-1 cache used by Neo Geo CD Redump BIN-track verification.
-class Sha1Cache {
+class Crc32Cache {
 public:
-    static Sha1Cache load(const std::filesystem::path& path);
+    static Crc32Cache load(const std::filesystem::path& path);
+    static std::optional<std::string> calculate_file_crc32(
+        const std::filesystem::path& file,
+        const std::atomic<bool>* cancel = nullptr);
 
-    std::optional<std::string> file_sha1(
+    std::optional<std::string> file_crc32(
         const std::filesystem::path& file,
         std::uintmax_t size,
         const std::atomic<bool>* cancel = nullptr);
@@ -26,7 +28,7 @@ public:
     std::size_t pruned() const { return m_cache.pruned(); }
 
 private:
-    explicit Sha1Cache(HashCache cache) : m_cache(std::move(cache)) {}
+    explicit Crc32Cache(HashCache cache) : m_cache(std::move(cache)) {}
     HashCache m_cache;
 };
 
