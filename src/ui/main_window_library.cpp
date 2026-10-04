@@ -79,6 +79,20 @@ std::string lowercaseAscii(std::string text) {
     return text;
 }
 
+struct LibrarySortValue {
+    std::int64_t numeric = 0;
+    std::string text;
+};
+
+std::int64_t libraryYearSortValue(const Game& game) {
+    if (!game.year.has_value() || game.year->empty()) return 0;
+    try {
+        return std::stoi(*game.year);
+    } catch (...) {
+        return 0;
+    }
+}
+
 QString variantFullName(const Rom& rom) {
     if (rom.name.has_value() && !rom.name->empty())
         return QString::fromStdString(*rom.name);
@@ -479,29 +493,31 @@ std::vector<int> MainWindow::sortedVariantOrder(const Game& game) const {
     if (!ratingSort && !playtimeSort) return order;
 
     const bool descending = m_sortKey.endsWith("_desc");
-    std::stable_sort(order.begin(), order.end(), [&](int left, int right) {
-        const Rom& leftRom = game.roms[left];
-        const Rom& rightRom = game.roms[right];
-        const std::int64_t leftMetric = ratingSort
+    std::vector<LibrarySortValue> sortValues(game.roms.size());
+    for (int index : order) {
+        const Rom& rom = game.roms[index];
+        LibrarySortValue& value = sortValues[index];
+        value.numeric = ratingSort
             ? static_cast<std::int64_t>(
-                  m_gameLibraryState.rating(game.system, leftRom.file))
-            : mediaPlaytimeSeconds(game, leftRom.file);
-        const std::int64_t rightMetric = ratingSort
-            ? static_cast<std::int64_t>(
-                  m_gameLibraryState.rating(game.system, rightRom.file))
-            : mediaPlaytimeSeconds(game, rightRom.file);
+                  m_gameLibraryState.rating(game.system, rom.file))
+            : mediaPlaytimeSeconds(game, rom.file);
+        value.text = lowercaseAscii(
+            rom.mame.empty() ? rom.file : rom.mame);
+    }
 
-        if (libraryMetricPrecedes(leftMetric, rightMetric, descending)) {
+    std::stable_sort(order.begin(), order.end(), [&](int left, int right) {
+        const LibrarySortValue& leftValue = sortValues[left];
+        const LibrarySortValue& rightValue = sortValues[right];
+
+        if (libraryMetricPrecedes(
+                leftValue.numeric, rightValue.numeric, descending)) {
             return true;
         }
-        if (libraryMetricPrecedes(rightMetric, leftMetric, descending)) {
+        if (libraryMetricPrecedes(
+                rightValue.numeric, leftValue.numeric, descending)) {
             return false;
         }
-        const std::string& leftName = leftRom.mame.empty()
-            ? leftRom.file : leftRom.mame;
-        const std::string& rightName = rightRom.mame.empty()
-            ? rightRom.file : rightRom.mame;
-        return lowercaseAscii(leftName) < lowercaseAscii(rightName);
+        return leftValue.text < rightValue.text;
     });
     return order;
 }
@@ -511,47 +527,55 @@ std::vector<int> MainWindow::sortedGameOrder(
     std::vector<int> idx(m_games.size());
     for (std::size_t i = 0; i < idx.size(); ++i) idx[i] = static_cast<int>(i);
 
-    auto yearValue = [&](const Game& game) -> int {
-        if (!game.year.has_value() || game.year->empty()) return 0;
-        try {
-            return std::stoi(*game.year);
-        } catch (...) {
-            return 0;
+    const bool yearSort = m_sortKey == "year" ||
+                          m_sortKey == "year_desc";
+    const bool ratingSort = m_sortKey == "rating" ||
+                            m_sortKey == "rating_desc";
+    const bool playtimeSort = m_sortKey == "playtime" ||
+                              m_sortKey == "playtime_desc";
+    const bool metricSort = ratingSort || playtimeSort;
+
+    std::vector<LibrarySortValue> sortValues(m_games.size());
+    for (std::size_t index = 0; index < m_games.size(); ++index) {
+        LibrarySortValue& value = sortValues[index];
+        if (yearSort) {
+            value.numeric = libraryYearSortValue(m_games[index]);
+            continue;
         }
-    };
+
+        value.text = lowercaseAscii(listTitles[index]);
+        if (metricSort) {
+            value.numeric = gameSortMetric(m_games[index], ratingSort);
+        }
+    }
 
     if (m_sortKey == "display_desc") {
         std::stable_sort(idx.begin(), idx.end(), [&](int a, int b) {
-            return lowercaseAscii(listTitles[a]) >
-                   lowercaseAscii(listTitles[b]);
+            return sortValues[a].text > sortValues[b].text;
         });
     } else if (m_sortKey == "year_desc") {
         std::stable_sort(idx.begin(), idx.end(), [&](int a, int b) {
-            return yearValue(m_games[a]) > yearValue(m_games[b]);
+            return sortValues[a].numeric > sortValues[b].numeric;
         });
     } else if (m_sortKey == "year") {
         std::stable_sort(idx.begin(), idx.end(), [&](int a, int b) {
-            return yearValue(m_games[a]) < yearValue(m_games[b]);
+            return sortValues[a].numeric < sortValues[b].numeric;
         });
-    } else if (m_sortKey == "rating" || m_sortKey == "rating_desc" ||
-               m_sortKey == "playtime" || m_sortKey == "playtime_desc") {
-        const bool ratingMetric = m_sortKey.startsWith("rating");
+    } else if (metricSort) {
         const bool descending = m_sortKey.endsWith("_desc");
         std::stable_sort(idx.begin(), idx.end(), [&](int a, int b) {
-            const std::int64_t left = gameSortMetric(
-                m_games[a], ratingMetric);
-            const std::int64_t right = gameSortMetric(
-                m_games[b], ratingMetric);
-            if (libraryMetricPrecedes(left, right, descending)) return true;
-            if (libraryMetricPrecedes(right, left, descending)) return false;
-            return lowercaseAscii(listTitles[a]) <
-                   lowercaseAscii(listTitles[b]);
+            const LibrarySortValue& left = sortValues[a];
+            const LibrarySortValue& right = sortValues[b];
+            if (libraryMetricPrecedes(
+                    left.numeric, right.numeric, descending)) return true;
+            if (libraryMetricPrecedes(
+                    right.numeric, left.numeric, descending)) return false;
+            return left.text < right.text;
         });
     } else {
         // "display" and legacy/unknown sort keys fall back to Name (A -> Z).
         std::stable_sort(idx.begin(), idx.end(), [&](int a, int b) {
-            return lowercaseAscii(listTitles[a]) <
-                   lowercaseAscii(listTitles[b]);
+            return sortValues[a].text < sortValues[b].text;
         });
     }
 
