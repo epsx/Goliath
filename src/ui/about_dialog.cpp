@@ -1,6 +1,7 @@
 #include "ui/about_dialog.hpp"
 
 #include "common/project_legal.hpp"
+#include "ui/update_check.hpp"
 #include "ui/widgets/title_bar.hpp"
 
 #include <QDesktopServices>
@@ -278,6 +279,12 @@ AboutDialog::AboutDialog(QWidget* parent)
     auto* actionRow = new QHBoxLayout();
     actionRow->setSpacing(8);
     actionRow->addStretch();
+
+    auto* checkUpdates = new QPushButton("Check for Updates...", this);
+    checkUpdates->setObjectName("about_link_button");
+    connect(checkUpdates, &QPushButton::clicked, this,
+            [this]() { checkForUpdates(this); });
+    actionRow->addWidget(checkUpdates);
 
     auto* qtWebsite = makeExternalLinkButton(
         "Qt Website", "https://www.qt.io/", {}, this);

@@ -13,7 +13,7 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Network)
 find_package(SDL3 REQUIRED CONFIG)
 
 string(TIMESTAMP GOLIATH_BUILD_DATE "%Y-%m-%d" UTC)
@@ -23,6 +23,9 @@ set(GOLIATH_PROJECT_URL "https://github.com/epsx/Goliath" CACHE STRING
     "Published Goliath project URL shown by About Goliath")
 set(GOLIATH_LICENSE_URL "https://www.gnu.org/licenses/gpl-3.0.html" CACHE STRING
     "Published Goliath license URL shown by About Goliath")
+set(GOLIATH_RELEASES_API_URL
+    "https://api.github.com/repos/epsx/Goliath/releases?per_page=20" CACHE STRING
+    "GitHub releases API URL used by the manual update checker")
 
 if(NOT GOLIATH_BUILD_REVISION)
     set(GOLIATH_BUILD_REVISION "local-uncommitted")
@@ -78,6 +81,7 @@ add_library(goliath-core STATIC
     src/common/log_file.cpp
     src/common/window_geometry.cpp
     src/common/sha1.cpp
+    src/update/release_feed.cpp
     src/game/hash_cache.cpp
     src/game/crc32_cache.cpp
     src/game/sha1_cache.cpp
@@ -140,6 +144,7 @@ add_executable(goliath-qt
     assets/app_icon.qrc
     src/main.cpp
     src/ui/about_dialog.cpp
+    src/ui/update_check.cpp
     src/ui/command_dialog.cpp
     src/ui/main_window.cpp
     src/ui/game_screenshot.cpp
@@ -177,6 +182,7 @@ add_executable(goliath-qt
 target_link_libraries(goliath-qt PRIVATE
     goliath-core
     Qt6::Widgets
+    Qt6::Network
 )
 if(WIN32)
     target_sources(goliath-qt PRIVATE src/ui/windows_desktop_capture.cpp)
@@ -214,6 +220,7 @@ target_compile_definitions(goliath-qt PRIVATE
     GOLIATH_BUILD_REVISION="${GOLIATH_BUILD_REVISION}"
     GOLIATH_PROJECT_URL="${GOLIATH_PROJECT_URL}"
     GOLIATH_LICENSE_URL="${GOLIATH_LICENSE_URL}"
+    GOLIATH_RELEASES_API_URL="${GOLIATH_RELEASES_API_URL}"
 )
 
 add_custom_command(TARGET goliath-qt POST_BUILD
@@ -333,6 +340,7 @@ if(BUILD_TESTS)
         tests/test_theme.cpp
         tests/test_window_geometry.cpp
         tests/test_project_legal.cpp
+        tests/test_release_feed.cpp
         src/common/theme.cpp
     )
 
