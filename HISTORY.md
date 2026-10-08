@@ -7,7 +7,7 @@ Historical test counts are retained as checkpoint evidence. The current
 publication candidate passes:
 
 ```text
-All tests passed (3608 assertions in 233 test cases)
+All tests passed (3756 assertions in 254 test cases)
 ```
 
 The preceding `1360/99` Feature 9 baseline passed its per-game mapping,
@@ -16,6 +16,24 @@ baseline passed manual MVS/AES, Neo Geo CD CUE, Neo Geo CD CHD, Settings, and
 visible-only Random smoke tests.
 
 ---
+
+## 2026-10-08 — Goliath 0.40.1 preview candidate
+
+- Added manual update checks and opt-in daily or weekly automatic checks,
+  including trusted GitHub release parsing, release-note presentation, and
+  persisted last-successful-check information.
+- Added persistent List, Grid, and Big Grid Icons library modes with themed
+  artwork cards, readable titles and variant tooltips, responsive columns,
+  continuous visible-row striping, and stable resize/splitter behavior.
+- Improved library responsiveness by retaining selection per system,
+  precomputing sort keys, reporting rescan phase timings, caching MVS/AES
+  CRC-32 verification, and rejecting unstable hash-cache fingerprints.
+- Standardized Settings action footers, added Core reset-to-defaults, retained
+  the selected Lithogen executable, restored Classic View and panel shadows,
+  and aligned the toolbar, library controls, Search, and Snaps/GIFs gallery.
+- Validated the complete Windows suite at 3756 assertions in 254 test cases
+  and manually checked List, Grid, Big Grid Icons, Classic View, themes,
+  Expand/Collapse All, and responsive layouts at 1080p and 2K.
 
 ## 2026-10-03 — Goliath 0.40.0 publication candidate
 
