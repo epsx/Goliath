@@ -861,6 +861,11 @@ void MainWindow::closeEvent(QCloseEvent* event) {
 
 void MainWindow::resizeEvent(QResizeEvent* event) {
     QMainWindow::resizeEvent(event);
+    // Child layouts and Classic View splitter changes settle after this event.
+    // Recalculate only the icon-mode grid once the new viewport width exists.
+    QTimer::singleShot(0, this, [this]() {
+        updateIconViewGridSize();
+    });
 
     if (!m_splitter) {
         return;

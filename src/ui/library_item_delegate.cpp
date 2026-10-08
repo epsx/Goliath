@@ -6,12 +6,15 @@
 #include <QColor>
 #include <QFont>
 #include <QFontMetrics>
+#include <QIcon>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPalette>
+#include <QPixmap>
 #include <QStyle>
 #include <QStyleOptionViewItem>
 #include <QString>
+#include <QTextOption>
 #include <QWidget>
 
 #include <algorithm>
@@ -74,8 +77,26 @@ LibraryItemDelegate::LibraryItemDelegate(QObject* parent)
 void LibraryItemDelegate::paint(
         QPainter* painter, const QStyleOptionViewItem& sourceOption,
         const QModelIndex& index) const {
+    QStyleOptionViewItem option(sourceOption);
+    initStyleOption(&option, index);
+    const QWidget* widget = option.widget;
+    QStyle* style = widget ? widget->style() : QApplication::style();
+    const bool alternate =
+        index.data(LibraryAlternateBackgroundRole).toBool();
+    const QColor rowBackground = propertyColor(
+        widget,
+        alternate ? "goliathLibraryAlternateBackground"
+                  : "goliathLibraryBackground",
+        option.palette.color(
+            alternate ? QPalette::AlternateBase : QPalette::Base));
+
+    // QStyleSheetStyle ignores a delegate-supplied backgroundBrush for this
+    // tree. Paint the theme's stable parent/child stripe explicitly, then let
+    // the active style overlay selection, focus, branch content and artwork.
+    painter->fillRect(option.rect, rowBackground);
     if (index.column() != 0) {
-        QStyledItemDelegate::paint(painter, sourceOption, index);
+        style->drawControl(QStyle::CE_ItemViewItem, &option,
+                           painter, widget);
         return;
     }
 
@@ -83,15 +104,12 @@ void LibraryItemDelegate::paint(
     const int rating = libraryListRatingBadge(
         index.data(LibraryRatingRole).toInt());
     if (!favorite && rating == 0) {
-        QStyledItemDelegate::paint(painter, sourceOption, index);
+        style->drawControl(QStyle::CE_ItemViewItem, &option,
+                           painter, widget);
         return;
     }
 
-    QStyleOptionViewItem option(sourceOption);
-    initStyleOption(&option, index);
     const QString title = option.text;
-    const QWidget* widget = option.widget;
-    QStyle* style = widget ? widget->style() : QApplication::style();
     const QRect textRect = style->subElementRect(
         QStyle::SE_ItemViewItemText, &option, widget);
 
@@ -184,6 +202,128 @@ void LibraryItemDelegate::paint(
             starX += RatingStarSize + RatingStarSpacing;
         }
     }
+
+    painter->restore();
+}
+
+LibraryTileDelegate::LibraryTileDelegate(QObject* parent)
+    : QStyledItemDelegate(parent) {}
+
+void LibraryTileDelegate::setDisplayMode(LibraryDisplayMode mode) {
+    m_mode = mode;
+}
+
+QSize LibraryTileDelegate::sizeHint(
+        const QStyleOptionViewItem& /*option*/,
+        const QModelIndex& /*index*/) const {
+    const LibraryTileMetrics metrics = libraryTileMetrics(m_mode);
+    return QSize(metrics.width, metrics.height);
+}
+
+void LibraryTileDelegate::paint(
+        QPainter* painter, const QStyleOptionViewItem& sourceOption,
+        const QModelIndex& index) const {
+    QStyleOptionViewItem option(sourceOption);
+    initStyleOption(&option, index);
+
+    const LibraryTileMetrics metrics = libraryTileMetrics(m_mode);
+    const QWidget* widget = option.widget;
+    const bool selected = option.state.testFlag(QStyle::State_Selected);
+    const bool hovered = option.state.testFlag(QStyle::State_MouseOver);
+    const bool enabled = option.state.testFlag(QStyle::State_Enabled);
+
+    painter->save();
+    painter->setRenderHint(QPainter::Antialiasing);
+
+    const QRect tileRect = option.rect.adjusted(4, 4, -4, -4);
+    const QColor accent = propertyColor(
+        widget, "goliathEngravedHover",
+        option.palette.color(QPalette::Highlight));
+    if (selected) {
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(accent);
+        painter->drawRoundedRect(tileRect, 8, 8);
+    } else if (hovered) {
+        QColor hoverFill = accent;
+        hoverFill.setAlpha(28);
+        QColor hoverOutline = accent;
+        hoverOutline.setAlpha(110);
+        painter->setPen(QPen(hoverOutline, 1));
+        painter->setBrush(hoverFill);
+        painter->drawRoundedRect(tileRect, 8, 8);
+    }
+
+    const int artworkX = option.rect.center().x() -
+                         metrics.artwork_width / 2;
+    const QRect artworkRect(
+        artworkX, option.rect.top() + 8,
+        metrics.artwork_width, metrics.artwork_height);
+    QColor artworkBackground = propertyColor(
+        widget, "goliathLibraryArtworkBackground",
+        option.palette.color(QPalette::Base));
+    QColor artworkBorder = propertyColor(
+        widget, "goliathLibraryArtworkBorder",
+        option.palette.color(QPalette::Mid));
+    if (!enabled) {
+        artworkBackground.setAlpha(160);
+        artworkBorder.setAlpha(120);
+    }
+    QColor shadow(0, 0, 0, selected ? 42 : 28);
+    painter->setPen(Qt::NoPen);
+    painter->setBrush(shadow);
+    painter->drawRoundedRect(artworkRect.translated(0, 2), 7, 7);
+    painter->setPen(QPen(artworkBorder, 1));
+    painter->setBrush(artworkBackground);
+    painter->drawRoundedRect(artworkRect, 7, 7);
+
+    const QIcon icon = qvariant_cast<QIcon>(
+        index.data(Qt::DecorationRole));
+    if (!icon.isNull()) {
+        const QRect contentRect = artworkRect.adjusted(9, 9, -9, -9);
+        const int iconPixels = libraryDisplayModeIconPixels(m_mode);
+        const QSize iconBounds(
+            std::min(iconPixels, contentRect.width()),
+            std::min(iconPixels, contentRect.height()));
+        const QSize sourceSize = icon.actualSize(QSize(512, 512));
+        QPixmap artwork = icon.pixmap(sourceSize);
+        if (!artwork.isNull()) {
+            artwork = artwork.scaled(
+                iconBounds, Qt::KeepAspectRatio,
+                Qt::SmoothTransformation);
+            const QPoint artworkTopLeft(
+                contentRect.center().x() - artwork.width() / 2,
+                contentRect.center().y() - artwork.height() / 2);
+            painter->drawPixmap(artworkTopLeft, artwork);
+        }
+    }
+
+    const int titleTop = artworkRect.bottom() + 7;
+    const QRect titleRect(
+        option.rect.left() + 7, titleTop,
+        option.rect.width() - 14,
+        std::max(0, option.rect.bottom() - titleTop - 5));
+    const QColor textColor = selected
+        ? propertyColor(
+              widget, "goliathEngravedSelectionText",
+              option.palette.color(QPalette::HighlightedText))
+        : propertyColor(
+              widget, "goliathEngravedText",
+              option.palette.color(QPalette::Text));
+    QColor effectiveText = textColor;
+    if (!enabled) effectiveText.setAlpha(120);
+
+    painter->setFont(option.font);
+    QTextOption textOption(Qt::AlignHCenter | Qt::AlignTop);
+    textOption.setWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
+    painter->setClipRect(titleRect);
+
+    const QString title = index.data(Qt::DisplayRole).toString();
+    const QColor depthColor = propertyColor(
+        widget, "goliathEngravedDepth", QColor(255, 255, 255, 120));
+    painter->setPen(depthColor);
+    painter->drawText(titleRect.translated(0, 1), title, textOption);
+    painter->setPen(effectiveText);
+    painter->drawText(titleRect, title, textOption);
 
     painter->restore();
 }

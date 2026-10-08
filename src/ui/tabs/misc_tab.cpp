@@ -43,6 +43,10 @@ MiscTab::MiscTab(fs::path jollygoodSettingsIni, fs::path geolithIni, QWidget* pa
 
 void MiscTab::setupUi() {
     auto* layout = new QVBoxLayout(this);
+    layout->setContentsMargins(
+        layout->contentsMargins().left(),
+        layout->contentsMargins().top(),
+        layout->contentsMargins().right(), 0);
 
     auto* group = new QGroupBox("JollyGood Misc Settings");
     auto* form = new QFormLayout(group);

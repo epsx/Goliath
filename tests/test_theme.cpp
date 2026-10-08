@@ -251,6 +251,23 @@ TEST_CASE("gallery control containers preserve the patterned background",
     }
 }
 
+TEST_CASE("library icon styling does not leak into settings lists",
+          "[theme][library-view]") {
+    const std::string stylesheet = generate_theme_style(
+        find_theme("Neo Geo Classic"));
+    CHECK(stylesheet.find("QListWidget#library_icon_view {") !=
+          std::string::npos);
+    CHECK(stylesheet.find("QListWidget#library_icon_view::item {") !=
+          std::string::npos);
+    CHECK(stylesheet.find("\nQListWidget {") == std::string::npos);
+    CHECK(stylesheet.find("\nQListWidget::item {") == std::string::npos);
+    CHECK(stylesheet.find(
+        "QStackedWidget#library_view_stack {\n"
+        "    background-color: transparent;\n"
+        "    border: none;\n"
+        "}") != std::string::npos);
+}
+
 TEST_CASE("legacy and unknown theme keys resolve predictably", "[theme]") {
     CHECK(find_theme("One Dark Pro").key == "Tokyo Night");
     CHECK(find_theme("Monokai Pro").key == "Gruvbox Dark");

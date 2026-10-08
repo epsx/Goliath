@@ -662,6 +662,12 @@ void MainWindow::populateTree() {
             childItem->setData(0, LibraryFavoriteRole, childFavorite);
             childItem->setData(
                 0, LibraryRatingRole, libraryListRatingBadge(childRating));
+            const std::string variantTooltip =
+                libraryListVariantTooltip(game, rom);
+            if (!variantTooltip.empty()) {
+                childItem->setToolTip(
+                    0, QString::fromStdString(variantTooltip));
+            }
             childItem->setHidden(!m_showVariants);
         }
 
@@ -672,7 +678,37 @@ void MainWindow::populateTree() {
         clearDetailsForNoSelection(false);
     }
 
+    refreshLibraryListRowBackgrounds();
     updateStatus();
+}
+
+void MainWindow::refreshLibraryListRowBackgrounds() {
+    if (!m_tree) return;
+
+    int visibleRow = 0;
+    const auto applyBackground = [&visibleRow](QTreeWidgetItem* item) {
+        const bool alternate =
+            libraryListVisibleRowUsesAlternateBackground(visibleRow);
+        item->setData(
+            0, LibraryAlternateBackgroundRole, alternate);
+        item->setData(
+            1, LibraryAlternateBackgroundRole, alternate);
+        ++visibleRow;
+    };
+
+    for (int i = 0; i < m_tree->topLevelItemCount(); ++i) {
+        QTreeWidgetItem* parent = m_tree->topLevelItem(i);
+        if (!parent || parent->isHidden()) continue;
+
+        applyBackground(parent);
+        if (!parent->isExpanded()) continue;
+
+        for (int j = 0; j < parent->childCount(); ++j) {
+            QTreeWidgetItem* child = parent->child(j);
+            if (!child || child->isHidden()) continue;
+            applyBackground(child);
+        }
+    }
 }
 
 void MainWindow::refreshLibraryView(
@@ -728,17 +764,18 @@ void MainWindow::setLibraryDisplayMode(LibraryDisplayMode mode,
     if (m_iconView) {
         const int iconPixels = libraryDisplayModeIconPixels(mode);
         m_iconView->setIconSize(QSize(iconPixels, iconPixels));
-        const bool showLabels = libraryDisplayModeShowsLabels(mode);
-        const bool expandedMvsGrid =
-            mode == LibraryDisplayMode::Grid &&
-            m_librarySystem == "neogeo";
-        m_iconView->setWordWrap(showLabels);
-        m_iconView->setTextElideMode(
-            expandedMvsGrid ? Qt::ElideNone : Qt::ElideRight);
-        m_iconView->setUniformItemSizes(!expandedMvsGrid);
-        m_iconView->setGridSize(showLabels
-            ? QSize(132, 116)
-            : QSize(84, 84));
+        if (m_libraryTileDelegate)
+            m_libraryTileDelegate->setDisplayMode(mode);
+        if (mode != LibraryDisplayMode::List) {
+            const bool expandedMvsGrid =
+                mode == LibraryDisplayMode::Grid &&
+                m_librarySystem == "neogeo";
+            m_iconView->setWordWrap(true);
+            m_iconView->setTextElideMode(
+                expandedMvsGrid ? Qt::ElideNone : Qt::ElideRight);
+            m_iconView->setUniformItemSizes(!expandedMvsGrid);
+            updateIconViewGridSize();
+        }
     }
 
     if (m_libraryViewStack && m_tree && m_iconView) {
@@ -756,22 +793,36 @@ void MainWindow::setLibraryDisplayMode(LibraryDisplayMode mode,
     }
 }
 
+void MainWindow::updateIconViewGridSize() {
+    if (!m_iconView || m_libraryDisplayMode == LibraryDisplayMode::List) {
+        return;
+    }
+
+    const LibraryTileMetrics metrics = libraryTileMetrics(
+        m_libraryDisplayMode);
+    const int cellWidth = libraryResponsiveGridCellWidth(
+        m_iconView->viewport()->width(), metrics.width,
+        m_iconView->spacing());
+    const QSize targetSize(cellWidth, metrics.height);
+    if (m_iconView->gridSize() != targetSize) {
+        m_iconView->setGridSize(targetSize);
+    }
+}
+
 void MainWindow::refreshIconView() {
     if (!m_iconView || !m_tree) return;
 
     const QSignalBlocker blocker(m_iconView);
     m_iconView->clear();
-    const bool showLabels = libraryDisplayModeShowsLabels(
-        m_libraryDisplayMode);
+    if (m_libraryDisplayMode == LibraryDisplayMode::List) return;
+
     const bool expandedMvsGrid =
         m_libraryDisplayMode == LibraryDisplayMode::Grid &&
         m_librarySystem == "neogeo";
     m_iconView->setTextElideMode(
         expandedMvsGrid ? Qt::ElideNone : Qt::ElideRight);
     m_iconView->setUniformItemSizes(!expandedMvsGrid);
-    m_iconView->setGridSize(showLabels
-        ? QSize(132, 116)
-        : QSize(84, 84));
+    updateIconViewGridSize();
 
     struct IconTile {
         QTreeWidgetItem* treeItem = nullptr;
@@ -898,30 +949,9 @@ void MainWindow::refreshIconView() {
         return titlePrecedes(left, right);
     });
 
-    const bool scaleBigIcons =
-        m_libraryDisplayMode == LibraryDisplayMode::BigIcons;
-    const QSize bigIconBounds(
-        libraryDisplayModeIconPixels(LibraryDisplayMode::BigIcons),
-        libraryDisplayModeIconPixels(LibraryDisplayMode::BigIcons));
     for (const IconTile& tile : tiles) {
-        QIcon icon = tile.icon;
-        if (scaleBigIcons && !icon.isNull()) {
-            const QSize sourceSize = icon.actualSize(QSize(512, 512));
-            QPixmap pixmap = icon.pixmap(sourceSize);
-            if (!pixmap.isNull()) {
-                const bool enlarging =
-                    pixmap.width() < bigIconBounds.width() ||
-                    pixmap.height() < bigIconBounds.height();
-                pixmap = pixmap.scaled(
-                    bigIconBounds, Qt::KeepAspectRatio,
-                    enlarging ? Qt::FastTransformation
-                              : Qt::SmoothTransformation);
-                icon = QIcon(pixmap);
-            }
-        }
-
         auto* item = new QListWidgetItem(
-            icon, showLabels ? tile.title : QString(), m_iconView);
+            tile.icon, tile.title, m_iconView);
         item->setData(GameIndexRole,
                       tile.treeItem->data(0, GameIndexRole));
         item->setData(RomIndexRole,
@@ -931,6 +961,9 @@ void MainWindow::refreshIconView() {
         item->setTextAlignment(Qt::AlignHCenter | Qt::AlignTop);
     }
     syncIconSelectionFromTree();
+    QTimer::singleShot(0, m_iconView, [this]() {
+        updateIconViewGridSize();
+    });
 }
 
 void MainWindow::syncIconSelectionFromTree() {
@@ -1467,6 +1500,7 @@ void MainWindow::filterGames(const QString& text) {
             parent->setExpanded(true);
         }
     }
+    refreshLibraryListRowBackgrounds();
     if (!m_rebuildingLibraryView) {
         ensureVisibleSelection(!needle.isEmpty() || m_favoritesOnly ||
                                personalFiltersActive);
@@ -2245,15 +2279,22 @@ void MainWindow::setAllGroupsExpanded(bool expanded) {
         : -1;
 
     bool changed = false;
-    for (int i = 0; i < m_tree->topLevelItemCount(); ++i) {
-        QTreeWidgetItem* parent = m_tree->topLevelItem(i);
-        if (parent->isExpanded() == expanded) continue;
-        parent->setExpanded(expanded);
-        changed = true;
+    {
+        // Individual itemExpanded/itemCollapsed signals each refresh every
+        // visible row. Suppress them during a bulk operation and perform the
+        // stripe/selection work once after the final group changes state.
+        const QSignalBlocker blocker(m_tree);
+        for (int i = 0; i < m_tree->topLevelItemCount(); ++i) {
+            QTreeWidgetItem* parent = m_tree->topLevelItem(i);
+            if (parent->isExpanded() == expanded) continue;
+            parent->setExpanded(expanded);
+            changed = true;
+        }
     }
 
     if (!changed) return;
     if (!expanded) ensureVisibleSelection(false);
+    refreshLibraryListRowBackgrounds();
     if (!anchor) return;
 
     // Bulk expansion/collapse finishes across queued layout passes. Restore

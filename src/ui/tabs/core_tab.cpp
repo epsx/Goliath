@@ -10,6 +10,7 @@
 #include <QHBoxLayout>
 #include <QIcon>
 #include <QLabel>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSize>
@@ -94,6 +95,10 @@ CoreTab::CoreTab(fs::path geolithIni, QWidget* parent)
 
 void CoreTab::setupUi() {
     auto* layout = new QVBoxLayout(this);
+    layout->setContentsMargins(
+        layout->contentsMargins().left(),
+        layout->contentsMargins().top(),
+        layout->contentsMargins().right(), 0);
 
     auto* scroll = new QScrollArea();
     scroll->setWidgetResizable(true);
@@ -140,9 +145,16 @@ void CoreTab::setupUi() {
     scroll->setWidget(container);
     layout->addWidget(scroll);
 
+    auto* buttonRow = new QHBoxLayout();
     auto* saveBtn = new QPushButton("Save Core Settings");
     connect(saveBtn, &QPushButton::clicked, this, &CoreTab::save);
-    layout->addWidget(saveBtn);
+    buttonRow->addWidget(saveBtn);
+
+    auto* resetBtn = new QPushButton("Reset to Defaults");
+    connect(resetBtn, &QPushButton::clicked,
+            this, &CoreTab::resetDefaults);
+    buttonRow->addWidget(resetBtn);
+    layout->addLayout(buttonRow);
 }
 
 void CoreTab::load() {
@@ -174,6 +186,26 @@ void CoreTab::save() {
     }
     cfg.save(m_geolithIni);
 
+}
+
+void CoreTab::resetDefaults() {
+    const auto reply = QMessageBox::question(
+        this, "Reset Core Settings",
+        "Reset all Geolith Core settings to their defaults?",
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (reply != QMessageBox::Yes) return;
+
+    std::error_code ec;
+    fs::create_directories(m_geolithIni.parent_path(), ec);
+
+    IniDocument cfg;
+    cfg.load(m_geolithIni);
+    for (const GroupedField& gf : geolithCoreFields()) {
+        cfg.set("geolith", gf.spec.key,
+                std::to_string(gf.spec.default_value));
+    }
+    cfg.save(m_geolithIni);
+    load();
 }
 
 } // namespace goliath

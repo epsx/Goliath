@@ -80,7 +80,12 @@ void InfoTab::setupUi() {
     auto* content = new QWidget(scroll);
     auto* layout = new QVBoxLayout(content);
     scroll->setWidget(content);
-    rootLayout->addWidget(scroll);
+    rootLayout->addWidget(scroll, 1);
+
+    m_refreshButton = new QPushButton(
+        QString::fromUtf8("\xE2\x86\xBB Refresh Information"), this);
+    connect(m_refreshButton, &QPushButton::clicked, this, &InfoTab::refresh);
+    rootLayout->addWidget(m_refreshButton);
 
     auto* updatesGroup = new QGroupBox("Goliath Updates");
     auto* updatesLayout = new QVBoxLayout(updatesGroup);
@@ -182,9 +187,6 @@ void InfoTab::setupUi() {
 
     layout->addStretch();
 
-    m_refreshButton = new QPushButton(QString::fromUtf8("\xE2\x86\xBB Refresh Information"));
-    connect(m_refreshButton, &QPushButton::clicked, this, &InfoTab::refresh);
-    layout->addWidget(m_refreshButton);
 }
 
 void InfoTab::activate() {

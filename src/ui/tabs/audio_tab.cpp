@@ -51,6 +51,10 @@ AudioTab::AudioTab(Config& appConfig, fs::path jollygoodSettingsIni,
 
 void AudioTab::setupUi() {
     auto* layout = new QVBoxLayout(this);
+    layout->setContentsMargins(
+        layout->contentsMargins().left(),
+        layout->contentsMargins().top(),
+        layout->contentsMargins().right(), 0);
 
     auto* group = new QGroupBox("JollyGood Audio Settings");
     auto* form = new QFormLayout(group);

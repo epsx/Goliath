@@ -66,7 +66,8 @@ LithogenDialog::LithogenDialog(Config& config, const QString& romFolder,
     m_form = new QFormLayout();
     const auto addPath = [this](const QString& label, QLineEdit*& edit,
                                       const QString& initial, bool directory,
-                                      const QString& filter) {
+                                      const QString& filter,
+                                      bool persistExecutable = false) {
         auto* row = new QWidget(m_controls);
         auto* rowLayout = new QHBoxLayout(row);
         rowLayout->setContentsMargins(0, 0, 0, 0);
@@ -74,19 +75,25 @@ LithogenDialog::LithogenDialog(Config& config, const QString& romFolder,
         auto* browse = new QPushButton("Browse...", row);
         rowLayout->addWidget(edit, 1);
         rowLayout->addWidget(browse);
-        connect(browse, &QPushButton::clicked, this, [this, edit, directory, filter]() {
+        connect(browse, &QPushButton::clicked, this,
+                [this, edit, directory, filter, persistExecutable]() {
             const QString start = edit->text().trimmed();
             const QString chosen = directory
                 ? QFileDialog::getExistingDirectory(this, "Choose folder", start)
                 : QFileDialog::getOpenFileName(this, "Choose file", start, filter);
-            if (!chosen.isEmpty()) edit->setText(QDir::toNativeSeparators(chosen));
+            if (chosen.isEmpty()) return;
+            edit->setText(QDir::toNativeSeparators(chosen));
+            if (persistExecutable) persistExecutablePath(chosen);
         });
         m_form->addRow(label, row);
         return row;
     };
     addPath("Lithogen executable:", m_executable,
             QString::fromStdString(m_config.get("Tools", "lithogen_executable", "")),
-            false, "Executables (*.exe *);;All files (*)");
+            false, "Executables (*.exe *);;All files (*)", true);
+    connect(m_executable, &QLineEdit::editingFinished, this, [this]() {
+        persistExecutablePath(m_executable->text());
+    });
     m_inputRow = addPath("Input ZIP:", m_input, {}, false,
                          "ZIP archives (*.zip);;All files (*)");
     m_folderRow = addPath("ZIP folder:", m_folder, {}, true, {});
@@ -238,6 +245,19 @@ void LithogenDialog::setJobResult(int row, const QString& result) {
     m_results->scrollToItem(m_results->item(row, 1));
 }
 
+void LithogenDialog::persistExecutablePath(const QString& path) {
+    const QFileInfo executable(path.trimmed());
+    if (!executable.isFile()) return;
+
+    const QString absolutePath = executable.absoluteFilePath();
+    const std::string storedPath = absolutePath.toStdString();
+    if (m_config.get("Tools", "lithogen_executable", "") == storedPath)
+        return;
+
+    m_config.set("Tools", "lithogen_executable", storedPath);
+    save_config(m_config);
+}
+
 void LithogenDialog::startConversion() {
     if (m_active || m_process->state() != QProcess::NotRunning) return;
     const QFileInfo executable(m_executable->text().trimmed());
@@ -312,8 +332,7 @@ void LithogenDialog::startConversion() {
         }
     }
 
-    m_config.set("Tools", "lithogen_executable", executable.absoluteFilePath().toStdString());
-    save_config(m_config);
+    persistExecutablePath(executable.absoluteFilePath());
     m_executablePath = executable.absoluteFilePath();
     m_targetDir = targetDir;
     m_parentPath = extraParent;

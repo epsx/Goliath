@@ -17,10 +17,14 @@ using goliath::libraryDetailsTitle;
 using goliath::libraryDisplayModeFromKey;
 using goliath::libraryDisplayModeIconPixels;
 using goliath::libraryDisplayModeKey;
-using goliath::libraryDisplayModeShowsLabels;
+using goliath::libraryDisplayModeLabel;
+using goliath::libraryResponsiveGridCellWidth;
+using goliath::libraryTileMetrics;
 using goliath::libraryExpansionShouldBePreserved;
 using goliath::libraryGameListTitles;
+using goliath::libraryListVisibleRowUsesAlternateBackground;
 using goliath::libraryMetricPrecedes;
+using goliath::libraryListVariantTooltip;
 using goliath::libraryMvsAesHumanTitle;
 using goliath::libraryPersonalFiltersActive;
 using goliath::libraryPersonalFiltersAllow;
@@ -58,11 +62,30 @@ TEST_CASE("library display modes expose their presentation contract",
           "[library-view][display-mode]") {
     CHECK(libraryDisplayModeIconPixels(LibraryDisplayMode::List) == 32);
     CHECK(libraryDisplayModeIconPixels(LibraryDisplayMode::Grid) == 64);
-    CHECK(libraryDisplayModeIconPixels(LibraryDisplayMode::BigIcons) == 64);
-    CHECK(libraryDisplayModeShowsLabels(LibraryDisplayMode::List));
-    CHECK(libraryDisplayModeShowsLabels(LibraryDisplayMode::Grid));
-    CHECK_FALSE(libraryDisplayModeShowsLabels(
-        LibraryDisplayMode::BigIcons));
+    CHECK(libraryDisplayModeIconPixels(LibraryDisplayMode::BigIcons) == 96);
+}
+
+TEST_CASE("library display modes expose stable user-facing labels",
+          "[library-view][display-mode]") {
+    CHECK(libraryDisplayModeLabel(LibraryDisplayMode::List) == "List");
+    CHECK(libraryDisplayModeLabel(LibraryDisplayMode::Grid) == "Grid");
+    CHECK(libraryDisplayModeLabel(LibraryDisplayMode::BigIcons) ==
+          "Big Grid Icons");
+}
+
+TEST_CASE("library tiles reserve artwork and title card space",
+          "[library-view][display-mode]") {
+    const auto grid = libraryTileMetrics(LibraryDisplayMode::Grid);
+    CHECK(grid.width == 132);
+    CHECK(grid.height == 148);
+    CHECK(grid.artwork_width == 108);
+    CHECK(grid.artwork_height == 82);
+
+    const auto big = libraryTileMetrics(LibraryDisplayMode::BigIcons);
+    CHECK(big.width == 164);
+    CHECK(big.height == 190);
+    CHECK(big.artwork_width == 136);
+    CHECK(big.artwork_height == 124);
 }
 
 TEST_CASE("flat library tiles use human media names instead of catalog IDs",
@@ -76,6 +99,8 @@ TEST_CASE("flat library tiles use human media names instead of catalog IDs",
     named.name = "2020 Super Baseball (set 2)";
     CHECK(libraryTileTitle(game, &named) ==
           "2020 Super Baseball (set 2)");
+    CHECK(libraryListVariantTooltip(game, named) ==
+          "2020 Super Baseball (set 2)");
 
     goliath::Rom catalogOnly;
     catalogOnly.mame = "2020bbh";
@@ -85,6 +110,7 @@ TEST_CASE("flat library tiles use human media names instead of catalog IDs",
     named.name = "2020 Super Baseball (Japan) (En,Ja)";
     CHECK(libraryTileTitle(game, &named) ==
           "2020 Super Baseball (Japan) (En,Ja)");
+    CHECK(libraryListVariantTooltip(game, named).empty());
 }
 
 TEST_CASE("recording folders follow exact media filenames for Neo Geo CD",
@@ -405,6 +431,26 @@ TEST_CASE("MVS AES list titles remain untouched even when names repeat",
 
     CHECK(libraryGameListTitles({first, second}) ==
           std::vector<std::string>{"Metal Slug", "Metal Slug"});
+}
+
+TEST_CASE("list row stripes alternate across every visible row",
+          "[library-view][list][background]") {
+    CHECK_FALSE(libraryListVisibleRowUsesAlternateBackground(0));
+    CHECK(libraryListVisibleRowUsesAlternateBackground(1));
+    CHECK_FALSE(libraryListVisibleRowUsesAlternateBackground(2));
+    CHECK(libraryListVisibleRowUsesAlternateBackground(3));
+    CHECK_FALSE(libraryListVisibleRowUsesAlternateBackground(4));
+    CHECK(libraryListVisibleRowUsesAlternateBackground(5));
+}
+
+TEST_CASE("grid cells distribute spare viewport width without shrinking",
+          "[library-view][grid][responsive]") {
+    CHECK(libraryResponsiveGridCellWidth(620, 132, 4) == 150);
+    CHECK(libraryResponsiveGridCellWidth(684, 132, 4) == 132);
+    CHECK(libraryResponsiveGridCellWidth(683, 132, 4) == 165);
+    CHECK(libraryResponsiveGridCellWidth(340, 164, 4) == 164);
+    CHECK(libraryResponsiveGridCellWidth(0, 132, 4) == 132);
+    CHECK(libraryResponsiveGridCellWidth(620, 0, 4) == 0);
 }
 
 TEST_CASE("MVS AES titles retain human names without catalog codes",

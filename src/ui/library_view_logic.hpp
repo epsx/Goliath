@@ -35,17 +35,70 @@ constexpr LibraryDisplayMode libraryDisplayModeFromKey(
     return LibraryDisplayMode::List;
 }
 
+constexpr std::string_view libraryDisplayModeLabel(
+        LibraryDisplayMode mode) noexcept {
+    switch (mode) {
+    case LibraryDisplayMode::List: return "List";
+    case LibraryDisplayMode::Grid: return "Grid";
+    case LibraryDisplayMode::BigIcons: return "Big Grid Icons";
+    }
+    return "List";
+}
+
 constexpr int libraryDisplayModeIconPixels(LibraryDisplayMode mode) {
     switch (mode) {
     case LibraryDisplayMode::List: return 32;
     case LibraryDisplayMode::Grid: return 64;
-    case LibraryDisplayMode::BigIcons: return 64;
+    case LibraryDisplayMode::BigIcons: return 96;
     }
     return 32;
 }
 
-constexpr bool libraryDisplayModeShowsLabels(LibraryDisplayMode mode) {
-    return mode != LibraryDisplayMode::BigIcons;
+// The delegate paints explicit theme backgrounds, so use the flattened visible
+// row position to keep parent and child stripes continuous across group edges.
+constexpr bool libraryListVisibleRowUsesAlternateBackground(
+        int visibleRow) noexcept {
+    return visibleRow % 2 != 0;
+}
+
+struct LibraryTileMetrics {
+    int width;
+    int height;
+    int artwork_width;
+    int artwork_height;
+};
+
+constexpr LibraryTileMetrics libraryTileMetrics(
+        LibraryDisplayMode mode) noexcept {
+    switch (mode) {
+    case LibraryDisplayMode::Grid:
+        return {132, 148, 108, 82};
+    case LibraryDisplayMode::BigIcons:
+        return {164, 190, 136, 124};
+    case LibraryDisplayMode::List:
+        return {0, 0, 32, 32};
+    }
+    return {0, 0, 32, 32};
+}
+
+constexpr int libraryResponsiveGridCellWidth(
+        int viewportWidth, int baseWidth, int spacing) noexcept {
+    if (baseWidth <= 0) return 0;
+    if (viewportWidth <= 0) return baseWidth;
+
+    const int safeSpacing = spacing > 0 ? spacing : 0;
+    const int outerSpacing = safeSpacing * 2;
+    const int contentWidth = viewportWidth > outerSpacing
+        ? viewportWidth - outerSpacing
+        : viewportWidth;
+    const int columnStride = baseWidth + safeSpacing;
+    const int fittedColumns = columnStride > 0
+        ? (contentWidth + safeSpacing) / columnStride
+        : 1;
+    const int columns = fittedColumns > 0 ? fittedColumns : 1;
+    const int distributedWidth =
+        (contentWidth - (columns - 1) * safeSpacing) / columns;
+    return distributedWidth > baseWidth ? distributedWidth : baseWidth;
 }
 
 enum class VisibleSelectionDecision {
@@ -427,6 +480,15 @@ inline std::string libraryTileTitle(const Game& game, const Rom* rom) {
     if (game.system == "neogeocd")
         return title.empty() ? game.display : title;
     return libraryMvsAesHumanTitle(title, game.display);
+}
+
+inline std::string libraryListVariantTooltip(
+        const Game& game, const Rom& rom) {
+    if (game.system != "neogeo") return {};
+    if (rom.name.has_value() && !rom.name->empty()) return *rom.name;
+    if (rom.label.has_value() && !rom.label->empty()) return *rom.label;
+    if (!rom.mame.empty()) return rom.mame;
+    return rom.file;
 }
 
 inline std::string libraryDetailsTitle(

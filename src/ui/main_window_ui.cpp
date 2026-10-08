@@ -751,9 +751,12 @@ void MainWindow::buildUi() {
         const char* label;
     };
     static const ViewOption viewOptions[] = {
-        {LibraryDisplayMode::List, "List"},
-        {LibraryDisplayMode::Grid, "Grid"},
-        {LibraryDisplayMode::BigIcons, "Big Icons"},
+        {LibraryDisplayMode::List, libraryDisplayModeLabel(
+             LibraryDisplayMode::List).data()},
+        {LibraryDisplayMode::Grid, libraryDisplayModeLabel(
+             LibraryDisplayMode::Grid).data()},
+        {LibraryDisplayMode::BigIcons, libraryDisplayModeLabel(
+             LibraryDisplayMode::BigIcons).data()},
     };
     auto* viewMenu = filtersMenu->addMenu("View");
     m_libraryDisplayGroup = new QActionGroup(viewMenu);
@@ -963,11 +966,11 @@ void MainWindow::buildUi() {
     connect(aboutBtn, &QPushButton::clicked, this, &MainWindow::openAbout);
     toolbar->addWidget(aboutBtn);
 
-    // The details cards are inset by 4 px in the right pane and another 8 px
-    // inside its scroll area. Match that 12 px on the toolbar's right edge so
-    // the two horizontal outlines end on the same visual axis.
+    // Match the library's 8 px shadow room on the left and the details cards'
+    // combined 12 px inset on the right, so the toolbar and content outlines
+    // share the same visual axes.
     auto* toolbarRow = new QHBoxLayout();
-    toolbarRow->setContentsMargins(0, 0, 12, 0);
+    toolbarRow->setContentsMargins(8, 0, 12, 0);
     toolbarRow->setSpacing(0);
     toolbarRow->addWidget(toolbarFrame);
     mainLayout->addLayout(toolbarRow);
@@ -1016,12 +1019,17 @@ void MainWindow::buildUi() {
     leftLayout->addWidget(systemSelector);
 
     m_libraryViewStack = new QStackedWidget();
+    m_libraryViewStack->setObjectName("library_view_stack");
+    // Elevate the common container rather than its pages. QGraphicsEffect on
+    // a child page is clipped by QStackedWidget, which made the library shadow
+    // disappear after List/Grid/Big Grid Icons were introduced.
+    addPanelElevation(m_libraryViewStack);
 
     m_tree = new QTreeWidget();
     m_tree->setProperty("goliathEngravedSurface", true);
-    m_tree->setItemDelegateForColumn(
-        0, new LibraryItemDelegate(m_tree));
-    addPanelElevation(m_tree);
+    // The delegate paints continuous visible-row stripes and also paints the
+    // personal-library badges in the title column.
+    m_tree->setItemDelegate(new LibraryItemDelegate(m_tree));
     m_tree->setColumnCount(2);
     m_tree->setHeaderHidden(true);
     // QTreeView enables stretchLastSection by default.  That would make the
@@ -1037,12 +1045,19 @@ void MainWindow::buildUi() {
     // make icon rows overlap when the first visible item has no icon, so let
     // Qt size each row from its actual content.
     m_tree->setUniformRowHeights(false);
-    m_tree->setAlternatingRowColors(true);
+    m_tree->setAlternatingRowColors(false);
     m_tree->setIndentation(18);
     connect(m_tree, &QTreeWidget::itemSelectionChanged, this, &MainWindow::updateSelection);
     connect(m_tree, &QTreeWidget::itemDoubleClicked, this, &MainWindow::launchSelectedItem);
+    connect(m_tree, &QTreeWidget::itemExpanded, this,
+            [this](QTreeWidgetItem*) {
+                refreshLibraryListRowBackgrounds();
+            });
     connect(m_tree, &QTreeWidget::itemCollapsed, this,
-            [this](QTreeWidgetItem*) { ensureVisibleSelection(false); });
+            [this](QTreeWidgetItem*) {
+                refreshLibraryListRowBackgrounds();
+                ensureVisibleSelection(false);
+            });
     m_tree->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(m_tree, &QTreeWidget::customContextMenuRequested, this, &MainWindow::showTreeContextMenu);
     m_libraryViewStack->addWidget(m_tree);
@@ -1050,7 +1065,8 @@ void MainWindow::buildUi() {
     m_iconView = new QListWidget();
     m_iconView->setObjectName("library_icon_view");
     m_iconView->setProperty("goliathEngravedSurface", true);
-    addPanelElevation(m_iconView);
+    m_libraryTileDelegate = new LibraryTileDelegate(m_iconView);
+    m_iconView->setItemDelegate(m_libraryTileDelegate);
     m_iconView->setViewMode(QListView::IconMode);
     m_iconView->setResizeMode(QListView::Adjust);
     m_iconView->setMovement(QListView::Static);
@@ -1105,7 +1121,10 @@ void MainWindow::buildUi() {
     m_detailsScroll = new QScrollArea();
     m_detailsScroll->setWidgetResizable(true);
     m_detailsScroll->setFrameShape(QFrame::NoFrame);
-    m_detailsScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    // The media row intentionally has a useful minimum width. If the library
+    // pane is widened on a 1080p display, let the details pane scroll instead
+    // of clipping its gallery beyond the window edge.
+    m_detailsScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 
     auto* detailsWidget = new HatchedBackgroundWidget();
     auto* detailsLayout = new QVBoxLayout(detailsWidget);
@@ -1519,7 +1538,7 @@ void MainWindow::buildUi() {
     auto* galleryPanelLayout = new QHBoxLayout(galleryPanel);
     // Child effects are clipped by their parent. Reserve paint room inside the
     // gallery container so all four sides of the snapshot shadow stay visible.
-    galleryPanelLayout->setContentsMargins(0, 8, 8, 8);
+    galleryPanelLayout->setContentsMargins(2, 8, 6, 8);
     galleryPanelLayout->setSpacing(0);
     galleryPanelLayout->addWidget(galleryRail, 0, Qt::AlignVCenter);
     galleryPanelLayout->addWidget(snapshotFrame, 0, Qt::AlignVCenter);
@@ -1555,9 +1574,15 @@ void MainWindow::buildUi() {
     m_splitter->addWidget(rightWidget);
 
     m_splitter->setCollapsible(0, false);
+    // resizeEvent() deliberately collapses the details pane below 1000 px to
+    // enter Classic View, then restores it above 1150 px.
     m_splitter->setCollapsible(1, true);
 
     m_splitter->setSizes({400, 760});
+    connect(m_splitter, &QSplitter::splitterMoved, this,
+            [this](int, int) {
+                updateIconViewGridSize();
+            });
 
     // Status bar with Launch aligned to the right edge of the detail cards.
     auto* statusBar_ = statusBar();
@@ -1621,6 +1646,16 @@ void MainWindow::applyTheme(const QString& themeNameIn) {
 
     setStyleSheet(qss);
 
+    if (m_tree) {
+        m_tree->setProperty(
+            "goliathLibraryBackground",
+            QString::fromStdString(theme.bg_secondary));
+        m_tree->setProperty(
+            "goliathLibraryAlternateBackground",
+            QString::fromStdString(theme.bg_tertiary));
+        m_tree->viewport()->update();
+    }
+
     const bool darkSurface = contrast_text_for(theme.bg_primary) == "#ffffff";
     QColor shadowColor;
     if (darkSurface) {
@@ -1637,6 +1672,27 @@ void MainWindow::applyTheme(const QString& themeNameIn) {
         (borderColor.green() * 3 + accentColor.green()) / 4,
         (borderColor.blue() * 3 + accentColor.blue()) / 4,
         darkSurface ? 36 : 28);
+
+    if (m_iconView) {
+        QColor artworkBackground(
+            QString::fromStdString(theme.bg_secondary));
+        if (darkSurface) {
+            // Dark themes need a restrained matte rather than the former
+            // hard-coded white card. Blend the surface toward the theme border
+            // so transparent pixel artwork retains its dark outlines.
+            artworkBackground.setRed(
+                (artworkBackground.red() + borderColor.red()) / 2);
+            artworkBackground.setGreen(
+                (artworkBackground.green() + borderColor.green()) / 2);
+            artworkBackground.setBlue(
+                (artworkBackground.blue() + borderColor.blue()) / 2);
+        }
+        m_iconView->setProperty("goliathLibraryArtworkBackground",
+                                artworkBackground.name(QColor::HexRgb));
+        m_iconView->setProperty("goliathLibraryArtworkBorder",
+                                borderColor.name(QColor::HexRgb));
+        m_iconView->viewport()->update();
+    }
 
     const auto elevatedPanels = findChildren<QWidget*>();
     for (QWidget* panel : elevatedPanels) {

@@ -144,6 +144,11 @@ QSplitter#library_details_splitter::handle {
     border: none;
 }
 
+QStackedWidget#library_view_stack {
+    background-color: transparent;
+    border: none;
+}
+
 QMainWindow {
     background-color: @bg_primary@;
 }
@@ -258,7 +263,7 @@ QPushButton#launch_btn:disabled {
 }
 
 QTreeWidget,
-QListWidget {
+QListWidget#library_icon_view {
     background-color: @bg_secondary@;
     border: 1px solid @border@;
     border-radius: @border_radius@px;
@@ -268,19 +273,19 @@ QListWidget {
 }
 
 QTreeWidget::item,
-QListWidget::item {
+QListWidget#library_icon_view::item {
     padding: 6px;
     border-radius: 4px;
     margin: 1px 0px;
 }
 
 QTreeWidget::item:selected,
-QListWidget::item:selected {
+QListWidget#library_icon_view::item:selected {
     background-color: @accent@;
     color: @on_accent@;
 }
 
-QListWidget::item:hover:!selected {
+QListWidget#library_icon_view::item:hover:!selected {
     background-color: @bg_hover@;
     color: @text_primary@;
 }

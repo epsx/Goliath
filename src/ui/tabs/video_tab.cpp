@@ -93,6 +93,10 @@ VideoTab::VideoTab(fs::path jollygoodSettingsIni,
 
 void VideoTab::setupUi() {
     auto* layout = new QVBoxLayout(this);
+    layout->setContentsMargins(
+        layout->contentsMargins().left(),
+        layout->contentsMargins().top(),
+        layout->contentsMargins().right(), 0);
 
     auto* scroll = new QScrollArea();
     scroll->setWidgetResizable(true);

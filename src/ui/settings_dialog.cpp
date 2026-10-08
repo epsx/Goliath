@@ -170,7 +170,7 @@ SettingsDialog::~SettingsDialog() {
 
 void SettingsDialog::buildHotkeysTab(QWidget* widget) {
     auto* layout = new QVBoxLayout(widget);
-    layout->setContentsMargins(16, 16, 16, 16);
+    layout->setContentsMargins(16, 16, 16, 0);
 
     auto* applicationGroup = new QGroupBox("Goliath shortcuts", widget);
     auto* applicationLayout = new QVBoxLayout(applicationGroup);
@@ -276,10 +276,11 @@ void SettingsDialog::buildHotkeysTab(QWidget* widget) {
         updateHotkeyWarnings();
     });
     buttons->addWidget(reset);
-    buttons->addStretch();
-    captureLayout->addLayout(buttons);
     layout->addWidget(captureGroup);
     layout->addStretch();
+    // Match the other Settings tabs: persistent actions stay in a shallow,
+    // fixed footer instead of being embedded in the scrolling/content card.
+    layout->addLayout(buttons);
 #if !defined(_WIN32)
     m_pngHotkeyEdit->setEnabled(false);
 #if defined(GOLIATH_X11_CAPTURE)
@@ -392,6 +393,10 @@ void SettingsDialog::saveHotkeys() {
 
 void SettingsDialog::buildInputTab(QWidget* inputWidget) {
     auto* pageLayout = new QVBoxLayout(inputWidget);
+    pageLayout->setContentsMargins(
+        pageLayout->contentsMargins().left(),
+        pageLayout->contentsMargins().top(),
+        pageLayout->contentsMargins().right(), 0);
 
     auto* pageScroll = new QScrollArea();
     pageScroll->setObjectName("input_tab_scroll");
@@ -490,6 +495,10 @@ void SettingsDialog::buildInputTab(QWidget* inputWidget) {
 
 void SettingsDialog::buildPathTab(QWidget* pathWidget) {
     auto* pathLayout = new QVBoxLayout(pathWidget);
+    pathLayout->setContentsMargins(
+        pathLayout->contentsMargins().left(),
+        pathLayout->contentsMargins().top(),
+        pathLayout->contentsMargins().right(), 0);
 
     for (const auto& ps : pathSettings()) {
         auto* row = new QHBoxLayout();
@@ -513,16 +522,16 @@ void SettingsDialog::buildPathTab(QWidget* pathWidget) {
         pathLayout->addLayout(row);
     }
 
+    auto* note = new QLabel("After saving, use Tools \xE2\x96\xBC \xE2\x86\x92 Rescan ROMs (or F5) "
+                             "so the library picks up the new folders.");
+    note->setWordWrap(true);
+    pathLayout->addWidget(note);
+
     pathLayout->addStretch();
 
     auto* saveBtn = new QPushButton("Save Path Settings");
     connect(saveBtn, &QPushButton::clicked, this, &SettingsDialog::savePathConfig);
     pathLayout->addWidget(saveBtn);
-
-    auto* note = new QLabel("After saving, use Tools \xE2\x96\xBC \xE2\x86\x92 Rescan ROMs (or F5) "
-                             "so the library picks up the new folders.");
-    note->setWordWrap(true);
-    pathLayout->addWidget(note);
 }
 
 void SettingsDialog::loadJgrfInputSettings() {

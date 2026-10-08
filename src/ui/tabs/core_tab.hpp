@@ -17,6 +17,7 @@ public:
 
 private slots:
     void save();
+    void resetDefaults();
 
 private:
     void setupUi();

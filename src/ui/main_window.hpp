@@ -60,6 +60,8 @@ class QKeySequence;
 
 namespace goliath {
 
+class LibraryTileDelegate;
+
 class TitleBar;
 class RescanWorker;
 #if defined(GOLIATH_WAYLAND_CAPTURE)
@@ -129,6 +131,7 @@ private:
     std::vector<int> sortedGameOrder(
         const std::vector<std::string>& listTitles) const;
     void populateTree();
+    void refreshLibraryListRowBackgrounds();
     void refreshLibraryView(bool preserveSelection,
                             const QString& preferredRomOverride = {});
     void setAllGroupsExpanded(bool expanded);
@@ -137,6 +140,7 @@ private:
     void clearLibraryFilters();
     void updateFiltersButton();
     void setLibraryDisplayMode(LibraryDisplayMode mode, bool persist = true);
+    void updateIconViewGridSize();
     void refreshIconView();
     void syncIconSelectionFromTree();
     void selectIconItem(QListWidgetItem* item);
@@ -274,6 +278,7 @@ private:
     QTreeWidget* m_tree = nullptr;
     QStackedWidget* m_libraryViewStack = nullptr;
     QListWidget* m_iconView = nullptr;
+    LibraryTileDelegate* m_libraryTileDelegate = nullptr;
     QLineEdit* m_searchEntry = nullptr;
     std::vector<QAction*> m_selectionActions;
     QLabel* m_libraryStatusLabel = nullptr;

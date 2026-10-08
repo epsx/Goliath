@@ -37,6 +37,7 @@ private:
     void finishRun();
     void setJobResult(int row, const QString& result);
     void appendOutput(const QString& text);
+    void persistExecutablePath(const QString& path);
 
     Config& m_config;
     QString m_romFolder;
