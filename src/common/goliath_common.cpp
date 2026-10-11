@@ -1,9 +1,10 @@
 #include "goliath_common.hpp"
 
+#include "common/qt_path.hpp"
+
 #include <QByteArray>
 #include <QIODevice>
 #include <QSaveFile>
-#include <QString>
 
 #include <cctype>
 #include <cstddef>
@@ -27,14 +28,6 @@ namespace fs = std::filesystem;
 namespace goliath {
 
 static std::string to_lower_local(std::string s);
-
-static QString path_to_qstring(const fs::path& path) {
-#if defined(_WIN32)
-    return QString::fromStdWString(path.wstring());
-#else
-    return QString::fromStdString(path.string());
-#endif
-}
 
 // ---------- Config ----------
 
@@ -73,6 +66,19 @@ bool Config::has(const std::string& section, const std::string& key) const {
     auto sec_it = sections.find(section);
     if (sec_it == sections.end()) return false;
     return sec_it->second.find(key) != sec_it->second.end();
+}
+
+std::string Config::serialized_text() const {
+    std::ostringstream out;
+    // Sections/keys are written in std::map order (alphabetical).
+    for (const auto& [section, kv] : sections) {
+        out << "[" << section << "]\n";
+        for (const auto& [key, value] : kv) {
+            out << key << " = " << value << "\n";
+        }
+        out << "\n";
+    }
+    return out.str();
 }
 
 // ---------- base dir ----------
@@ -181,39 +187,38 @@ Config default_config() {
     return cfg;
 }
 
-static std::string serialize_ini(const Config& cfg) {
-    std::ostringstream out;
-    // Sections/keys are written in std::map order (alphabetical).
-    for (const auto& [section, kv] : cfg.sections) {
-        out << "[" << section << "]\n";
-        for (const auto& [key, value] : kv) {
-            out << key << " = " << value << "\n";
-        }
-        out << "\n";
-    }
-    return out.str();
-}
+bool save_config_file(const fs::path& path,
+                      const Config& config,
+                      std::string* error) {
+    if (error) error->clear();
 
-static bool write_config_file(const fs::path& path, const Config& config) {
     const QByteArray serialized =
-        QByteArray::fromStdString(serialize_ini(config));
+        QByteArray::fromStdString(config.serialized_text());
     QSaveFile output(path_to_qstring(path));
     output.setDirectWriteFallback(false);
     if (!output.open(QIODevice::WriteOnly)) {
-        std::cerr << "[goliath] Warning: could not open " << path.string()
-                  << " for writing: " << output.errorString().toStdString()
-                  << "\n";
+        const std::string message =
+            "Could not open Goliath configuration for writing: " +
+            path_to_utf8(path) + ": " + output.errorString().toStdString();
+        if (error) *error = message;
+        std::cerr << "[goliath] Warning: " << message << "\n";
         return false;
     }
     if (output.write(serialized) != serialized.size()) {
-        std::cerr << "[goliath] Warning: could not write " << path.string()
-                  << ": " << output.errorString().toStdString() << "\n";
+        const std::string message =
+            "Could not write Goliath configuration: " + path_to_utf8(path) +
+            ": " + output.errorString().toStdString();
+        if (error) *error = message;
+        std::cerr << "[goliath] Warning: " << message << "\n";
         output.cancelWriting();
         return false;
     }
     if (!output.commit()) {
-        std::cerr << "[goliath] Warning: could not replace " << path.string()
-                  << ": " << output.errorString().toStdString() << "\n";
+        const std::string message =
+            "Could not replace Goliath configuration: " + path_to_utf8(path) +
+            ": " + output.errorString().toStdString();
+        if (error) *error = message;
+        std::cerr << "[goliath] Warning: " << message << "\n";
         return false;
     }
     return true;
@@ -222,7 +227,7 @@ static bool write_config_file(const fs::path& path, const Config& config) {
 fs::path ensure_config() {
     fs::path ini_path = get_config_path();
     if (!fs::exists(ini_path))
-        write_config_file(ini_path, default_config());
+        save_config_file(ini_path, default_config());
     return ini_path;
 }
 
@@ -246,8 +251,8 @@ Config load_config() {
     return cfg;
 }
 
-void save_config(const Config& config) {
-    write_config_file(get_config_path(), config);
+bool save_config(const Config& config, std::string* error) {
+    return save_config_file(get_config_path(), config, error);
 }
 
 // ---------- path resolution ----------
@@ -261,7 +266,7 @@ fs::path resolve_path(const Config& config, const std::string& key,
         return base_dir;
     }
 
-    fs::path p(value);
+    fs::path p = path_from_utf8(value);
     if (p.is_absolute()) {
         return p;
     }

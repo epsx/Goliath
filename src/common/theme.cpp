@@ -707,6 +707,11 @@ QFrame#toolbar_frame {
     padding: 8px;
 }
 
+QWidget#toolbar_actions {
+    background-color: transparent;
+    border: none;
+}
+
 QPushButton#tools_btn,
 QPushButton#settings_btn,
 QPushButton#about_btn,
@@ -739,6 +744,29 @@ QPushButton#favorite_btn:pressed {
 
 QPushButton#favorite_btn:checked {
     color: @accent@;
+}
+
+QPushButton#update_available_indicator {
+    color: @accent@;
+    background-color: transparent;
+    border: none;
+    border-radius: 3px;
+    padding: 0px 2px;
+    font-size: 10px;
+    font-weight: 600;
+}
+
+QPushButton#update_available_indicator:hover,
+QPushButton#update_available_indicator:focus {
+    color: @accent_hover@;
+    background-color: @bg_hover@;
+    border: none;
+}
+
+QPushButton#update_available_indicator:pressed {
+    color: @accent@;
+    background-color: @bg_tertiary@;
+    border: none;
 }
 
 QPushButton#tools_btn::menu-indicator,

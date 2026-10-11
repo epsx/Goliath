@@ -1,6 +1,7 @@
 #include "jollygood_process.hpp"
 
 #include "common/log_file.hpp"
+#include "common/qt_path.hpp"
 
 #include <QProcess>
 
@@ -17,11 +18,7 @@ bool launch_jollygood_detached(const QStringList& args, const QString& cwd,
         return false;
     }
 
-#if defined(_WIN32)
-    const std::filesystem::path directLogPath(logPath.toStdWString());
-#else
-    const std::filesystem::path directLogPath(logPath.toStdString());
-#endif
+    const std::filesystem::path directLogPath = qstring_to_path(logPath);
     const LogFileOperationResult logReady =
         prepare_regular_log_file(directLogPath);
     if (!logReady.success) {

@@ -44,8 +44,8 @@ private:
     void rebuild();
     void refreshJoystickList();
     void startListening(QPushButton* button,
-                        const QString& section,
-                        const QString& key);
+                        const std::string& section,
+                        const std::string& key);
     void stopJoystickListener();
     void applyMapping(const QString& value,
                       const QString& displayName = {});
@@ -54,10 +54,10 @@ private:
                          const std::string& key);
 
     int initialMappingProfile() const;
-    QString effectiveValue(const IniDocument& globalConfig,
-                           const std::string& section,
-                           const std::string& key,
-                           bool* overridden) const;
+    std::string effectiveValue(const IniDocument& globalConfig,
+                               const std::string& section,
+                               const std::string& key,
+                               bool* overridden) const;
     void updateButtonDisplay(QPushButton* button,
                              const IniDocument& globalConfig,
                              const std::string& section,
@@ -74,8 +74,8 @@ private:
     std::vector<DetectedJoystick> m_detectedJoysticks;
 
     QPushButton* m_listeningButton = nullptr;
-    QString m_listeningSection;
-    QString m_listeningKey;
+    std::string m_listeningSection;
+    std::string m_listeningKey;
     QString m_listeningDisplay;
     QString m_listeningTooltip;
     JoystickListener* m_joystickListener = nullptr;

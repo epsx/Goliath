@@ -1,5 +1,7 @@
 #include "neogeo_metadata.hpp"
 
+#include "common/native_file.hpp"
+#include "common/qt_path.hpp"
 #include "tinyxml2.h"
 
 #include <algorithm>
@@ -18,6 +20,11 @@ using TinyXmlElement = tinyxml2::XMLElement;
 
 namespace goliath {
 namespace {
+
+bool load_xml_document(TinyXmlDocument& document, const fs::path& path) {
+    NativeFile input = open_native_file(path);
+    return input && document.LoadFile(input.get()) == tinyxml2::XML_SUCCESS;
+}
 
 std::string trim(const std::string& s) {
     const std::size_t start = s.find_first_not_of(" \t\r\n");
@@ -256,9 +263,10 @@ HistoryLists load_history(const fs::path& history_path,
         callback("Loading History...\n");
 
     TinyXmlDocument doc;
-    if (doc.LoadFile(history_path.string().c_str()) != tinyxml2::XML_SUCCESS) {
+    if (!load_xml_document(doc, history_path)) {
         if (callback)
-            callback("Warning: could not parse " + history_path.string() + "\n");
+            callback("Warning: could not parse " +
+                     path_to_utf8(history_path) + "\n");
         return history;
     }
 
@@ -364,7 +372,8 @@ std::string make_desc_key(const std::string& input) {
     out.reserve(lower.size());
     bool previous_space = false;
 
-    for (unsigned char c : lower) {
+    for (const char rawC : lower) {
+        const auto c = static_cast<unsigned char>(rawC);
         const bool word = (c >= 0x80) || std::isalnum(c);
         if (word) {
             out.push_back(static_cast<char>(c));
@@ -388,16 +397,18 @@ void load_software_list_xml(const fs::path& xml_path,
         return;
 
     TinyXmlDocument doc;
-    if (doc.LoadFile(xml_path.string().c_str()) != tinyxml2::XML_SUCCESS) {
+    if (!load_xml_document(doc, xml_path)) {
         if (callback)
-            callback("Warning: could not parse " + xml_path.string() + "\n");
+            callback("Warning: could not parse " + path_to_utf8(xml_path) +
+                     "\n");
         return;
     }
 
     TinyXmlElement* root = doc.RootElement();
     if (!root || std::string(root->Name() ? root->Name() : "") != "softwarelist") {
         if (callback)
-            callback("Warning: invalid MAME software list: " + xml_path.string() + "\n");
+            callback("Warning: invalid MAME software list: " +
+                     path_to_utf8(xml_path) + "\n");
         return;
     }
 
@@ -405,7 +416,7 @@ void load_software_list_xml(const fs::path& xml_path,
     if (!list_name || expected_list != list_name) {
         if (callback)
             callback("Warning: expected software list '" + expected_list + "' in " +
-                     xml_path.string() + "\n");
+                     path_to_utf8(xml_path) + "\n");
         return;
     }
 
@@ -611,19 +622,19 @@ std::optional<fs::path> find_redump_neocd_dat(const fs::path& metadata_dir) {
         std::error_code entry_ec;
         if (!entry.is_regular_file(entry_ec))
             continue;
-        if (to_lower(entry.path().extension().string()) == ".dat")
+        if (to_lower(path_to_utf8(entry.path().extension())) == ".dat")
             candidates.push_back(entry.path());
     }
 
     std::sort(candidates.begin(), candidates.end(),
               [](const fs::path& a, const fs::path& b) {
-                  return to_lower(a.filename().string()) <
-                         to_lower(b.filename().string());
+                  return to_lower(path_to_utf8(a.filename())) <
+                         to_lower(path_to_utf8(b.filename()));
               });
 
     for (const fs::path& path : candidates) {
         TinyXmlDocument doc;
-        if (doc.LoadFile(path.string().c_str()) != tinyxml2::XML_SUCCESS)
+        if (!load_xml_document(doc, path))
             continue;
         if (is_redump_neocd_document(doc))
             return path;
@@ -642,17 +653,17 @@ void load_redump_neocd_dat(const fs::path& dat_path,
         return;
 
     TinyXmlDocument doc;
-    if (doc.LoadFile(dat_path.string().c_str()) != tinyxml2::XML_SUCCESS) {
+    if (!load_xml_document(doc, dat_path)) {
         if (callback)
             callback("Warning: could not parse Redump Neo Geo CD DAT: " +
-                     dat_path.string() + "\\n");
+                     path_to_utf8(dat_path) + "\\n");
         return;
     }
 
     if (!is_redump_neocd_document(doc)) {
         if (callback)
             callback("Warning: invalid Redump Neo Geo CD DAT: " +
-                     dat_path.string() + "\\n");
+                     path_to_utf8(dat_path) + "\\n");
         return;
     }
 
@@ -778,11 +789,13 @@ CdMatchIndex build_cd_match_index(const SoftwareCatalog& catalog) {
 std::optional<std::string> find_cd_game(const fs::path& relative_path,
                                         const CdMatchIndex& index) {
     std::vector<std::string> candidates;
-    candidates.push_back(make_cd_title_key(relative_path.stem().string()));
+    candidates.push_back(make_cd_title_key(
+        path_to_utf8(relative_path.stem())));
 
     const fs::path parent = relative_path.parent_path();
     if (!parent.empty() && parent != ".")
-        candidates.push_back(make_cd_title_key(parent.filename().string()));
+        candidates.push_back(make_cd_title_key(
+            path_to_utf8(parent.filename())));
 
     // First try only deterministic exact aliases.
     for (const std::string& candidate : candidates) {
@@ -852,7 +865,7 @@ std::optional<std::string> find_redump_cd_metadata(
     }
 
     const std::optional<std::string> matched =
-        find_cd_game(fs::path(entry.name), index);
+        find_cd_game(path_from_utf8(entry.name), index);
     if (matched.has_value() && catalog.contains(*matched))
         return matched;
     return std::nullopt;

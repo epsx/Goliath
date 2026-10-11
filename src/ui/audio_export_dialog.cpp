@@ -1,5 +1,6 @@
 #include "ui/audio_export_dialog.hpp"
 
+#include "common/qt_path.hpp"
 #include "game/audio_export.hpp"
 
 #include <QDateTime>
@@ -15,22 +16,6 @@ namespace fs = std::filesystem;
 namespace goliath {
 
 namespace {
-
-QString path_to_qstring(const fs::path& path) {
-#if defined(_WIN32)
-    return QString::fromStdWString(path.wstring());
-#else
-    return QString::fromStdString(path.string());
-#endif
-}
-
-fs::path qstring_to_path(const QString& path) {
-#if defined(_WIN32)
-    return fs::path(path.toStdWString());
-#else
-    return fs::path(path.toStdString());
-#endif
-}
 
 bool probe_output_directory(const fs::path& directory,
                             QString* leftover,

@@ -1,4 +1,6 @@
 #include "ui/main_window.hpp"
+
+#include "common/qt_path.hpp"
 #include "ui/gallery_frame.hpp"
 
 #include <QCoreApplication>
@@ -104,8 +106,8 @@ void MainWindow::refreshGameGallery() {
 
     if (validId.match(m_galleryRomId).hasMatch()) {
         // Earlier recordings use <ROM>-<timestamp>.gif in the app data folder.
-        const QDir screenshots(QString::fromStdWString(
-            (m_paths.data_dir / "goliath" / "screenshots").wstring()));
+        const QDir screenshots(path_to_qstring(
+            m_paths.data_dir / "goliath" / "screenshots"));
         const auto olderGifs = screenshots.entryInfoList(
             {m_galleryRomId + "-*.gif", m_galleryRomId + "-*.GIF"},
             QDir::Files | QDir::NoSymLinks, QDir::Time);
@@ -130,7 +132,7 @@ void MainWindow::refreshGameGallery() {
 void MainWindow::showGalleryItem() {
     m_snapshotLabel->setToolTip(QString());
     const bool gifTab = m_galleryGifs->isChecked();
-    const int count = m_galleryGifPaths.size();
+    const qsizetype count = m_galleryGifPaths.size();
     m_galleryPrevious->setVisible(gifTab);
     m_galleryNext->setVisible(gifTab);
     m_galleryCountLabel->setVisible(gifTab);

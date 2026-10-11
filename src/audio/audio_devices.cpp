@@ -48,7 +48,8 @@ AudioDeviceSnapshot query_audio_playback_devices() {
         return result;
     }
 
-    result.playback_devices.reserve(std::max(count, 0));
+    if (count > 0)
+        result.playback_devices.reserve(static_cast<std::size_t>(count));
     for (int i = 0; i < count; ++i) {
         const char* name = SDL_GetAudioDeviceName(devices[i]);
         if (name && *name) {

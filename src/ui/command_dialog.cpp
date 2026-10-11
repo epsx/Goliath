@@ -246,8 +246,8 @@ void CommandDialog::restorePosition() {
     int line = std::clamp(savedLine, 0,
                           static_cast<int>(m_commandLines.size()) - 1);
     if (!savedText.isEmpty() && m_commandLines[line] != savedText) {
-        const int found = m_commandLines.indexOf(savedText);
-        if (found >= 0) line = found;
+        const qsizetype found = m_commandLines.indexOf(savedText);
+        if (found >= 0) line = static_cast<int>(found);
     }
     scrollToSourceLine(line);
     DebugLogger::logInfo(QString("restored command position from %1: line=%2")

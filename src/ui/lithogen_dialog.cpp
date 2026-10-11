@@ -1,4 +1,6 @@
 #include "ui/lithogen_dialog.hpp"
+
+#include "common/qt_path.hpp"
 #include "ui/widgets/title_bar.hpp"
 
 #include <QCheckBox>
@@ -250,7 +252,7 @@ void LithogenDialog::persistExecutablePath(const QString& path) {
     if (!executable.isFile()) return;
 
     const QString absolutePath = executable.absoluteFilePath();
-    const std::string storedPath = absolutePath.toStdString();
+    const std::string storedPath = path_to_utf8(qstring_to_path(absolutePath));
     if (m_config.get("Tools", "lithogen_executable", "") == storedPath)
         return;
 
@@ -350,12 +352,13 @@ void LithogenDialog::startConversion() {
     m_stop->setEnabled(true);
     m_rescan->setEnabled(false);
     m_log->clear();
-    m_results->setRowCount(m_jobs.size());
-    for (int i = 0; i < m_jobs.size(); ++i) {
+    const int jobCount = static_cast<int>(m_jobs.size());
+    m_results->setRowCount(jobCount);
+    for (int i = 0; i < jobCount; ++i) {
         m_results->setItem(i, 0, new QTableWidgetItem(QFileInfo(m_jobs[i]).fileName()));
         m_results->setItem(i, 1, new QTableWidgetItem("Waiting"));
     }
-    m_progress->setRange(0, m_jobs.size());
+    m_progress->setRange(0, jobCount);
     m_progress->setValue(0);
     m_summary->setText(QString("Queued %1 ZIP(s).").arg(m_jobs.size()));
     startNextJob();
@@ -445,7 +448,7 @@ void LithogenDialog::finishRun() {
     m_convert->setEnabled(true);
     m_stop->setEnabled(false);
     m_rescan->setEnabled(m_canRescan);
-    const int unprocessed = m_jobs.size() - m_current;
+    const int unprocessed = m_results->rowCount() - m_current;
     m_summary->setText(QString("Created: %1  |  Failed: %2  |  Existing: %3"
                                 "  |  Not started: %4")
         .arg(m_created).arg(m_failed).arg(m_skipped).arg(unprocessed));

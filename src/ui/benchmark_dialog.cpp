@@ -2,6 +2,7 @@
 
 #include "common/debug_logger.hpp"
 #include "common/log_file.hpp"
+#include "common/qt_path.hpp"
 #include "game/jollygood_benchmark.hpp"
 #include "ui/widgets/title_bar.hpp"
 
@@ -55,14 +56,6 @@ QString shader_name(int value) {
 
 QString formatted_frames(std::uint64_t frames) {
     return QLocale().toString(static_cast<qulonglong>(frames));
-}
-
-std::filesystem::path qstring_to_path(const QString& path) {
-#if defined(_WIN32)
-    return std::filesystem::path(path.toStdWString());
-#else
-    return std::filesystem::path(path.toStdString());
-#endif
 }
 
 } // namespace

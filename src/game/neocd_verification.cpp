@@ -1,5 +1,6 @@
 #include "neocd_verification.hpp"
 
+#include "common/qt_path.hpp"
 #include "common/sha1.hpp"
 
 #include <algorithm>
@@ -38,7 +39,7 @@ struct CueTrackFile {
 std::optional<fs::path> resolve_cue_track_path(const fs::path& cue_dir,
                                                std::string referenced) {
     std::replace(referenced.begin(), referenced.end(), '\\', '/');
-    fs::path rel = fs::path(referenced).lexically_normal();
+    fs::path rel = path_from_utf8(referenced).lexically_normal();
     if (rel.empty() || rel.is_absolute())
         return std::nullopt;
     for (const auto& part : rel) {
@@ -57,13 +58,13 @@ std::optional<fs::path> resolve_cue_track_path(const fs::path& cue_dir,
     const fs::path parent = exact.parent_path();
     if (!fs::is_directory(parent, ec))
         return std::nullopt;
-    const std::string wanted = to_lower(exact.filename().string());
+    const std::string wanted = to_lower(path_to_utf8(exact.filename()));
     for (const auto& entry : fs::directory_iterator(parent, ec)) {
         if (ec)
             break;
         std::error_code entry_ec;
         if (entry.is_regular_file(entry_ec) &&
-            to_lower(entry.path().filename().string()) == wanted) {
+            to_lower(path_to_utf8(entry.path().filename())) == wanted) {
             return entry.path();
         }
     }
@@ -124,7 +125,8 @@ std::vector<const RedumpRomEntry*> redump_track_rows(
     std::vector<const RedumpRomEntry*> rows;
     rows.reserve(game.roms.size());
     for (const RedumpRomEntry& rom : game.roms) {
-        if (to_lower(fs::path(rom.name).extension().string()) == ".cue")
+        if (to_lower(path_to_utf8(path_from_utf8(rom.name).extension())) ==
+            ".cue")
             continue;
         rows.push_back(&rom);
     }
@@ -134,7 +136,8 @@ std::vector<const RedumpRomEntry*> redump_track_rows(
 const RedumpRomEntry* redump_cue_row(const RedumpGameEntry& game) {
     const RedumpRomEntry* cue = nullptr;
     for (const RedumpRomEntry& rom : game.roms) {
-        if (to_lower(fs::path(rom.name).extension().string()) != ".cue")
+        if (to_lower(path_to_utf8(path_from_utf8(rom.name).extension())) !=
+            ".cue")
             continue;
         if (cue != nullptr)
             return nullptr;
@@ -153,7 +156,7 @@ std::optional<std::size_t> select_catalog_match(
     if (matches.empty() || title_key == nullptr)
         return std::nullopt;
 
-    const std::string cue_key = title_key(cue_path.stem().string());
+    const std::string cue_key = title_key(path_to_utf8(cue_path.stem()));
     std::optional<std::size_t> named;
     for (std::size_t index : matches) {
         if (title_key(catalog[index].name) != cue_key &&
@@ -372,7 +375,7 @@ std::optional<RedumpCueVerification> verify_redump_cue(
         const RedumpGameEntry& selected_game = catalog[selected];
         const RedumpRomEntry* expected_cue = redump_cue_row(selected_game);
         FileHashVerification cue_detail;
-        cue_detail.file = cue_path.filename().string();
+        cue_detail.file = path_to_utf8(cue_path.filename());
         cue_detail.role = "CUE descriptor";
         cue_detail.algorithm = "SHA-1";
         cue_detail.size = cue_size;
@@ -395,7 +398,8 @@ std::optional<RedumpCueVerification> verify_redump_cue(
              index < local_files->size() && index < expected_tracks.size();
              ++index) {
             FileHashVerification detail;
-            detail.file = (*local_files)[index].path.filename().string();
+            detail.file = path_to_utf8(
+                (*local_files)[index].path.filename());
             detail.catalog_file = expected_tracks[index]->name;
             detail.role = "Track " +
                 (index + 1 < 10 ? std::string("0") : std::string()) +

@@ -2,6 +2,7 @@
 
 #include "common/filesystem_safety.hpp"
 #include "common/paths.hpp"
+#include "common/qt_path.hpp"
 #include "game/filesystem_io.hpp"
 #include "game/game_profile.hpp"
 #include "game/jollygood_executable.hpp"
@@ -66,14 +67,6 @@ struct ArchiveSnapshot {
     PayloadMap payloads;
     std::size_t file_count = 0;
 };
-
-QString path_to_qstring(const fs::path& path) {
-#if defined(_WIN32)
-    return QString::fromStdWString(path.wstring());
-#else
-    return QString::fromStdString(path.string());
-#endif
-}
 
 std::string lower_ascii(std::string value) {
     std::transform(value.begin(), value.end(), value.begin(),
@@ -166,7 +159,7 @@ bool inspect_plain_directory(const fs::path& logical_path,
     if (ec) {
         if (error) {
             *error = "Could not inspect backup directory " +
-                     logical_path.string() + ": " + ec.message();
+                     path_to_utf8(logical_path) + ": " + ec.message();
         }
         return false;
     }
@@ -174,7 +167,7 @@ bool inspect_plain_directory(const fs::path& logical_path,
     if (!fs::is_directory(status)) {
         if (error) {
             *error = "Backup path is not a plain directory: " +
-                     logical_path.string();
+                     path_to_utf8(logical_path);
         }
         return false;
     }
@@ -194,7 +187,7 @@ bool inspect_regular_file(const fs::path& logical_path,
     if (ec == std::errc::no_such_file_or_directory) return true;
     if (ec) {
         if (error) {
-            *error = "Could not inspect " + logical_path.string() + ": " +
+            *error = "Could not inspect " + path_to_utf8(logical_path) + ": " +
                      ec.message();
         }
         return false;
@@ -203,7 +196,7 @@ bool inspect_regular_file(const fs::path& logical_path,
     if (!fs::is_regular_file(status)) {
         if (error) {
             *error = "Managed save path is not a regular file: " +
-                     logical_path.string();
+                     path_to_utf8(logical_path);
         }
         return false;
     }
@@ -211,7 +204,8 @@ bool inspect_regular_file(const fs::path& logical_path,
     const std::uintmax_t fileSize = fs::file_size(ioPath, ec);
     if (ec) {
         if (error) {
-            *error = "Could not read the size of " + logical_path.string() +
+            *error = "Could not read the size of " +
+                     path_to_utf8(logical_path) +
                      ": " + ec.message();
         }
         return false;
@@ -220,7 +214,7 @@ bool inspect_regular_file(const fs::path& logical_path,
     if (ec) {
         if (error) {
             *error = "Could not read the timestamp of " +
-                     logical_path.string() + ": " + ec.message();
+                     path_to_utf8(logical_path) + ": " + ec.message();
         }
         return false;
     }
@@ -243,20 +237,22 @@ bool read_file_bytes(const fs::path& logical_path,
     if (!inspect_regular_file(logical_path, &exists, &size, nullptr, error))
         return false;
     if (!exists) {
-        if (error) *error = "File no longer exists: " + logical_path.string();
+        if (error) {
+            *error = "File no longer exists: " + path_to_utf8(logical_path);
+        }
         return false;
     }
     if (size > maximum_size) {
         if (error) {
             *error = "File exceeds the safe size limit: " +
-                     logical_path.string();
+                     path_to_utf8(logical_path);
         }
         return false;
     }
 
     std::ifstream input(filesystem_io_path(logical_path), std::ios::binary);
     if (!input) {
-        if (error) *error = "Could not open file: " + logical_path.string();
+        if (error) *error = "Could not open file: " + path_to_utf8(logical_path);
         return false;
     }
 
@@ -266,7 +262,10 @@ bool read_file_bytes(const fs::path& logical_path,
                    static_cast<std::streamsize>(size));
     }
     if (!input || input.peek() != std::ifstream::traits_type::eof()) {
-        if (error) *error = "Could not read file completely: " + logical_path.string();
+        if (error) {
+            *error = "Could not read file completely: " +
+                     path_to_utf8(logical_path);
+        }
         bytes->clear();
         return false;
     }
@@ -278,7 +277,7 @@ bool ensure_directory(const fs::path& logical_path, std::string* error) {
     fs::create_directories(filesystem_io_path(logical_path), ec);
     if (!ec) return true;
     if (error) {
-        *error = "Could not create directory " + logical_path.string() +
+        *error = "Could not create directory " + path_to_utf8(logical_path) +
                  ": " + ec.message();
     }
     return false;
@@ -328,14 +327,14 @@ bool prepare_direct_save_branch(const JgrfSavePaths& paths,
             if (ensure_direct_directory(ioCandidate, &createError)) continue;
             if (error) {
                 *error = "Could not prepare direct JGRF save-data directory " +
-                         candidate.string() + ": " + createError;
+                         path_to_utf8(candidate) + ": " + createError;
             }
             return false;
         }
 
         if (error) {
             *error = "JGRF save-data path is not a direct directory: " +
-                     candidate.string();
+                     path_to_utf8(candidate);
             if (inspection.kind == DirectPathKind::Error &&
                 !inspection.error.empty()) {
                 *error += ": " + inspection.error;
@@ -404,7 +403,7 @@ bool atomic_write_bytes(const fs::path& logical_path,
     output.setDirectWriteFallback(false);
     if (!output.open(QIODevice::WriteOnly)) {
         if (error) {
-            *error = "Could not open " + logical_path.string() +
+            *error = "Could not open " + path_to_utf8(logical_path) +
                      " for writing: " + output.errorString().toStdString();
         }
         return false;
@@ -414,7 +413,7 @@ bool atomic_write_bytes(const fs::path& logical_path,
     if (size != 0 &&
         output.write(reinterpret_cast<const char*>(bytes.data()), size) != size) {
         if (error) {
-            *error = "Could not write " + logical_path.string() + ": " +
+            *error = "Could not write " + path_to_utf8(logical_path) + ": " +
                      output.errorString().toStdString();
         }
         output.cancelWriting();
@@ -422,7 +421,7 @@ bool atomic_write_bytes(const fs::path& logical_path,
     }
     if (!output.commit()) {
         if (error) {
-            *error = "Could not replace " + logical_path.string() + ": " +
+            *error = "Could not replace " + path_to_utf8(logical_path) + ": " +
                      output.errorString().toStdString();
         }
         return false;
@@ -875,7 +874,7 @@ bool direct_backup_member(const AppPaths& paths,
                           const std::string& media,
                           const fs::path& candidate) {
     if (candidate.empty() || candidate.filename().empty() ||
-        lower_ascii(candidate.extension().string()) != ".zip") {
+        lower_ascii(path_to_utf8(candidate.extension())) != ".zip") {
         return false;
     }
 
@@ -893,7 +892,7 @@ bool remove_regular_file(const fs::path& logical_path, std::string* error) {
     std::error_code ec;
     const fs::file_status status = fs::symlink_status(ioPath, ec);
     if (ec) {
-        if (error) *error = "Could not inspect " + logical_path.string() +
+        if (error) *error = "Could not inspect " + path_to_utf8(logical_path) +
                             ": " + ec.message();
         return false;
     }
@@ -902,7 +901,7 @@ bool remove_regular_file(const fs::path& logical_path, std::string* error) {
         return false;
     }
     if (!fs::remove(ioPath, ec) || ec) {
-        if (error) *error = "Could not delete " + logical_path.string() +
+        if (error) *error = "Could not delete " + path_to_utf8(logical_path) +
                             ": " + ec.message();
         return false;
     }
@@ -936,7 +935,7 @@ bool apply_payload_snapshot(const JgrfSavePaths& save_paths,
         const fs::file_status status = fs::symlink_status(ioPath, ec);
         if (ec == std::errc::no_such_file_or_directory) continue;
         if (ec) {
-            if (error) *error = "Could not inspect " + path.string() +
+            if (error) *error = "Could not inspect " + path_to_utf8(path) +
                                 ": " + ec.message();
             return false;
         }
@@ -947,7 +946,7 @@ bool apply_payload_snapshot(const JgrfSavePaths& save_paths,
         }
         if (!fs::remove(ioPath, ec) || ec) {
             if (error) *error = "Could not remove stale save data " +
-                                path.string() + ": " + ec.message();
+                                path_to_utf8(path) + ": " + ec.message();
             return false;
         }
     }
@@ -1086,7 +1085,7 @@ std::vector<SaveBackupRecord> list_game_save_backups(
         std::error_code entryError;
         const fs::file_status status = entry.symlink_status(entryError);
         if (!entryError && fs::is_regular_file(status) &&
-            lower_ascii(entry.path().extension().string()) == ".zip") {
+            lower_ascii(path_to_utf8(entry.path().extension())) == ".zip") {
             SaveBackupRecord backup;
             backup.path = directory / entry.path().filename();
             backup.size = entry.file_size(entryError);
@@ -1111,8 +1110,8 @@ std::vector<SaveBackupRecord> list_game_save_backups(
     std::sort(backups.begin(), backups.end(),
               [](const SaveBackupRecord& left,
                  const SaveBackupRecord& right) {
-                  return left.path.filename().string() >
-                         right.path.filename().string();
+                  return path_to_utf8(left.path.filename()) >
+                         path_to_utf8(right.path.filename());
               });
     return backups;
 }

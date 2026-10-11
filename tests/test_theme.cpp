@@ -206,6 +206,18 @@ TEST_CASE("primary toolbar actions use borderless theme feedback",
         CHECK(stylesheet.find("QPushButton#filters_btn") != std::string::npos);
         CHECK(stylesheet.find("QPushButton#random_btn") != std::string::npos);
         CHECK(stylesheet.find("QPushButton#favorite_btn") != std::string::npos);
+        CHECK(stylesheet.find("QWidget#toolbar_actions") !=
+              std::string::npos);
+        CHECK(stylesheet.find(
+            "QWidget#toolbar_actions {\n"
+            "    background-color: transparent;\n"
+            "    border: none;\n"
+            "}") != std::string::npos);
+        CHECK(stylesheet.find("QPushButton#update_available_indicator") !=
+              std::string::npos);
+        CHECK(stylesheet.find(
+            "QPushButton#update_available_indicator {\n"
+            "    color: " + theme.accent + ";\n") != std::string::npos);
         CHECK(stylesheet.find("QPushButton#tools_btn::menu-indicator") !=
               std::string::npos);
         CHECK(stylesheet.find("QPushButton#filters_btn::menu-indicator") !=
@@ -388,8 +400,14 @@ TEST_CASE("About Goliath remains theme-aware across every palette", "[theme]") {
             "    background-color: " + theme.accent + ";\n"
             "    border-color: " + theme.accent + ";\n"
             "    color: " + contrast_text_for(theme.accent) + ";";
+        const std::string expected_body =
+            "QLabel#about_body {\n"
+            "    color: " + theme.text_primary + ";\n"
+            "}";
         CHECK(stylesheet.find(expected_cards) != std::string::npos);
         CHECK(stylesheet.find(expected_close) != std::string::npos);
+        CHECK(stylesheet.find(expected_body) != std::string::npos);
+        CHECK(contrast_ratio(theme.bg_secondary, theme.text_primary) >= 4.5);
     }
 }
 

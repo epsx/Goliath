@@ -3,6 +3,7 @@
 #include "ui/recording_id.hpp"
 #include "game/animated_gif.hpp"
 #include "common/debug_logger.hpp"
+#include "common/qt_path.hpp"
 
 #if defined(GOLIATH_WAYLAND_CAPTURE)
 
@@ -33,6 +34,7 @@
 #include <cstdint>
 #include <memory>
 #include <array>
+#include <limits>
 
 #include <unistd.h>
 
@@ -408,7 +410,12 @@ void MainWindow::recordWaylandGameGif() {
         for (int i = 0; i < colors.size() && i < 256; ++i)
             palette[static_cast<std::size_t>(i)] = colors[i];
         const int delay = (*frames & 1) ? 13 : 12;
-        if (!encoder->addFrame(image.constBits(), image.bytesPerLine(), palette.data(),
+        const qsizetype stride = image.bytesPerLine();
+        if (stride <= 0 || stride > std::numeric_limits<int>::max()) {
+            fail("The GIF frame stride is invalid.");
+            return;
+        }
+        if (!encoder->addFrame(image.constBits(), static_cast<int>(stride), palette.data(),
                                static_cast<std::size_t>(colors.size()), delay)) {
             fail("Could not encode the GIF frame.");
             return;
@@ -425,10 +432,12 @@ void MainWindow::recordWaylandGameGif() {
             return;
         }
         const QDateTime now = QDateTime::currentDateTime();
+        const QString mediaText = QString::fromUtf8(
+            media.data(), static_cast<qsizetype>(media.size()));
         const auto folderPath = m_paths.base_dir / "recordings" /
-            recordingIdForMedia(QString::fromStdString(media)).toStdWString() /
-            now.toString("yyyy-MM-dd").toStdWString();
-        const QString folder = QString::fromStdWString(folderPath.wstring());
+            qstring_to_path(recordingIdForMedia(mediaText)) /
+            qstring_to_path(now.toString("yyyy-MM-dd"));
+        const QString folder = path_to_qstring(folderPath);
         if (!QDir().mkpath(folder)) {
             QMessageBox::warning(this, "Game GIF", "Could not create the recordings folder.");
             return;

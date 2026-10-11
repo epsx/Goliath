@@ -54,7 +54,9 @@ inline constexpr bool should_record_tracked_session(
 struct GamePlaytimeRecord {
     std::int64_t total_seconds = 0;
     std::int64_t session_count = 0;
-    std::int64_t last_played_epoch = 0;
+    std::int64_t last_started_epoch = 0;
+    std::int64_t last_ended_epoch = 0;
+    std::int64_t last_session_seconds = 0;
 };
 
 // Compact display text such as "Less than a minute", "45m", or "2h 14m".
@@ -74,8 +76,9 @@ public:
     const GamePlaytimeRecord* find(const std::string& system,
                                    const std::string& media) const;
 
-    // Returns true only when a valid session was added. Totals saturate at
-    // int64_t limits instead of overflowing corruptly.
+    // Returns true only when a valid session was added. The start timestamp
+    // is derived from the monotonic duration and end timestamp. Totals
+    // saturate at int64_t limits instead of overflowing corruptly.
     bool add_session(const std::string& system,
                      const std::string& media,
                      std::int64_t session_seconds,

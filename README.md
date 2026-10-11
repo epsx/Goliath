@@ -58,8 +58,10 @@ Linux support is maintained where practical.
   configuration.
 - BIOS verification and safe JGRF BIOS preparation.
 - Save-data backup, validation, restore, deletion, and folder access.
-- Exact-media playtime, session count, and last-played tracking, including
-  background observation after the main window is closed.
+- Exact-media playtime, session count, Last Started/Ended, and Last Session
+  tracking, including background observation after the main window is closed.
+- Manual and opt-in daily/weekly update checks with trusted release parsing,
+  themed changelog presentation, and a discreet persistent toolbar indicator.
 - Selected-game performance benchmark and one-shot WAV export.
 - Frontend and JGRF diagnostics with guarded log controls.
 - SDL3 controller mapping and asynchronous audio-device discovery.
@@ -179,8 +181,9 @@ Sort and filter choices persist across restarts.
 The Theme, Sort, and Settings combo popup containers use the active palette
 throughout, including their outer Windows frames.
 
-The details panel displays **Playtime** and **Sessions** on separate rows
-without duplicating their visible values in hover tooltips.
+The details panel displays **Playtime**, **Sessions**, **Last Started**,
+**Last Ended**, and **Last Session** on separate rows without duplicating their
+visible values in hover tooltips.
 
 Use **Tools** or a game's context menu for:
 
@@ -222,6 +225,12 @@ line when the overlay closes.
 
 In **About Goliath**, a build identifier that names a committed GitHub revision
 opens that commit; local uncommitted builds retain a plain development label.
+
+In **Settings → Info**, **Check Now...** performs a manual Goliath release
+check. Automatic checks are opt-in and can be saved as Daily or Weekly. When a
+newer release exists, a compact indicator appears below About; selecting it
+opens the themed changelog and trusted GitHub download link. Goliath never
+downloads or installs an update automatically.
 
 The default-on **Command overlay** toolbar check box controls automatic
 creation for future matching game launches and persists in `goliath.ini`.
@@ -488,7 +497,7 @@ Detailed Windows deployment instructions are in
 
 - [HOWTO.md](HOWTO.md) — setup, build, runtime preparation, deployment, and
   troubleshooting;
-- [STRUCTURA.md](STRUCTURA.md) — detailed architecture and source ownership;
+- [STRUCTURE.md](STRUCTURE.md) — detailed architecture and source ownership;
 - [HISTORY.md](HISTORY.md) — implementation and validation history;
 - [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) — dependency and license
   inventory;

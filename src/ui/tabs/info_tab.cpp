@@ -1,5 +1,6 @@
 #include "info_tab.hpp"
 
+#include "common/qt_path.hpp"
 #include "game/jollygood_capabilities.hpp"
 #include "game/jollygood_executable.hpp"
 #include "game/geolith_capabilities.hpp"
@@ -48,7 +49,7 @@ QLabel* valueLabel(const QString& initial = "Not checked") {
 // OpenGL ES on MVS/AES and Neo Geo CD CHD. --help alone cannot report the
 // runtime BGRA fix; a different build remains unverified.
 bool matchesSha256(const fs::path& path, const char* expected) {
-    QFile file(QString::fromStdString(path.string()));
+    QFile file(path_to_qstring(path));
     if (!file.open(QIODevice::ReadOnly)) return false;
     QCryptographicHash hash(QCryptographicHash::Sha256);
     return hash.addData(&file) && hash.result().toHex() == expected;
@@ -109,8 +110,9 @@ void InfoTab::setupUi() {
 
     auto* updateNote = new QLabel(
         "Automatic checks are opt-in. They run silently when Goliath is up "
-        "to date or the network is unavailable, and show a dialog only when "
-        "a newer release exists. Manual checks remain available at any time.",
+        "to date or the network is unavailable. When a newer release exists, "
+        "a discreet indicator appears below About. Manual checks remain "
+        "available at any time.",
         updatesGroup);
     updateNote->setWordWrap(true);
     updateNote->setObjectName("themed_note");
@@ -201,9 +203,22 @@ void InfoTab::saveUpdatePreference() {
         : QStringLiteral("disabled");
     const UpdateCheckInterval interval = parse_update_check_interval(
         key.toStdString());
-    m_config.set("Updates", "check_interval",
-                 std::string(update_check_interval_key(interval)));
-    save_config(m_config);
+    Config candidate = m_config;
+    candidate.set("Updates", "check_interval",
+                  std::string(update_check_interval_key(interval)));
+
+    std::string error;
+    if (!save_config(candidate, &error)) {
+        if (m_updatePreferenceStatus) {
+            m_updatePreferenceStatus->setText(
+                QStringLiteral(
+                    "Automatic update preference could not be saved: ") +
+                QString::fromStdString(error));
+        }
+        return;
+    }
+
+    m_config = std::move(candidate);
     if (m_updatePreferenceStatus) {
         m_updatePreferenceStatus->setText(
             interval == UpdateCheckInterval::Disabled
@@ -217,14 +232,12 @@ void InfoTab::saveUpdatePreference() {
 
 void InfoTab::checkUpdatesNow() {
     if (m_checkUpdatesButton) m_checkUpdatesButton->setEnabled(false);
-    const bool successful = checkForUpdates(this);
-    if (successful) rememberSuccessfulUpdateCheck();
+    const UpdateCheckResult result = checkForUpdates(this);
+    if (result.successful) {
+        recordSuccessfulUpdateCheck(m_config, result);
+        refreshLastUpdateCheck();
+    }
     if (m_checkUpdatesButton) m_checkUpdatesButton->setEnabled(true);
-}
-
-void InfoTab::rememberSuccessfulUpdateCheck() {
-    recordSuccessfulUpdateCheck(m_config);
-    refreshLastUpdateCheck();
 }
 
 void InfoTab::refreshLastUpdateCheck() {
@@ -345,14 +358,14 @@ void InfoTab::startJgrfProbe() {
     const fs::path exe = resolve_jollygood_executable(m_jollygoodExe);
     if (exe.empty()) {
         m_jgrfVersion->setText("Unavailable");
-        m_jgrfExecutable->setText(QString::fromStdString(m_jollygoodExe.string()));
+        m_jgrfExecutable->setText(path_to_qstring(m_jollygoodExe));
         m_vulkanRenderer->setText("Unknown");
         m_esBgraRenderer->setText("Unavailable");
         m_jgrfError = "Configured JGRF executable was not found.";
         return;
     }
 
-    m_jgrfExecutable->setText(QString::fromStdString(exe.string()));
+    m_jgrfExecutable->setText(path_to_qstring(exe));
     auto* process = new QProcess(this);
     auto timedOut = std::make_shared<bool>(false);
     m_jgrfProcess = process;
@@ -400,7 +413,7 @@ void InfoTab::startJgrfProbe() {
         process->deleteLater();
     });
 
-    process->start(QString::fromStdString(exe.string()), {"--help"});
+    process->start(path_to_qstring(exe), {"--help"});
 
     // A broken executable should never leave the Info tab permanently busy.
     QTimer::singleShot(kJgrfHelpProbeTimeoutMs, process,
@@ -418,7 +431,7 @@ void InfoTab::startCoreProbe() {
 
     m_coreLibrary->setText(coreLibrary.empty()
                                ? "Unavailable"
-                               : QString::fromStdString(coreLibrary.string()));
+                               : path_to_qstring(coreLibrary));
 
     m_corePending = true;
     auto result = std::make_shared<GeolithCapabilities>();

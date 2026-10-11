@@ -104,8 +104,10 @@ InputPanelWidget* create_input_panel(const std::string& section,
     return nullptr;
 }
 
-QString mapping_tooltip(const QString& stored, bool overridden) {
-    const QString shownValue = stored.isEmpty() ? "not set" : stored;
+QString mapping_tooltip(const std::string& stored, bool overridden) {
+    const QString shownValue = stored.empty()
+        ? QStringLiteral("not set")
+        : QString::fromStdString(stored);
     QString text = overridden
         ? QString("Custom mapping for this game.\nStored value: %1"
                   "\n\nRight-click to inherit the global mapping.")
@@ -113,8 +115,7 @@ QString mapping_tooltip(const QString& stored, bool overridden) {
         : QString("Inherited from the global mapping.\nStored value: %1")
               .arg(shownValue);
 
-    const auto action =
-        jgrf_hotkey_action_for_binding(stored.toStdString());
+    const auto action = jgrf_hotkey_action_for_binding(stored);
     if (action.has_value()) {
         text += QString::fromUtf8(
                     "\n\n\xE2\x9A\xA0 JGRF frontend hotkey: %1"
@@ -244,7 +245,7 @@ int GameInputMappingWidget::initialMappingProfile() const {
     return 1;
 }
 
-QString GameInputMappingWidget::effectiveValue(
+std::string GameInputMappingWidget::effectiveValue(
         const IniDocument& globalConfig,
         const std::string& section,
         const std::string& key,
@@ -254,7 +255,7 @@ QString GameInputMappingWidget::effectiveValue(
         const auto keyOverride = sectionOverride->second.find(key);
         if (keyOverride != sectionOverride->second.end()) {
             if (overridden) *overridden = true;
-            return QString::fromStdString(keyOverride->second);
+            return keyOverride->second;
         }
     }
     if (overridden) *overridden = false;
@@ -265,13 +266,13 @@ QString GameInputMappingWidget::effectiveValue(
             globalValue = globalConfig.get(section, rawKey);
     }
     if (globalValue.has_value() && !globalValue->empty())
-        return QString::fromStdString(*globalValue);
+        return *globalValue;
 
     const auto defaultSection = default_input_config().find(section);
     if (defaultSection != default_input_config().end()) {
         const auto defaultKey = defaultSection->second.find(key);
         if (defaultKey != defaultSection->second.end())
-            return QString::fromStdString(defaultKey->second);
+            return defaultKey->second;
     }
     return {};
 }
@@ -282,24 +283,23 @@ void GameInputMappingWidget::updateButtonDisplay(
         const std::string& section,
         const std::string& key) {
     bool overridden = false;
-    const QString value =
+    const std::string value =
         effectiveValue(globalConfig, section, key, &overridden);
-    const auto [stored, display] = normalize_input_value(value.toStdString());
+    const auto [stored, display] = normalize_input_value(value);
 
-    QString shown = value.isEmpty()
+    QString shown = value.empty()
         ? QStringLiteral("--")
         : QString::fromStdString(display);
     if (overridden)
         shown.prepend(QString::fromUtf8("\xE2\x80\xA2 "));
 
-    if (!value.isEmpty() &&
+    if (!value.empty() &&
         !normalize_input_binding_for_definition(section, key, stored).has_value()) {
         shown = QStringLiteral("Invalid: ") + shown;
     }
 
     setButtonDisplayText(button, shown);
-    button->setToolTip(mapping_tooltip(
-        QString::fromStdString(stored), overridden));
+    button->setToolTip(mapping_tooltip(stored, overridden));
 }
 
 void GameInputMappingWidget::rebuild() {
@@ -346,11 +346,9 @@ void GameInputMappingWidget::rebuild() {
             }
 
             updateButtonDisplay(button, globalConfig, section, key);
-            const QString qSection = sectionName;
-            const QString qKey = QString::fromStdString(key);
             connect(button, &QPushButton::clicked,
-                    this, [this, button, qSection, qKey]() {
-                        startListening(button, qSection, qKey);
+                    this, [this, button, section, key]() {
+                        startListening(button, section, key);
                     });
 
             button->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -408,8 +406,8 @@ void GameInputMappingWidget::refreshJoystickList() {
 
 void GameInputMappingWidget::startListening(
         QPushButton* button,
-        const QString& section,
-        const QString& key) {
+        const std::string& section,
+        const std::string& key) {
     if (button == m_listeningButton) {
         cancelListening();
         return;
@@ -446,8 +444,7 @@ void GameInputMappingWidget::startListening(
     }
     if (port < 0 || port > 9) return;
 
-    const JoystickCaptureMode mode = is_analog_input_definition(
-        section.toStdString(), key.toStdString())
+    const JoystickCaptureMode mode = is_analog_input_definition(section, key)
         ? JoystickCaptureMode::AnalogAxis
         : JoystickCaptureMode::Digital;
     m_joystickListener =
@@ -492,10 +489,8 @@ void GameInputMappingWidget::applyMapping(
         const QString& displayName) {
     if (!m_listeningButton) return;
 
-    const std::string section = m_listeningSection.toStdString();
-    const std::string key = m_listeningKey.toStdString();
     const auto stored = normalize_input_binding_for_definition(
-        section, key, value.toStdString());
+        m_listeningSection, m_listeningKey, value.toStdString());
     if (!stored.has_value()) {
         setButtonDisplayText(m_listeningButton, "Unsupported input; try again...");
         m_listeningButton->setToolTip(
@@ -505,7 +500,7 @@ void GameInputMappingWidget::applyMapping(
     }
 
     stopJoystickListener();
-    m_overrides[section][key] = *stored;
+    m_overrides[m_listeningSection][m_listeningKey] = *stored;
 
     QString display;
     if (!displayName.isEmpty()) {
@@ -518,8 +513,7 @@ void GameInputMappingWidget::applyMapping(
     setButtonDisplayText(
         m_listeningButton,
         QString::fromUtf8("\xE2\x80\xA2 ") + display);
-    m_listeningButton->setToolTip(
-        mapping_tooltip(QString::fromStdString(*stored), true));
+    m_listeningButton->setToolTip(mapping_tooltip(*stored, true));
     resetButtonStyle(m_listeningButton);
 
     m_listeningButton = nullptr;
@@ -584,9 +578,7 @@ void GameInputMappingWidget::keyPressEvent(QKeyEvent* event) {
         return;
     }
 
-    if (is_analog_input_definition(
-            m_listeningSection.toStdString(),
-            m_listeningKey.toStdString())) {
+    if (is_analog_input_definition(m_listeningSection, m_listeningKey)) {
         setButtonDisplayText(m_listeningButton, "Move analog axis...");
         m_listeningButton->setToolTip(
             "This emulated axis requires a physical analog joystick axis. "

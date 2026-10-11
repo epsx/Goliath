@@ -126,6 +126,13 @@ TEST_CASE("per-game profile keys distinguish every launchable media",
     REQUIRE(parent != cue);
 }
 
+TEST_CASE("profile media normalization preserves UTF-8 path components",
+          "[profiles][paths][unicode]") {
+    REQUIRE(normalize_game_profile_media(
+                "Știință\\日本\\Joc.neo") ==
+            "Știință/日本/Joc.neo");
+}
+
 TEST_CASE("shared video schema matches JGRF and Geolith contracts",
           "[profiles][video][schema]") {
     const auto& frontend = goliath::jgrf_video_setting_specs();

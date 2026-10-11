@@ -175,17 +175,20 @@ void CoreTab::load() {
 }
 
 void CoreTab::save() {
-    std::error_code ec;
-    fs::create_directories(m_geolithIni.parent_path(), ec);
-
     IniDocument cfg;
     cfg.load(m_geolithIni);
     for (const GroupedField& gf : geolithCoreFields()) {
         int value = m_widgets.value(gf.spec.key);
         cfg.set("geolith", gf.spec.key, std::to_string(value));
     }
-    cfg.save(m_geolithIni);
 
+    std::string error;
+    if (!cfg.save(m_geolithIni, &error)) {
+        QMessageBox::warning(
+            this, "Core Settings",
+            QStringLiteral("Core settings could not be saved.\n\n") +
+                QString::fromStdString(error));
+    }
 }
 
 void CoreTab::resetDefaults() {
@@ -195,16 +198,20 @@ void CoreTab::resetDefaults() {
         QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
     if (reply != QMessageBox::Yes) return;
 
-    std::error_code ec;
-    fs::create_directories(m_geolithIni.parent_path(), ec);
-
     IniDocument cfg;
     cfg.load(m_geolithIni);
     for (const GroupedField& gf : geolithCoreFields()) {
         cfg.set("geolith", gf.spec.key,
                 std::to_string(gf.spec.default_value));
     }
-    cfg.save(m_geolithIni);
+    std::string error;
+    if (!cfg.save(m_geolithIni, &error)) {
+        QMessageBox::warning(
+            this, "Reset Core Settings",
+            QStringLiteral("Core defaults could not be saved.\n\n") +
+                QString::fromStdString(error));
+        return;
+    }
     load();
 }
 

@@ -1,5 +1,7 @@
 #include "game/jollygood_executable.hpp"
 
+#include "common/qt_path.hpp"
+
 #include <algorithm>
 #include <cctype>
 #include <string>
@@ -15,7 +17,7 @@ fs::path resolve_jollygood_executable(fs::path configured) {
     if (fs::is_regular_file(configured, ec)) return configured;
 
 #if defined(_WIN32)
-    std::string extension = configured.extension().string();
+    std::string extension = path_to_utf8(configured.extension());
     std::transform(extension.begin(), extension.end(), extension.begin(),
                    [](unsigned char ch) {
                        return static_cast<char>(std::tolower(ch));

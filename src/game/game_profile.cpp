@@ -1,5 +1,6 @@
 #include "game/game_profile.hpp"
 
+#include "common/qt_path.hpp"
 #include "input/input_maps.hpp"
 #include "json.hpp"
 
@@ -23,14 +24,6 @@ namespace goliath {
 namespace {
 
 constexpr int kProfileSchemaVersion = 1;
-
-QString path_to_qstring(const fs::path& path) {
-#if defined(_WIN32)
-    return QString::fromStdWString(path.wstring());
-#else
-    return QString::fromStdString(path.string());
-#endif
-}
 
 std::optional<int> optional_int_in_range(const json& object,
                                          const char* key,
@@ -201,8 +194,8 @@ std::string normalize_game_profile_media(std::string media) {
         if (ch == '\\') ch = '/';
     }
 
-    fs::path normalized = fs::path(media).lexically_normal();
-    std::string result = normalized.generic_string();
+    fs::path normalized = path_from_utf8(media).lexically_normal();
+    std::string result = path_to_utf8(normalized);
     while (result.starts_with("./")) result.erase(0, 2);
     return result == "." ? std::string() : result;
 }
@@ -216,7 +209,8 @@ std::string exact_media_storage_id(const std::string& system,
                                    const std::string& media) {
     const std::string key = make_game_profile_key(system, media);
     std::uint64_t hash = 1469598103934665603ULL;
-    for (unsigned char ch : key) {
+    for (const char rawCh : key) {
+        const auto ch = static_cast<unsigned char>(rawCh);
         hash ^= ch;
         hash *= 1099511628211ULL;
     }
@@ -240,14 +234,19 @@ bool GameProfileStore::load(const fs::path& path, std::string* error) {
 
     const bool regular = fs::is_regular_file(path, ec);
     if (ec || !regular) {
-        if (error) *error = "Profile path is not a regular file: " + path.string();
+        if (error) {
+            *error = "Profile path is not a regular file: " +
+                     path_to_utf8(path);
+        }
         return false;
     }
 
     try {
         std::ifstream input(path, std::ios::binary);
         if (!input) {
-            if (error) *error = "Could not open profile file: " + path.string();
+            if (error) {
+                *error = "Could not open profile file: " + path_to_utf8(path);
+            }
             return false;
         }
 
@@ -324,13 +323,14 @@ bool GameProfileStore::save(const fs::path& path, std::string* error) const {
     if (!output.open(QIODevice::WriteOnly)) {
         if (error) {
             *error = "Could not open profile file for writing: " +
-                     path.string() + ": " + output.errorString().toStdString();
+                     path_to_utf8(path) + ": " +
+                     output.errorString().toStdString();
         }
         return false;
     }
     if (output.write(serialized) != serialized.size()) {
         if (error) {
-            *error = "Could not write profile file: " + path.string() +
+            *error = "Could not write profile file: " + path_to_utf8(path) +
                      ": " + output.errorString().toStdString();
         }
         output.cancelWriting();
@@ -338,7 +338,7 @@ bool GameProfileStore::save(const fs::path& path, std::string* error) const {
     }
     if (!output.commit()) {
         if (error) {
-            *error = "Could not replace profile file: " + path.string() +
+            *error = "Could not replace profile file: " + path_to_utf8(path) +
                      ": " + output.errorString().toStdString();
         }
         return false;

@@ -15,6 +15,8 @@ A public portable archive must contain, at minimum:
 - `LICENSE`;
 - `THIRD-PARTY-NOTICES.md`;
 - the complete `licenses/` directory generated from the audited components;
+- the four audited baseline files under `metadata/`, together with
+  `metadata/README.md`;
 - the Goliath executable and only the runtime files actually required by the
   release.
 
@@ -72,8 +74,9 @@ Before publication:
 3. inspect imports of the actual EXE and DLL files and compare them with the
    third-party inventory;
 4. verify the Goliath and Qt corresponding-source archives;
-5. confirm the package contains no ROM, disc-image, BIOS, firmware, metadata,
-   save-data, log, configuration, or developer-machine residue;
+5. confirm the package retains the four audited baseline metadata files but
+   contains no ROM, disc-image, BIOS, firmware, external or supplemental
+   metadata, save-data, log, configuration, or developer-machine residue;
 6. test the archive on a clean Windows machine without MSYS2;
 7. publish hashes for the binary and corresponding-source archives.
 

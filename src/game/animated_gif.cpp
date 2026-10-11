@@ -90,8 +90,10 @@ bool AnimatedGifEncoder::addFrame(const std::uint8_t* pixels, int stride,
     dictionary.reserve(4096);
     emit(256); // Clear code.
     int prefix = pixels[0];
+    const auto rowStride = static_cast<std::size_t>(stride);
     for (int y = 0; y < m_height; ++y) {
-        const std::uint8_t* row = pixels + static_cast<std::size_t>(y) * stride;
+        const std::uint8_t* row =
+            pixels + static_cast<std::size_t>(y) * rowStride;
         for (int x = 0; x < m_width; ++x) {
             if (x == 0 && y == 0) continue;
             const int symbol = row[x];
@@ -126,8 +128,10 @@ bool AnimatedGifEncoder::addFrame(const std::uint8_t* pixels, int stride,
     for (std::size_t pos = 0; pos < compressed.size();) {
         const auto length = std::min<std::size_t>(255, compressed.size() - pos);
         byte(static_cast<std::uint8_t>(length));
-        m_output.insert(m_output.end(), compressed.begin() + pos,
-                        compressed.begin() + pos + length);
+        using Difference = std::vector<std::uint8_t>::difference_type;
+        const auto first = compressed.cbegin() + static_cast<Difference>(pos);
+        const auto last = first + static_cast<Difference>(length);
+        m_output.insert(m_output.end(), first, last);
         pos += length;
     }
     byte(0); // End of frame data sub-blocks.

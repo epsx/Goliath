@@ -1,5 +1,7 @@
 #include "catch2/catch.hpp"
 
+#include "common/native_file.hpp"
+#include "common/qt_path.hpp"
 #include "game/bios_verify.hpp"
 #include "miniz.h"
 
@@ -24,7 +26,9 @@ static void clean_dir(const fs::path& dir) {
 static void write_zip_with_file(const fs::path& zip_path, const std::string& member, const void* data, size_t size) {
     mz_zip_archive zip;
     std::memset(&zip, 0, sizeof(zip));
-    if (mz_zip_writer_init_file(&zip, zip_path.string().c_str(), 0)) {
+    goliath::NativeFile output = goliath::open_native_file(
+        zip_path, goliath::NativeFileMode::WriteBinary);
+    if (output && mz_zip_writer_init_cfile(&zip, output.get(), 0)) {
         mz_zip_writer_add_mem(&zip, member.c_str(), data, size, 0);
         mz_zip_writer_finalize_archive(&zip);
         mz_zip_writer_end(&zip);
@@ -105,4 +109,33 @@ TEST_CASE("verify_bios accepts optional neocd presence check", "[bios]") {
 
     clean_dir(dir);
     fs::remove(dir, ec);
+}
+
+TEST_CASE("verify_bios reads archives below a Unicode directory",
+          "[bios][paths][unicode]") {
+    const fs::path dir = fs::temp_directory_path() /
+        goliath::path_from_utf8("goliath_bios_Știință_日本");
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+    ec.clear();
+    fs::create_directories(dir, ec);
+    REQUIRE_FALSE(ec);
+
+    const char data[] = "abc";
+    write_zip_with_file(
+        dir / "neocd.zip", "front-sp1.bin", data, sizeof(data));
+
+    const auto result = verify_bios(dir);
+    REQUIRE(result.has_value());
+
+    const bool found = std::any_of(
+        result->lines.begin(), result->lines.end(),
+        [](const std::string& line) {
+            return line.find("front-sp1.bin") != std::string::npos &&
+                   line.find(" found") != std::string::npos;
+        });
+    CHECK(found);
+
+    fs::remove_all(dir, ec);
+    CHECK_FALSE(ec);
 }

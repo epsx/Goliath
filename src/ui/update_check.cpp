@@ -3,6 +3,7 @@
 #include "common/debug_logger.hpp"
 #include "common/goliath_common.hpp"
 #include "ui/widgets/title_bar.hpp"
+#include "update/update_alert.hpp"
 #include "update/release_feed.hpp"
 
 #include <QDesktopServices>
@@ -14,6 +15,7 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QPalette>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QSize>
@@ -227,8 +229,8 @@ void show_release_result(QWidget* parent, const PublishedRelease& release,
     cardLayout->addWidget(heading);
 
     const QString releaseText = trustedUrl
-        ? QString("<a href=\"%1\" style=\"color:inherit; "
-                  "text-decoration:underline\">%2</a>")
+        ? QString("<a href=\"%1\" style=\"text-decoration:underline\">"
+                  "%2</a>")
               .arg(releaseUrl.toString(QUrl::FullyEncoded).toHtmlEscaped(),
                    tag.toHtmlEscaped())
         : tag.toHtmlEscaped();
@@ -249,6 +251,16 @@ void show_release_result(QWidget* parent, const PublishedRelease& release,
     detailLabel->setObjectName("about_body");
     detailLabel->setWordWrap(true);
     detailLabel->setTextFormat(Qt::RichText);
+    // Qt rich text does not implement CSS color:inherit like a browser. Let
+    // links use the label's resolved theme foreground instead of falling back
+    // to a nearly black platform link color on dark themes.
+    detailLabel->ensurePolished();
+    QPalette detailPalette = detailLabel->palette();
+    const QColor detailForeground =
+        detailPalette.color(detailLabel->foregroundRole());
+    detailPalette.setColor(QPalette::Link, detailForeground);
+    detailPalette.setColor(QPalette::LinkVisited, detailForeground);
+    detailLabel->setPalette(detailPalette);
     detailLabel->setTextInteractionFlags(
         trustedUrl ? Qt::TextBrowserInteraction : Qt::TextSelectableByMouse);
     detailLabel->setOpenExternalLinks(false);
@@ -309,12 +321,18 @@ void show_release_result(QWidget* parent, const PublishedRelease& release,
 
 } // namespace
 
-bool checkForUpdates(QWidget* parent) {
+void showUpdateRelease(QWidget* parent, const PublishedRelease& release) {
+    show_release_result(
+        parent, release,
+        parse_release_version(std::string_view(GOLIATH_VERSION)));
+}
+
+UpdateCheckResult checkForUpdates(QWidget* parent) {
     const QUrl apiUrl = releases_api_url();
     if (!is_valid_releases_api_url(apiUrl)) {
         show_update_notice(parent, "Update check unavailable.",
                            "The Goliath release service is not configured.");
-        return false;
+        return {};
     }
 
     QDialog progress(parent);
@@ -358,20 +376,23 @@ bool checkForUpdates(QWidget* parent) {
         canceled = true;
         reply->abort();
     }
-    if (canceled) return false;
+    if (canceled) return {};
 
     QString error;
     const auto release = release_from_reply(reply, &error);
     if (!release) {
         show_update_notice(parent, "The update check failed.",
                            error);
-        return false;
+        return {};
     }
 
-    show_release_result(
-        parent, *release,
-        parse_release_version(std::string_view(GOLIATH_VERSION)));
-    return true;
+    UpdateCheckResult result;
+    result.successful = true;
+    if (release_is_newer_than_installed(*release, GOLIATH_VERSION)) {
+        result.available_release = *release;
+    }
+    showUpdateRelease(parent, *release);
+    return result;
 }
 
 void checkForUpdatesAutomatically(
@@ -380,7 +401,7 @@ void checkForUpdatesAutomatically(
     if (!parent || !is_valid_releases_api_url(apiUrl)) {
         DebugLogger::logWarn(
             "automatic update check skipped: release service is not configured");
-        if (completion) completion(false);
+        if (completion) completion({});
         return;
     }
 
@@ -394,29 +415,42 @@ void checkForUpdatesAutomatically(
         if (!release) {
             DebugLogger::logWarn(
                 "automatic update check failed: " + error);
-            if (completion) completion(false);
+            if (completion) completion({});
         } else {
-            const auto current = parse_release_version(
-                std::string_view(GOLIATH_VERSION));
-            if (!current ||
-                compare_release_versions(release->version, *current) > 0) {
-                show_release_result(parent, *release, current);
+            UpdateCheckResult result;
+            result.successful = true;
+            if (release_is_newer_than_installed(*release, GOLIATH_VERSION)) {
+                result.available_release = *release;
             }
             DebugLogger::logInfo(
                 QString("automatic update check completed: latest=%1")
                     .arg(QString::fromStdString(release->tag)));
-            if (completion) completion(true);
+            if (completion) completion(std::move(result));
         }
         reply->deleteLater();
         network->deleteLater();
     });
 }
 
-void recordSuccessfulUpdateCheck(Config& config) {
+void recordSuccessfulUpdateCheck(Config& config,
+                                 const UpdateCheckResult& result) {
+    if (!result.successful) return;
+
     config.set(
         "Updates", "last_successful_check_epoch",
         std::to_string(QDateTime::currentSecsSinceEpoch()));
     save_config(config);
+
+    std::string error;
+    const auto cachePath = update_alert_cache_path();
+    const bool persisted = result.available_release
+        ? save_update_alert_cache(cachePath, *result.available_release, &error)
+        : clear_update_alert_cache(cachePath, &error);
+    if (!persisted) {
+        DebugLogger::logWarn(
+            QString("could not update persistent release alert: %1")
+                .arg(QString::fromStdString(error)));
+    }
 }
 
 } // namespace goliath

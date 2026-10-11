@@ -70,18 +70,20 @@ void JoystickListener::run() {
     // the "j<port>h0<dir>" codes it writes.
     bool hasHat = SDL_GetNumJoystickHats(joystick) > 0;
 
-    std::vector<bool> prevButtons(numButtons > 0 ? numButtons : 0, false);
-    std::vector<double> prevAxes(numAxes > 0 ? numAxes : 0, 0.0);
+    std::vector<bool> prevButtons(static_cast<std::size_t>(numButtons), false);
+    std::vector<double> prevAxes(static_cast<std::size_t>(numAxes), 0.0);
     // Index order matches jgrf's SDL_EVENT_JOYSTICK_HAT_MOTION handler:
     // Up=0, Down=1, Left=2, Right=3.
     bool prevHatDir[4] = {false, false, false, false};
 
     SDL_UpdateJoysticks();
     for (int i = 0; i < numButtons; ++i) {
-        prevButtons[i] = SDL_GetJoystickButton(joystick, i);
+        const auto index = static_cast<std::size_t>(i);
+        prevButtons[index] = SDL_GetJoystickButton(joystick, i);
     }
     for (int i = 0; i < numAxes; ++i) {
-        prevAxes[i] = SDL_GetJoystickAxis(joystick, i) / 32768.0; // -1..1
+        const auto index = static_cast<std::size_t>(i);
+        prevAxes[index] = SDL_GetJoystickAxis(joystick, i) / 32768.0; // -1..1
     }
     if (hasHat) {
         Uint8 hat = SDL_GetJoystickHat(joystick, 0);
@@ -96,21 +98,23 @@ void JoystickListener::run() {
 
         if (m_mode == JoystickCaptureMode::Digital) {
             for (int i = 0; i < numButtons; ++i) {
+                const auto index = static_cast<std::size_t>(i);
                 bool now = SDL_GetJoystickButton(joystick, i);
-                if (now && !prevButtons[i]) {
+                if (now && !prevButtons[index]) {
                     emit mapped(QString::fromStdString(
                         make_joystick_button_mapping(m_port, i)));
                     SDL_CloseJoystick(joystick);
                     return;
                 }
-                prevButtons[i] = now;
+                prevButtons[index] = now;
             }
         }
 
         for (int i = 0; i < numAxes; ++i) {
+            const auto index = static_cast<std::size_t>(i);
             double value = SDL_GetJoystickAxis(joystick, i) / 32768.0;
             const bool activeNow = std::fabs(value) > 0.8;
-            const bool axisChanged = std::fabs(value - prevAxes[i]) > 0.5;
+            const bool axisChanged = std::fabs(value - prevAxes[index]) > 0.5;
 
             if (activeNow && axisChanged) {
                 const std::string mapping =
@@ -122,7 +126,7 @@ void JoystickListener::run() {
                 return;
             }
 
-            prevAxes[i] = value;
+            prevAxes[index] = value;
         }
 
         if (m_mode == JoystickCaptureMode::Digital && hasHat) {

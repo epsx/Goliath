@@ -6,6 +6,7 @@
 #include "game/neocd_verification.hpp"
 #include "game/neogeo_metadata.hpp"
 #include "common/goliath_common.hpp"
+#include "common/qt_path.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -1477,6 +1478,56 @@ TEST_CASE("geolith crc catalog ignores malformed rows",
     CHECK(catalog.at("mslug.neo") == "352441c2");
 
     fs::remove_all(root);
+}
+
+TEST_CASE("metadata XML loaders accept Unicode filesystem paths",
+          "[db][metadata][paths][unicode]") {
+    const fs::path root = fs::temp_directory_path() /
+        goliath::path_from_utf8("goliath_metadata_Știință_日本");
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    ec.clear();
+    fs::create_directories(root, ec);
+    REQUIRE_FALSE(ec);
+
+    create_common_metadata(root);
+    create_redump_neocd_dat(root);
+    write_file(
+        root / "metadata/geolith.xml",
+        R"xml(<?xml version="1.0"?>
+<geolith-metadata schema-version="1">
+  <neo-catalog algorithm="crc32" entries="1">
+    <rom file="mslug.neo" crc32="352441c2"/>
+  </neo-catalog>
+</geolith-metadata>
+)xml");
+
+    const goliath::GeolithCrcCatalog geolith =
+        goliath::load_geolith_crc_catalog(root / "metadata/geolith.xml");
+    REQUIRE(geolith.size() == 1);
+    CHECK(geolith.at("mslug.neo") == "352441c2");
+
+    SoftwareCatalog cartridges;
+    goliath::load_software_list_xml(
+        root / "metadata/neogeo.xml", "neogeo",
+        goliath::NeoGeoMedia::Cartridge, cartridges);
+    CHECK(cartridges.contains("mslug"));
+
+    const goliath::SupplementalMetadata supplemental =
+        goliath::load_supplemental_metadata(
+            root / "metadata", std::unordered_set<std::string>{"mslug"});
+    CHECK(supplemental.history.neogeo.contains("mslug"));
+
+    const std::optional<fs::path> redumpPath =
+        goliath::find_redump_neocd_dat(root / "metadata");
+    REQUIRE(redumpPath.has_value());
+
+    goliath::RedumpCatalog redump;
+    goliath::load_redump_neocd_dat(*redumpPath, redump);
+    CHECK(redump.size() == 2);
+
+    fs::remove_all(root, ec);
+    CHECK_FALSE(ec);
 }
 
 TEST_CASE("db scanner normalizes software-list description separators", "[db][metadata][migration]") {

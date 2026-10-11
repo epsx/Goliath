@@ -1,5 +1,7 @@
 #include "common/filesystem_safety.hpp"
 
+#include "common/qt_path.hpp"
+
 #include <system_error>
 
 #if defined(_WIN32)
@@ -68,14 +70,14 @@ bool ensure_direct_directory(const fs::path& path, std::string* error) {
         return true;
     if (inspection.kind == DirectPathKind::Error) {
         if (error) {
-            *error = "Could not inspect directory " + path.string() +
+            *error = "Could not inspect directory " + path_to_utf8(path) +
                      ": " + inspection.error;
         }
         return false;
     }
     if (inspection.kind != DirectPathKind::Missing) {
         if (error) {
-            *error = "Path is not a direct directory: " + path.string();
+            *error = "Path is not a direct directory: " + path_to_utf8(path);
         }
         return false;
     }
@@ -84,7 +86,7 @@ bool ensure_direct_directory(const fs::path& path, std::string* error) {
     fs::create_directories(path, ec);
     if (ec) {
         if (error) {
-            *error = "Could not create directory " + path.string() +
+            *error = "Could not create directory " + path_to_utf8(path) +
                      ": " + ec.message();
         }
         return false;
@@ -94,7 +96,7 @@ bool ensure_direct_directory(const fs::path& path, std::string* error) {
     if (inspection.kind == DirectPathKind::Directory)
         return true;
     if (error) {
-        *error = "Created path is not a direct directory: " + path.string();
+        *error = "Created path is not a direct directory: " + path_to_utf8(path);
         if (inspection.kind == DirectPathKind::Error &&
             !inspection.error.empty()) {
             *error += ": " + inspection.error;

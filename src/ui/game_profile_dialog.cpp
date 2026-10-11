@@ -1,5 +1,6 @@
 #include "ui/game_profile_dialog.hpp"
 
+#include "common/qt_path.hpp"
 #include "common/theme.hpp"
 #include "game/jollygood_capabilities.hpp"
 #include "game/jollygood_executable.hpp"
@@ -499,7 +500,7 @@ void GameProfileDialog::probeJollygoodVideoCapabilities() {
                 process->deleteLater();
             });
 
-    process->start(QString::fromStdString(executable.string()), {"--help"});
+    process->start(path_to_qstring(executable), {"--help"});
     QTimer::singleShot(kJgrfHelpProbeTimeoutMs, process,
                        [process, timedOut]() {
         if (process->state() == QProcess::NotRunning) return;

@@ -68,6 +68,8 @@ TEST_CASE("playtime store rejects launch failures and invalid identity",
         "neogeo", "./", 30, 1000));
     CHECK_FALSE(store.add_session(
         "neogeo", "kof98.neo", 30, 0));
+    CHECK_FALSE(store.add_session(
+        "neogeo", "kof98.neo", 60, 30));
     CHECK(store.size() == 0);
 
     CHECK(store.add_session(
@@ -119,13 +121,18 @@ TEST_CASE("playtime sessions accumulate on exact normalized media keys",
     REQUIRE(cartridge != nullptr);
     CHECK(cartridge->total_seconds == 150);
     CHECK(cartridge->session_count == 2);
-    CHECK(cartridge->last_played_epoch == 2000);
+    CHECK(cartridge->last_started_epoch == 1880);
+    CHECK(cartridge->last_ended_epoch == 2000);
+    CHECK(cartridge->last_session_seconds == 120);
 
     const GamePlaytimeRecord* cd =
         store.find("neogeocd", "sets\\kof98.neo");
     REQUIRE(cd != nullptr);
     CHECK(cd->total_seconds == 60);
     CHECK(cd->session_count == 1);
+    CHECK(cd->last_started_epoch == 2940);
+    CHECK(cd->last_ended_epoch == 3000);
+    CHECK(cd->last_session_seconds == 60);
     CHECK(store.size() == 2);
 }
 
@@ -143,6 +150,14 @@ TEST_CASE("playtime store round-trips through atomic persistence",
     REQUIRE(store.save(path, &error));
     CHECK(error.empty());
     CHECK(read_text(path).find("\"version\": 1") != std::string::npos);
+    CHECK(read_text(path).find("\"last_played_epoch\"") !=
+          std::string::npos);
+    CHECK(read_text(path).find("\"last_started_epoch\"") !=
+          std::string::npos);
+    CHECK(read_text(path).find("\"last_ended_epoch\"") !=
+          std::string::npos);
+    CHECK(read_text(path).find("\"last_session_seconds\"") !=
+          std::string::npos);
 
     GamePlaytimeStore loaded;
     REQUIRE(loaded.load(path, &error));
@@ -154,12 +169,17 @@ TEST_CASE("playtime store round-trips through atomic persistence",
     REQUIRE(cartridge != nullptr);
     CHECK(cartridge->total_seconds == 120);
     CHECK(cartridge->session_count == 1);
-    CHECK(cartridge->last_played_epoch == 1000);
+    CHECK(cartridge->last_started_epoch == 880);
+    CHECK(cartridge->last_ended_epoch == 1000);
+    CHECK(cartridge->last_session_seconds == 120);
 
     const GamePlaytimeRecord* cd =
         loaded.find("neogeocd", "lastblade/disc.cue");
     REQUIRE(cd != nullptr);
     CHECK(cd->total_seconds == 60);
+    CHECK(cd->last_started_epoch == 1940);
+    CHECK(cd->last_ended_epoch == 2000);
+    CHECK(cd->last_session_seconds == 60);
 
     fs::remove_all(root);
 }
@@ -244,7 +264,12 @@ TEST_CASE("invalid stored playtime records are skipped individually",
     REQUIRE(store.load(path, &error));
     CHECK(error.empty());
     CHECK(store.size() == 1);
-    CHECK(store.find("neogeo", "valid/game.neo") != nullptr);
+    const GamePlaytimeRecord* legacy =
+        store.find("neogeo", "valid/game.neo");
+    REQUIRE(legacy != nullptr);
+    CHECK(legacy->last_started_epoch == 0);
+    CHECK(legacy->last_ended_epoch == 3000);
+    CHECK(legacy->last_session_seconds == 0);
     CHECK(store.find("neogeo", "negative.neo") == nullptr);
     CHECK(store.find("neogeo", "no_sessions.neo") == nullptr);
 
@@ -278,7 +303,9 @@ TEST_CASE("playtime arithmetic saturates instead of overflowing",
     REQUIRE(record != nullptr);
     CHECK(record->total_seconds == std::numeric_limits<std::int64_t>::max());
     CHECK(record->session_count == std::numeric_limits<std::int64_t>::max());
-    CHECK(record->last_played_epoch == 2000);
+    CHECK(record->last_started_epoch == 1995);
+    CHECK(record->last_ended_epoch == 2000);
+    CHECK(record->last_session_seconds == 5);
 
     fs::remove_all(root);
 }
@@ -310,7 +337,9 @@ TEST_CASE("playtime save reports an unusable destination",
     REQUIRE(record != nullptr);
     CHECK(record->total_seconds == 60);
     CHECK(record->session_count == 1);
-    CHECK(record->last_played_epoch == 1000);
+    CHECK(record->last_started_epoch == 940);
+    CHECK(record->last_ended_epoch == 1000);
+    CHECK(record->last_session_seconds == 60);
 
     fs::remove_all(root);
 }

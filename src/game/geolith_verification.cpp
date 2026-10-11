@@ -1,5 +1,7 @@
 #include "geolith_verification.hpp"
 
+#include "common/native_file.hpp"
+#include "common/qt_path.hpp"
 #include "crc32_cache.hpp"
 #include "tinyxml2.h"
 
@@ -38,16 +40,16 @@ GeolithCrcCatalog load_geolith_crc_catalog(
     if (!fs::is_regular_file(xml_path, ec)) {
         if (callback) {
             callback("Geolith CRC-32 catalog not found: " +
-                     xml_path.string() + "\n");
+                     path_to_utf8(xml_path) + "\n");
         }
         return catalog;
     }
 
     tinyxml2::XMLDocument document;
-    if (document.LoadFile(xml_path.string().c_str()) !=
-        tinyxml2::XML_SUCCESS) {
+    NativeFile input = open_native_file(xml_path);
+    if (!input || document.LoadFile(input.get()) != tinyxml2::XML_SUCCESS) {
         if (callback) {
-            callback("Warning: could not parse " + xml_path.string() +
+            callback("Warning: could not parse " + path_to_utf8(xml_path) +
                      "\n");
         }
         return catalog;
@@ -58,7 +60,7 @@ GeolithCrcCatalog load_geolith_crc_catalog(
         std::string(root->Name()) != "geolith-metadata") {
         if (callback) {
             callback("Warning: invalid Geolith metadata root in " +
-                     xml_path.string() + "\n");
+                     path_to_utf8(xml_path) + "\n");
         }
         return catalog;
     }
@@ -90,7 +92,7 @@ GeolithCrcCatalog load_geolith_crc_catalog(
 
         const std::string file = to_lower(file_attribute);
         const std::string crc = to_lower(crc_attribute);
-        if (fs::path(file).extension().string() != ".neo" ||
+        if (path_to_utf8(path_from_utf8(file).extension()) != ".neo" ||
             !valid_crc32(crc)) {
             continue;
         }

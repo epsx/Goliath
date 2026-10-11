@@ -13,7 +13,7 @@ TEST_CASE("GIF encoder supports every configured recording duration", "[gif]") {
 
         std::array<std::uint8_t, 16 * 16> pixels{};
         std::array<std::uint32_t, 256> colors{};
-        for (int index = 0; index < 256; ++index)
+        for (std::size_t index = 0; index < colors.size(); ++index)
             colors[index] = static_cast<std::uint32_t>(index) * 0x010101u;
 
         for (int frame = 0; frame < frameCount; ++frame) {

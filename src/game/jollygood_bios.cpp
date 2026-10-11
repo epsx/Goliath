@@ -2,6 +2,7 @@
 
 #include "common/debug_logger.hpp"
 #include "common/paths.hpp"
+#include "common/qt_path.hpp"
 #include "game/jollygood_executable.hpp"
 
 #include <QProcess>
@@ -213,7 +214,7 @@ void ensure_jollygood_bios(const AppPaths& paths) {
         if (ec) {
             DebugLogger::logError(
                 QString("could not inspect configured BIOS directory %1: %2")
-                    .arg(QString::fromStdString(biosDir.string()))
+                    .arg(path_to_qstring(biosDir))
                     .arg(QString::fromStdString(ec.message())));
         }
         return;
@@ -225,7 +226,7 @@ void ensure_jollygood_bios(const AppPaths& paths) {
     if (equivalentExistingPaths(biosDir, jollygoodBios)) {
         const fs::path canonicalBiosDir = fs::weakly_canonical(biosDir, ec);
         std::ofstream out(marker, std::ios::trunc);
-        out << canonicalBiosDir.string();
+        out << path_to_utf8(canonicalBiosDir);
         return;
     }
 
@@ -233,7 +234,7 @@ void ensure_jollygood_bios(const AppPaths& paths) {
     if (ec) {
         DebugLogger::logError(
             QString("could not create JGRF data directory %1: %2")
-                .arg(QString::fromStdString(jollygoodDir.string()))
+                .arg(path_to_qstring(jollygoodDir))
                 .arg(QString::fromStdString(ec.message())));
         return;
     }
@@ -247,25 +248,25 @@ void ensure_jollygood_bios(const AppPaths& paths) {
     if (ec) {
         DebugLogger::logError(
             QString("could not resolve configured BIOS directory %1: %2")
-                .arg(QString::fromStdString(biosDir.string()))
+                .arg(path_to_qstring(biosDir))
                 .arg(QString::fromStdString(ec.message())));
         return;
     }
-    const std::string current = canonicalBiosDir.string();
+    const std::string current = path_to_utf8(canonicalBiosDir);
 
     BiosDestinationInspection destination =
         inspectBiosDestination(jollygoodBios);
     if (destination.kind == BiosDestinationKind::Error) {
         DebugLogger::logError(
             QString("could not inspect JGRF BIOS destination %1: %2")
-                .arg(QString::fromStdString(jollygoodBios.string()))
+                .arg(path_to_qstring(jollygoodBios))
                 .arg(QString::fromStdString(destination.error)));
         return;
     }
     if (destination.kind == BiosDestinationKind::Other) {
         DebugLogger::logError(
             QString("refusing to replace non-directory JGRF BIOS destination: %1")
-                .arg(QString::fromStdString(jollygoodBios.string())));
+                .arg(path_to_qstring(jollygoodBios)));
         return;
     }
 
@@ -285,7 +286,7 @@ void ensure_jollygood_bios(const AppPaths& paths) {
         if (!removeBiosLinkOnly(jollygoodBios, &removeError)) {
             DebugLogger::logError(
                 QString("could not remove stale JGRF BIOS link %1: %2")
-                    .arg(QString::fromStdString(jollygoodBios.string()))
+                    .arg(path_to_qstring(jollygoodBios))
                     .arg(QString::fromStdString(removeError)));
             return;
         }
@@ -296,9 +297,10 @@ void ensure_jollygood_bios(const AppPaths& paths) {
 #if defined(_WIN32)
         {
             QProcess proc;
-            proc.setWorkingDirectory(QString::fromStdString(paths.base_dir.string()));
-            proc.start("cmd", {"/c", "mklink", "/J", QString::fromStdString(jollygoodBios.string()),
-                                QString::fromStdString(biosDir.string())});
+            proc.setWorkingDirectory(path_to_qstring(paths.base_dir));
+            proc.start("cmd", {"/c", "mklink", "/J",
+                               path_to_qstring(jollygoodBios),
+                               path_to_qstring(biosDir)});
             bool ok = proc.waitForStarted(5000) && proc.waitForFinished(5000) && proc.exitCode() == 0;
             if (ok) {
                 std::ofstream out(marker, std::ios::trunc);
@@ -306,8 +308,8 @@ void ensure_jollygood_bios(const AppPaths& paths) {
                 return;
             }
             DebugLogger::logError(QString("mklink /J failed for %1 -> %2")
-                                      .arg(QString::fromStdString(jollygoodBios.string()))
-                                      .arg(QString::fromStdString(biosDir.string())));
+                                      .arg(path_to_qstring(jollygoodBios))
+                                      .arg(path_to_qstring(biosDir)));
         }
 #else
         std::error_code linkEc;
@@ -318,15 +320,15 @@ void ensure_jollygood_bios(const AppPaths& paths) {
             return;
         }
         DebugLogger::logError(QString("symlink failed for %1 -> %2: %3")
-                                  .arg(QString::fromStdString(jollygoodBios.string()))
-                                  .arg(QString::fromStdString(biosDir.string()))
+                                  .arg(path_to_qstring(jollygoodBios))
+                                  .arg(path_to_qstring(biosDir))
                                   .arg(QString::fromStdString(linkEc.message())));
 #endif
         fs::create_directories(jollygoodBios, ec);
         if (ec) {
             DebugLogger::logError(
                 QString("could not create JGRF BIOS fallback directory %1: %2")
-                    .arg(QString::fromStdString(jollygoodBios.string()))
+                    .arg(path_to_qstring(jollygoodBios))
                     .arg(QString::fromStdString(ec.message())));
             return;
         }
@@ -337,7 +339,7 @@ void ensure_jollygood_bios(const AppPaths& paths) {
     if (!fs::is_directory(jollygoodBios, ec) || ec) {
         DebugLogger::logError(
             QString("failed to prepare jollygood BIOS path %1%2")
-                .arg(QString::fromStdString(jollygoodBios.string()))
+                .arg(path_to_qstring(jollygoodBios))
                 .arg(ec ? QString(": %1").arg(
                               QString::fromStdString(ec.message()))
                         : QString()));
@@ -355,7 +357,7 @@ void ensure_jollygood_bios(const AppPaths& paths) {
                 copySucceeded = false;
                 DebugLogger::logError(
                     QString("could not inspect configured BIOS entry %1: %2")
-                        .arg(QString::fromStdString(entry.path().string()))
+                        .arg(path_to_qstring(entry.path()))
                         .arg(QString::fromStdString(entryEc.message())));
             }
             iterator.increment(ec);
@@ -376,7 +378,7 @@ void ensure_jollygood_bios(const AppPaths& paths) {
             copySucceeded = false;
             DebugLogger::logError(
                 QString("refusing to replace non-regular BIOS fallback file: %1")
-                    .arg(QString::fromStdString(dst.string())));
+                    .arg(path_to_qstring(dst)));
             iterator.increment(ec);
             continue;
         } else if (fs::is_regular_file(destinationStatus)) {
@@ -393,7 +395,7 @@ void ensure_jollygood_bios(const AppPaths& paths) {
                 copySucceeded = false;
                 DebugLogger::logError(
                     QString("could not copy BIOS fallback file %1: %2")
-                        .arg(QString::fromStdString(dst.string()))
+                        .arg(path_to_qstring(dst))
                         .arg(QString::fromStdString(copyEc.message())));
             }
         }
@@ -403,7 +405,7 @@ void ensure_jollygood_bios(const AppPaths& paths) {
         copySucceeded = false;
         DebugLogger::logError(
             QString("could not enumerate configured BIOS directory %1: %2")
-                .arg(QString::fromStdString(biosDir.string()))
+                .arg(path_to_qstring(biosDir))
                 .arg(QString::fromStdString(ec.message())));
     }
 

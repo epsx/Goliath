@@ -10,6 +10,7 @@
 
 namespace fs = std::filesystem;
 using goliath::IniDocument;
+using goliath::save_ini_documents;
 
 TEST_CASE("IniDocument loads sections and keys", "[ini]") {
     fs::path p = fs::temp_directory_path() / "goliath_test_ini.ini";
@@ -115,6 +116,75 @@ TEST_CASE("IniDocument preserves a blocker when its destination is unusable",
     IniDocument recovered;
     recovered.load(blocker / "settings.ini");
     CHECK(recovered.get("video", "shader") == "4");
+
+    fs::remove_all(root);
+}
+
+TEST_CASE("INI transaction preflights every destination before replacement",
+          "[ini][persistence][transaction]") {
+    const auto stamp =
+        std::chrono::steady_clock::now().time_since_epoch().count();
+    const fs::path root = fs::temp_directory_path() /
+        ("goliath_ini_transaction_" + std::to_string(stamp));
+    fs::remove_all(root);
+    fs::create_directories(root);
+
+    const fs::path settingsPath = root / "settings.ini";
+    const fs::path blocker = root / "blocked";
+    const fs::path corePath = blocker / "geolith.ini";
+    const std::string originalSettings =
+        "[video]\nshader = 1\nkeep = byte-for-byte\n";
+    const std::string originalBlocker = "do not replace this blocker\n";
+    {
+        std::ofstream settings(settingsPath, std::ios::binary);
+        REQUIRE(settings.good());
+        settings << originalSettings;
+
+        std::ofstream blocked(blocker, std::ios::binary);
+        REQUIRE(blocked.good());
+        blocked << originalBlocker;
+    }
+
+    IniDocument settings;
+    settings.set("video", "shader", "4");
+    IniDocument core;
+    core.set("system", "region", "japan");
+
+    std::string error;
+    CHECK_FALSE(save_ini_documents({
+        {settingsPath, &settings},
+        {corePath, &core},
+    }, &error));
+    CHECK_FALSE(error.empty());
+
+    std::ifstream settingsInput(settingsPath, std::ios::binary);
+    REQUIRE(settingsInput.good());
+    const std::string currentSettings(
+        std::istreambuf_iterator<char>(settingsInput), {});
+    CHECK(currentSettings == originalSettings);
+    settingsInput.close();
+
+    std::ifstream blockerInput(blocker, std::ios::binary);
+    REQUIRE(blockerInput.good());
+    const std::string currentBlocker(
+        std::istreambuf_iterator<char>(blockerInput), {});
+    CHECK(currentBlocker == originalBlocker);
+    blockerInput.close();
+
+    REQUIRE(fs::remove(blocker));
+    REQUIRE(save_ini_documents({
+        {settingsPath, &settings},
+        {corePath, &core},
+    }, &error));
+    CHECK(error.empty());
+
+    IniDocument savedSettings;
+    savedSettings.load(settingsPath);
+    CHECK(savedSettings.get("video", "shader") == "4");
+
+    IniDocument savedCore;
+    savedCore.load(corePath);
+    CHECK(savedCore.get("system", "region") == "japan");
 
     fs::remove_all(root);
 }

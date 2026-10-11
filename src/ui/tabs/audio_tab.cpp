@@ -1,6 +1,7 @@
 #include "audio_tab.hpp"
 
 #include "audio/audio_devices.hpp"
+#include "common/file_transaction.hpp"
 #include "common/goliath_common.hpp"
 #include "ini/ini_document.hpp"
 
@@ -11,6 +12,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QThread>
 #include <QTimer>
@@ -220,29 +222,39 @@ void AudioTab::applyDeviceSnapshot(const AudioDeviceSnapshot& snapshot) {
 }
 
 void AudioTab::save() {
-    std::error_code ec;
-    fs::create_directories(m_jollygoodSettingsIni.parent_path(), ec);
-
     // Only write settings that stock JGRF actually understands.
     IniDocument cfg;
     cfg.load(m_jollygoodSettingsIni);
     for (const FieldSpec& spec : jollygoodAudioFields()) {
         cfg.set("audio", spec.key, std::to_string(m_widgets.value(spec.key)));
     }
-    cfg.save(m_jollygoodSettingsIni);
-
     // Keep settings.ini canonical for frontend settings. A stale [audio]
     // section in geolith.ini would otherwise override the value above.
     IniDocument coreCfg;
     coreCfg.load(m_geolithIni);
     coreCfg.remove_section("audio");
-    coreCfg.save(m_geolithIni);
 
     // Volume is a Goliath-side setting; do not invent unsupported JGRF keys.
     const int volume = clamp_audio_volume(m_volumeSpin->value());
-    m_appConfig.set("Audio", "volume", std::to_string(volume));
-    save_config(m_appConfig);
+    Config candidate = m_appConfig;
+    candidate.set("Audio", "volume", std::to_string(volume));
 
+    std::string error;
+    if (!save_files_transactionally({
+            {m_jollygoodSettingsIni, cfg.serialized_text()},
+            {m_geolithIni, coreCfg.serialized_text()},
+            {get_config_path(), candidate.serialized_text()},
+        }, &error)) {
+        QMessageBox::warning(
+            this, "Audio Settings",
+            QStringLiteral(
+                "Audio settings and Goliath volume could not be saved as one "
+                "transaction.\n\n") +
+                QString::fromStdString(error));
+        return;
+    }
+
+    m_appConfig = std::move(candidate);
 }
 
 } // namespace goliath

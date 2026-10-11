@@ -1,5 +1,6 @@
 #include "ui/save_data_dialog.hpp"
 
+#include "common/qt_path.hpp"
 #include "game/filesystem_io.hpp"
 #include "ui/widgets/title_bar.hpp"
 
@@ -30,14 +31,6 @@ namespace goliath {
 
 namespace {
 
-QString path_to_qstring(const fs::path& path) {
-#if defined(_WIN32)
-    return QString::fromStdWString(path.wstring());
-#else
-    return QString::fromStdString(path.string());
-#endif
-}
-
 QString formatted_size(std::uintmax_t bytes) {
     const QLocale locale;
     if (bytes < 1024) return locale.toString(static_cast<qulonglong>(bytes)) + " B";
@@ -53,7 +46,7 @@ QString modified_text(const fs::path& path) {
 
 QTableWidget* make_table(const QStringList& headers) {
     auto* table = new QTableWidget();
-    table->setColumnCount(headers.size());
+    table->setColumnCount(static_cast<int>(headers.size()));
     table->setHorizontalHeaderLabels(headers);
     table->setSelectionBehavior(QAbstractItemView::SelectRows);
     table->setSelectionMode(QAbstractItemView::SingleSelection);

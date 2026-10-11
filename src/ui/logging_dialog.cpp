@@ -3,6 +3,7 @@
 #include "common/debug_logger.hpp"
 #include "common/filesystem_safety.hpp"
 #include "common/log_file.hpp"
+#include "common/qt_path.hpp"
 #include "ui/widgets/title_bar.hpp"
 
 #include <QCheckBox>
@@ -25,14 +26,6 @@ namespace fs = std::filesystem;
 namespace goliath {
 
 namespace {
-
-QString path_to_qstring(const fs::path& path) {
-#if defined(_WIN32)
-    return QString::fromStdWString(path.wstring());
-#else
-    return QString::fromStdString(path.string());
-#endif
-}
 
 QString file_summary(const fs::path& path) {
     const DirectPathInspection inspection = inspect_direct_path(path);

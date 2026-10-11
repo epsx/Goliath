@@ -7,7 +7,7 @@ Historical test counts are retained as checkpoint evidence. The current
 publication candidate passes:
 
 ```text
-All tests passed (3756 assertions in 254 test cases)
+All tests passed (3966 assertions in 265 test cases)
 ```
 
 The preceding `1360/99` Feature 9 baseline passed its per-game mapping,
@@ -16,6 +16,33 @@ baseline passed manual MVS/AES, Neo Geo CD CUE, Neo Geo CD CHD, Settings, and
 visible-only Random smoke tests.
 
 ---
+
+## 2026-10-09 — Main-window decomposition and update indicator milestone
+
+- Replaced the modal automatic-update interruption with a compact persistent
+  indicator below About; selecting it opens the themed release notes and
+  trusted GitHub link, while installing that release expires the cached alert.
+- Split `MainWindow` construction, themes, toolbar, details, data, dialogs,
+  events, runtime, updates, and library behavior into responsibility-oriented
+  translation units; removed the retired `main_window_library.cpp` monolith.
+- Extracted testable library-view and details-presentation helpers, stable item
+  roles, reusable panel/engraved widgets, and the verification-details dialog.
+- Preserved each system's exact selection and list viewport, including the
+  empty Neo Geo CD list, and changed the expensive visual splitter resize to a
+  lightweight guide applied on release.
+- Added persistent Last Started, Last Ended, and Last Session fields alongside
+  exact-media total playtime and session count, including complete background
+  observation after the visible Goliath window closes.
+- Renamed `STRUCTURA.md` to `STRUCTURE.md` and refreshed the architecture,
+  runtime, test, update, and playtime documentation for the completed layout.
+- Clarified that release packages retain the four audited baseline metadata
+  files while excluding external and supplemental user catalogs.
+- Kept per-game input identifiers and stored bindings in `std::string` across
+  the model boundary, converting to `QString` only for visible UI text.
+- Validated the complete Windows suite at 3966 assertions in 265 test cases and
+  manually checked all three themes, List/Grid/Big Grid Icons, system viewport
+  restoration, update presentation, details, shortcuts, Classic View, and the
+  lightweight splitter.
 
 ## 2026-10-08 — Goliath 0.40.1 preview candidate
 
@@ -1848,6 +1875,8 @@ Historical checkpoint: `27 test cases / 166 assertions`.
 | Feature 15 safe save-data manager | 1583 | 122 |
 | Feature 16 verbose logging and log clear | 1615 | 125 |
 | Feature 17 one-shot audio WAV export | 1665 | 129 |
+| Goliath 0.40.1 preview candidate | 3756 | 254 |
+| Main-window decomposition and update indicator | 3966 | 265 |
 
 Expected negative model tests print diagnostics for rejected systems, sources,
 game rows, ROM rows, and `main_rom` references. Those messages are not failures
@@ -1874,5 +1903,5 @@ These items were intentionally kept outside the cleanup/documentation patches:
 - Final Windows packaging must be validated from the actual Qt, SDL3, JGRF,
   Geolith, and shader dependencies being distributed.
 
-The immediate next project step at this history checkpoint is
-**Cleanup 7F — Final Validation**.
+The next project step after the current checkpoint is a final integrated
+source and packaging audit before any commit or release action.

@@ -1,6 +1,7 @@
 #include "catch2/catch.hpp"
 
 #include "common/paths.hpp"
+#include "common/qt_path.hpp"
 #include "game/game_profile.hpp"
 #include "ui/widgets/settings_field.hpp"
 #include "game/jollygood_capabilities.hpp"
@@ -194,6 +195,13 @@ TEST_CASE("Neo Geo CD CHD launch is gated on installed core capability",
         "--scale", "3", "D:/Neo Geo/kof98.neo"});
 }
 
+TEST_CASE("launch extension parsing preserves UTF-8 media names",
+          "[launch][paths][unicode]") {
+    REQUIRE(launch_extension_lower("Știință/日本/Joc.CUE") == ".cue");
+    REQUIRE(media_is_launchable(
+        "neogeocd", "Știință/日本/Joc.CUE", false));
+}
+
 TEST_CASE("session verbose logging is additive and keeps media last",
           "[launch][logging][verbose]") {
     const std::vector<std::string> baseArgs = {"-c", "geolith"};
@@ -305,6 +313,49 @@ TEST_CASE("per-game launch uses isolated config and shared data",
     REQUIRE(external.status == LaunchPreparationStatus::Ready);
     REQUIRE(external.environment.value("XDG_DATA_HOME") ==
             QString::fromStdString(externalPaths.data_dir.string()));
+
+    fs::remove_all(root, ec);
+}
+
+TEST_CASE("launch preparation preserves Unicode filesystem paths",
+          "[launch][paths][unicode]") {
+    namespace fs = std::filesystem;
+
+    const fs::path root = fs::temp_directory_path() /
+        qstring_to_path(QStringLiteral(u"Știință 日本"));
+    const fs::path romDir = root /
+        qstring_to_path(QStringLiteral(u"ROM-uri 日本"));
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(romDir, ec);
+    REQUIRE_FALSE(ec);
+
+#if defined(_WIN32)
+    const fs::path executable = root / "jollygood.exe";
+#else
+    const fs::path executable = root / "jollygood";
+#endif
+    {
+        std::ofstream output(executable, std::ios::binary);
+        output << "test";
+    }
+
+    AppPaths paths;
+    paths.base_dir = root;
+    paths.config_dir = root / "config";
+    paths.data_dir = root / "data";
+    paths.jollygood_exe = executable;
+    paths.jollygood_args = {"-c", "geolith"};
+
+    const fs::path media =
+        qstring_to_path(QStringLiteral(u"Joc 日本.neo"));
+    const auto preparation = prepare_jollygood_launch(
+        paths, romDir, root / "neocd", "neogeo", path_to_utf8(media));
+
+    REQUIRE(preparation.status == LaunchPreparationStatus::Ready);
+    CHECK(preparation.working_directory == path_to_qstring(root));
+    CHECK(preparation.log_path == path_to_qstring(root / "jollygood.log"));
+    CHECK(preparation.args.last() == path_to_qstring(romDir / media));
 
     fs::remove_all(root, ec);
 }

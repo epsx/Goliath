@@ -1,6 +1,7 @@
 #include "debug_logger.hpp"
 
 #include "common/log_file.hpp"
+#include "common/qt_path.hpp"
 
 #include <QDateTime>
 #include <QFile>
@@ -47,11 +48,7 @@ bool DebugLogger::initialize(const QString& logPath, QString* error) {
     if (g_file.isOpen()) g_file.close();
     g_open = false;
 
-#if defined(_WIN32)
-    const std::filesystem::path path(logPath.toStdWString());
-#else
-    const std::filesystem::path path(logPath.toStdString());
-#endif
+    const std::filesystem::path path = qstring_to_path(logPath);
     const LogFileOperationResult opened =
         open_direct_regular_log_file(g_file, path, true);
     if (!opened.success) {

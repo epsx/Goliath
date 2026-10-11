@@ -1,4 +1,5 @@
 #include "video_tab.hpp"
+#include "common/qt_path.hpp"
 #include "game/jollygood_capabilities.hpp"
 #include "game/jollygood_executable.hpp"
 #include "game/video_settings.hpp"
@@ -231,7 +232,7 @@ void VideoTab::probeJollygoodCapabilities() {
         process->deleteLater();
     });
 
-    process->start(QString::fromStdString(probeExe.string()), {"--help"});
+    process->start(path_to_qstring(probeExe), {"--help"});
     QTimer::singleShot(kJgrfHelpProbeTimeoutMs, process,
                        [process, timedOut]() {
         if (process->state() == QProcess::NotRunning) return;
@@ -293,16 +294,11 @@ void VideoTab::updateVulkanNote() {
 }
 
 void VideoTab::save() {
-    std::error_code ec;
-    fs::create_directories(m_jollygoodSettingsIni.parent_path(), ec);
-
     IniDocument cfg;
     cfg.load(m_jollygoodSettingsIni);
     for (const FieldSpec& spec : jollygoodVideoFields()) {
         cfg.set("video", spec.key, std::to_string(m_jollygoodWidgets.value(spec.key)));
     }
-    cfg.save(m_jollygoodSettingsIni);
-
     IniDocument cfg2;
     cfg2.load(m_geolithIni);
     // geolith.ini is a JGRF core-override file. A stale [video] section here
@@ -312,8 +308,17 @@ void VideoTab::save() {
     for (const FieldSpec& spec : geolithVideoFields()) {
         cfg2.set("geolith", spec.key, std::to_string(m_geolithWidgets.value(spec.key)));
     }
-    cfg2.save(m_geolithIni);
-
+    std::string error;
+    if (!save_ini_documents({
+            {m_jollygoodSettingsIni, &cfg},
+            {m_geolithIni, &cfg2},
+        }, &error)) {
+        QMessageBox::warning(
+            this, "Video Settings",
+            QStringLiteral(
+                "Video settings could not be saved as one transaction.\n\n") +
+                QString::fromStdString(error));
+    }
 }
 
 void VideoTab::resetDefaults() {
@@ -324,16 +329,11 @@ void VideoTab::resetDefaults() {
         QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
     if (reply != QMessageBox::Yes) return;
 
-    std::error_code ec;
-    fs::create_directories(m_jollygoodSettingsIni.parent_path(), ec);
-
     IniDocument cfg;
     cfg.load(m_jollygoodSettingsIni);
     for (const FieldSpec& spec : jollygoodVideoFields()) {
         cfg.set("video", spec.key, std::to_string(spec.default_value));
     }
-    cfg.save(m_jollygoodSettingsIni);
-
     IniDocument cfg2;
     cfg2.load(m_geolithIni);
     // geolith.ini is a JGRF core-override file. A stale [video] section here
@@ -343,7 +343,18 @@ void VideoTab::resetDefaults() {
     for (const FieldSpec& spec : geolithVideoFields()) {
         cfg2.set("geolith", spec.key, std::to_string(spec.default_value));
     }
-    cfg2.save(m_geolithIni);
+    std::string error;
+    if (!save_ini_documents({
+            {m_jollygoodSettingsIni, &cfg},
+            {m_geolithIni, &cfg2},
+        }, &error)) {
+        QMessageBox::warning(
+            this, "Reset Video Settings",
+            QStringLiteral(
+                "Video defaults could not be saved as one transaction.\n\n") +
+                QString::fromStdString(error));
+        return;
+    }
 
     load();
 }

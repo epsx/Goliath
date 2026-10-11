@@ -1,6 +1,7 @@
 #include "catch2/catch.hpp"
 
 #include "common/paths.hpp"
+#include "common/qt_path.hpp"
 #include "game/jollygood_bios.hpp"
 
 #include <chrono>
@@ -13,14 +14,19 @@ namespace fs = std::filesystem;
 
 using goliath::AppPaths;
 using goliath::ensure_jollygood_bios;
+using goliath::path_from_utf8;
+using goliath::path_to_utf8;
 
 namespace {
 
-fs::path make_bios_test_root(const std::string& name) {
+fs::path make_bios_test_root(const fs::path& name) {
     const auto stamp =
         std::chrono::steady_clock::now().time_since_epoch().count();
-    const fs::path root = fs::temp_directory_path() /
-        ("goliath_bios_" + name + "_" + std::to_string(stamp));
+    fs::path unique = "goliath_bios_";
+    unique += name;
+    unique += "_";
+    unique += std::to_string(stamp);
+    const fs::path root = fs::temp_directory_path() / unique;
     std::error_code ec;
     fs::remove_all(root, ec);
     fs::create_directories(root, ec);
@@ -61,6 +67,33 @@ fs::path expected_bios_destination(const AppPaths& paths) {
 }
 
 } // namespace
+
+TEST_CASE("BIOS marker preserves a Unicode source path as UTF-8",
+          "[bios][filesystem][unicode]") {
+    const fs::path root = make_bios_test_root(
+        path_from_utf8("Știință_日本"));
+    const AppPaths paths = make_bios_paths(root);
+    const fs::path destination = expected_bios_destination(paths);
+    const fs::path marker = paths.data_dir / "jollygood" / "bios_source.txt";
+
+    write_text(paths.bios_dir / "000-lo.lo", "configured BIOS");
+    ensure_jollygood_bios(paths);
+
+    std::error_code ec;
+    const fs::path canonicalBiosDir = fs::weakly_canonical(paths.bios_dir, ec);
+    REQUIRE_FALSE(ec);
+    REQUIRE(fs::is_directory(destination));
+    REQUIRE(fs::is_regular_file(destination / "000-lo.lo"));
+    REQUIRE(read_text(marker) == path_to_utf8(canonicalBiosDir));
+
+    // Remove a junction/symlink before its target. On Windows, remove_all()
+    // may otherwise delete configured-bios first and then report ENOENT while
+    // inspecting the now-dangling JGRF BIOS junction.
+    fs::remove(destination, ec);
+    ec.clear();
+    fs::remove_all(root, ec);
+    REQUIRE_FALSE(ec);
+}
 
 TEST_CASE("BIOS preparation preserves an existing plain destination directory",
           "[bios][filesystem][safety]") {

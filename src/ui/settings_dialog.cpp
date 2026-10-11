@@ -3,6 +3,7 @@
 #include "ui/capture_hotkeys.hpp"
 
 #include "common/goliath_common.hpp"
+#include "common/qt_path.hpp"
 #include "common/theme.hpp"
 #include "ui/tabs/audio_tab.hpp"
 #include "ui/tabs/core_tab.hpp"
@@ -378,16 +379,32 @@ void SettingsDialog::updateHotkeyWarnings() {
 void SettingsDialog::saveHotkeys() {
     const QKeySequence gif = m_gifHotkeyEdit->keySequence();
     const QKeySequence png = m_pngHotkeyEdit->keySequence();
-    QString error;
-    if (!m_applyHotkeys(gif, png, &error)) {
-        QMessageBox::warning(this, "Hotkeys", error);
+    QString applyError;
+    if (!m_applyHotkeys(gif, png, &applyError)) {
+        QMessageBox::warning(this, "Hotkeys", applyError);
         return;
     }
-    m_config.set("Hotkeys", "gif", gif.toString(QKeySequence::PortableText).toStdString());
-    m_config.set("Hotkeys", "png", png.toString(QKeySequence::PortableText).toStdString());
-    m_config.set("Hotkeys", "gif_duration_seconds",
-                 std::to_string(m_gifDurationCombo->currentData().toInt()));
-    save_config(m_config);
+
+    Config candidate = m_config;
+    candidate.set("Hotkeys", "gif",
+                  gif.toString(QKeySequence::PortableText).toStdString());
+    candidate.set("Hotkeys", "png",
+                  png.toString(QKeySequence::PortableText).toStdString());
+    candidate.set("Hotkeys", "gif_duration_seconds",
+                  std::to_string(m_gifDurationCombo->currentData().toInt()));
+
+    std::string saveError;
+    if (!save_config(candidate, &saveError)) {
+        QMessageBox::warning(
+            this, "Hotkeys",
+            QStringLiteral(
+                "Capture shortcuts were applied for this session but could "
+                "not be saved.\n\n") +
+                QString::fromStdString(saveError));
+        return;
+    }
+
+    m_config = std::move(candidate);
     QMessageBox::information(this, "Hotkeys", "Capture shortcuts updated.");
 }
 
@@ -506,7 +523,7 @@ void SettingsDialog::buildPathTab(QWidget* pathWidget) {
         lbl->setFixedWidth(190);
         row->addWidget(lbl);
 
-        auto* entry = new QLineEdit(QString::fromStdString(resolve_path(m_config, ps.key).string()));
+        auto* entry = new QLineEdit(path_to_qstring(resolve_path(m_config, ps.key)));
         entry->setReadOnly(true);
         row->addWidget(entry);
 
@@ -1136,10 +1153,10 @@ void SettingsDialog::resetInputConfig() {
 }
 
 void SettingsDialog::browsePath(const std::string& key, const QString& label) {
-    const QString current = QString::fromStdString(resolve_path(m_config, key).string());
+    const QString current = path_to_qstring(resolve_path(m_config, key));
     const QString path = QFileDialog::getExistingDirectory(
         this, "Select " + label,
-        current.isEmpty() ? QString::fromStdString(m_paths.base_dir.string()) : current);
+        current.isEmpty() ? path_to_qstring(m_paths.base_dir) : current);
 
     if (!path.isEmpty()) {
         m_pathEntries[key]->setText(path);
@@ -1147,23 +1164,36 @@ void SettingsDialog::browsePath(const std::string& key, const QString& label) {
 }
 
 void SettingsDialog::savePathConfig() {
+    Config candidate = m_config;
     for (const auto& ps : pathSettings()) {
         auto it = m_pathEntries.find(ps.key);
         if (it == m_pathEntries.end()) continue;
-        m_config.set("Paths", ps.key, relativePath(it->second->text()).toStdString());
+        candidate.set(
+            "Paths", ps.key,
+            path_to_utf8(qstring_to_path(relativePath(it->second->text()))));
     }
-    save_config(m_config);
 
+    std::string error;
+    if (!save_config(candidate, &error)) {
+        QMessageBox::warning(
+            this, "Path Settings",
+            QStringLiteral("Path settings could not be saved.\n\n") +
+                QString::fromStdString(error));
+        return;
+    }
+
+    m_config = std::move(candidate);
 }
 
 QString SettingsDialog::relativePath(const QString& path) const {
-    std::string base = m_paths.base_dir.string();
-    std::string p = path.toStdString();
-    std::string prefix = base + std::string(1, (char)fs::path::preferred_separator);
-    if (p.starts_with(prefix)) {
-        std::error_code ec;
-        fs::path rel = fs::relative(fs::path(p), m_paths.base_dir, ec);
-        if (!ec) return QString::fromStdString(rel.generic_string());
+    const fs::path selected = qstring_to_path(path).lexically_normal();
+    const fs::path base = m_paths.base_dir.lexically_normal();
+    std::error_code ec;
+    const fs::path relative = fs::relative(selected, base, ec);
+    if (!ec && !relative.empty() && !relative.is_absolute() &&
+        relative != fs::path(".") && *relative.begin() != fs::path("..")) {
+        QString portable = path_to_qstring(relative);
+        return portable.replace('\\', '/');
     }
     return path;
 }

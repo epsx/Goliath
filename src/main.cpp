@@ -7,6 +7,7 @@
 
 #include "common/debug_logger.hpp"
 #include "common/goliath_common.hpp"
+#include "common/qt_path.hpp"
 #include "ui/main_window.hpp"
 
 int main(int argc, char* argv[]) {
@@ -25,7 +26,8 @@ int main(int argc, char* argv[]) {
     // used everywhere instead of relying on Qt/Windows fallbacks.
     app.setWindowIcon(QIcon(":/icons/goliath-qt.ico"));
 
-    const QString debugLogPath = QString::fromStdString((goliath::get_base_dir() / "goliath-qt-debug.log").string());
+    const QString debugLogPath = goliath::path_to_qstring(
+        goliath::get_base_dir() / "goliath-qt-debug.log");
     QString debugLogError;
     if (!goliath::DebugLogger::initialize(debugLogPath, &debugLogError)) {
         QMessageBox::warning(
@@ -38,7 +40,9 @@ int main(int argc, char* argv[]) {
     goliath::DebugLogger::logInfo("Goliath Qt started");
 
     goliath::Config config = goliath::load_config();
-    goliath::DebugLogger::logInfo(QString("config path: %1").arg(QString::fromStdString(goliath::get_config_path().string())));
+    goliath::DebugLogger::logInfo(
+        QString("config path: %1")
+            .arg(goliath::path_to_qstring(goliath::get_config_path())));
 
     goliath::MainWindow window(config);
     window.show();

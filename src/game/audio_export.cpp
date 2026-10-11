@@ -103,7 +103,8 @@ std::string sanitize_audio_export_stem(std::string_view displayName) {
     result.reserve(displayName.size());
 
     bool pendingSpace = false;
-    for (unsigned char ch : displayName) {
+    for (const char rawCh : displayName) {
+        const auto ch = static_cast<unsigned char>(rawCh);
         if (portable_space_byte(ch)) {
             pendingSpace = !result.empty();
             continue;

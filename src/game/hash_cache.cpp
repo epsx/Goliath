@@ -1,5 +1,6 @@
 #include "hash_cache.hpp"
 
+#include "common/qt_path.hpp"
 #include "json.hpp"
 
 #include <QByteArray>
@@ -24,14 +25,6 @@ std::string to_lower(std::string value) {
         return static_cast<char>(std::tolower(c));
     });
     return value;
-}
-
-QString path_to_qstring(const fs::path& path) {
-#if defined(_WIN32)
-    return QString::fromStdWString(path.wstring());
-#else
-    return QString::fromStdString(path.string());
-#endif
 }
 
 fs::path logical_path(const fs::path& path) {
@@ -59,7 +52,7 @@ std::string cache_key(const fs::path& path) {
             absolute = logical;
     }
 
-    std::string key = absolute.lexically_normal().generic_string();
+    std::string key = path_to_utf8(absolute.lexically_normal());
 #ifdef _WIN32
     key = to_lower(key);
 #endif

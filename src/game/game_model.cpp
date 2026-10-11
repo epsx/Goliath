@@ -1,4 +1,6 @@
 #include "game_model.hpp"
+
+#include "common/qt_path.hpp"
 #include "json.hpp"
 
 #include <cstdint>
@@ -64,7 +66,8 @@ std::vector<Game> load_games(const fs::path& json_file) {
     try {
         root = json::parse(buf.str());
     } catch (const std::exception& e) {
-        std::cerr << "[goliath] Could not parse " << json_file.string() << ": " << e.what() << "\n";
+        std::cerr << "[goliath] Could not parse " << path_to_utf8(json_file)
+                  << ": " << e.what() << "\n";
         return games;
     }
 

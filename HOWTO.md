@@ -3,7 +3,7 @@
 This guide covers building, testing, configuring, deploying, rescanning, and
 troubleshooting `goliath-qt-cpp`.
 
-See `README.md` for the project overview, `STRUCTURA.md` for the detailed source
+See `README.md` for the project overview, `STRUCTURE.md` for the detailed source
 map, and `HISTORY.md` for the development history.
 
 ---
@@ -182,6 +182,48 @@ cmake --build build-validation -j$(nproc)
 The separate `build-validation/` directory leaves the normal `build/`
 directory untouched. If a fresh build succeeds, the old build directory can be
 removed after confirming that it is the intended directory.
+
+### Strict warning validation
+
+Use a separate build directory to enable additional conversion, sign,
+shadowing, format, and standards-conformance warnings. Treating those warnings
+as errors makes the validation fail at the first unresolved diagnostic:
+
+```bash
+cmake -S . -B build-warnings -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DBUILD_TESTS=ON \
+  -DGOLIATH_STRICT_WARNINGS=ON \
+  -DGOLIATH_WARNINGS_AS_ERRORS=ON
+cmake --build build-warnings -j$(nproc)
+ctest --test-dir build-warnings --output-on-failure
+```
+
+The stricter warning set applies to Goliath sources. Bundled `miniz` and
+TinyXML2 sources are excluded from that extra diagnostic policy. Both options
+default to `OFF`, so normal and release builds retain their existing flags.
+
+### AddressSanitizer and UndefinedBehaviorSanitizer
+
+Use a Debug build in a new directory. CMake first verifies that the selected
+GCC- or Clang-compatible toolchain can compile and link with both sanitizer
+runtimes; configuration stops with a clear error when they are unavailable.
+
+```bash
+cmake -S . -B build-sanitizers -G Ninja \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DBUILD_TESTS=ON \
+  -DGOLIATH_ENABLE_SANITIZERS=ON
+cmake --build build-sanitizers -j$(nproc)
+ASAN_OPTIONS=halt_on_error=1 \
+UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+  ctest --test-dir build-sanitizers --output-on-failure
+```
+
+Sanitizer binaries are diagnostic artifacts only. Do not deploy them over the
+normal runtime executable or include them in a release package. Keep sanitizer
+validation separate from `GOLIATH_WARNINGS_AS_ERRORS`: instrumentation can
+itself affect compiler diagnostics.
 
 ---
 
@@ -860,20 +902,36 @@ creating, restoring, or deleting data.
 ### Use playtime tracking
 
 1. Launch a parent, variant/hack, CUE, or CHD normally from the library.
-2. Keep Goliath open while playing for a complete measurement.
+2. Keep playing normally; the visible Goliath window may remain open or be
+   closed while its background observer follows the tracked JGRF process.
 3. Close JGRF normally, then select that exact row again if necessary.
-4. Read **Playtime**, tracked session count, and **Last Played** in the details
-   panel.
+4. Read **Playtime**, **Sessions**, **Last Started**, **Last Ended**, and
+   **Last Session** in the details panel.
 
 Normal launches are measured independently by system plus relative media path.
 Sessions shorter than five seconds are ignored as probable launch failures,
 and **Performance Benchmark** runs are never added. Statistics are replaced
 atomically in `config/game_playtime.json` and survive rescans.
 
-JGRF remains detached. Closing Goliath does not stop a running game; Goliath
-stores the observed portion through launcher shutdown, but cannot measure the
-remaining time after it exits. An unexpected launcher termination can also
-lose the active, not-yet-persisted portion.
+JGRF remains detached. Closing Goliath does not stop a running game; the
+frontend hides and continues observing in the background, saves the complete
+validated session when JGRF exits, then terminates after the final tracked
+process. Force-terminating that background observer can still lose an active,
+not-yet-persisted session.
+
+### Check for Goliath updates
+
+1. Open **Settings -> Info**.
+2. Choose **Check Now...** for an immediate manual check.
+3. To opt into automatic checks, select **Daily** or **Weekly** beside
+   **Automatic check**, then choose **Save Update Preference**.
+
+A successful check records its local timestamp. Goliath contacts only the
+configured HTTPS GitHub releases API, shows bounded release notes, and opens
+only trusted HTTPS destinations. It never downloads or installs releases.
+When a newer release is found, a compact indicator appears below **About** and
+persists across restarts. Selecting it opens the release details; installing
+that version makes the cached indicator expire on the next launch.
 
 ### Run a selected-game performance benchmark
 
@@ -1319,9 +1377,9 @@ confirm a normal Launch still starts detached and is unaffected.
 
 For a playtime change, use one normal cartridge launch and one CUE or CHD
 launch for more than five seconds. Confirm exact-media totals/session counts,
-local Last Played display, persistence after restarting Goliath, exclusion of
-a Benchmark run, and the partial-save behavior when closing Goliath before a
-detached game.
+Last Started/Ended/Session display, persistence after restarting Goliath,
+exclusion of a Benchmark run, and complete background observation after
+closing the visible Goliath window before the detached game.
 
 For a save-data-manager change, create representative `.st0`/`.st1` and
 persistent data through normal gameplay, then confirm inventory, manual backup,

@@ -26,7 +26,7 @@ goliath-qt-cpp/
 ├── README.md
 ├── HOWTO.md
 ├── HISTORY.md
-├── STRUCTURA.md
+├── STRUCTURE.md
 ├── licenses/
 ├── assets/
 ├── Screenshots/
@@ -55,7 +55,7 @@ archive, patch, editor-backup, and operating-system artifacts out of commits.
 | `README.md` | Project purpose, capabilities, architecture summary, and limits. |
 | `HOWTO.md` | Build, setup, deployment, rescan, validation, and troubleshooting. |
 | `HISTORY.md` | Chronological implementation and cleanup record. |
-| `STRUCTURA.md` | Detailed component ownership and data-flow map. |
+| `STRUCTURE.md` | Detailed component ownership and data-flow map. |
 | `.github/workflows/build.yml` | Windows/Linux CI, tests, dependency and license-coverage audits, and frontend build artifacts. |
 | `licenses/` | Exact source, upstream, MSYS2 runtime, and Qt SBOM license materials. |
 | `Screenshots/` | Public, content-free application screenshots used by `README.md`. |
@@ -75,7 +75,7 @@ Qt6::Core + SDL3 + reusable source + parser source
                    /          \
                   v            v
          goliath-qt        goliath-qt-tests
-         Qt6::Widgets      Catch2 + Qt6::Core
+   Qt6::Widgets/Network   Catch2 + Qt6::Core/Gui
 ```
 
 ### `goliath-core`
@@ -118,15 +118,15 @@ The application target adds:
 - rescan thread/dialog integration;
 - Qt and Windows icon resources.
 
-It links `goliath-core` and `Qt6::Widgets`. On MinGW, libgcc, libstdc++, and
-winpthread are linked statically for the application while Qt and SDL3 remain
-dynamic.
+It links `goliath-core`, `Qt6::Widgets`, and `Qt6::Network`. On MinGW, libgcc,
+libstdc++, and winpthread are linked statically for the application while Qt
+and SDL3 remain dynamic.
 
 ### `goliath-qt-tests`
 
-The test target links `goliath-core`, `Qt6::Core`, and the vendored Catch2
-header. It is kept as a console executable on MinGW so test output remains
-visible.
+The test target links `goliath-core`, `Qt6::Core`, `Qt6::Gui`, and the vendored
+Catch2 header. It is kept as a console executable on MinGW so test output
+remains visible.
 
 Tests are controlled by the `BUILD_TESTS` CMake option and are disabled by
 default. Developer and CI builds enable them explicitly with
@@ -145,9 +145,11 @@ src/
 │   └── jollygood_audio.hpp/.cpp
 ├── common/
 │   ├── debug_logger.hpp/.cpp
+│   ├── filesystem_safety.hpp/.cpp
 │   ├── goliath_common.hpp/.cpp
 │   ├── log_file.hpp/.cpp
 │   ├── paths.hpp/.cpp
+│   ├── qt_path.hpp/.cpp
 │   ├── sha1.hpp/.cpp
 │   └── theme.hpp/.cpp
 ├── game/
@@ -155,6 +157,7 @@ src/
 │   ├── bios_verify.hpp/.cpp
 │   ├── command_dat.hpp/.cpp
 │   ├── command_notation.hpp/.cpp
+│   ├── crc32_cache.hpp/.cpp
 │   ├── db_scanner.hpp/.cpp
 │   ├── detached_process_tracker.hpp/.cpp
 │   ├── filesystem_io.hpp/.cpp
@@ -163,8 +166,10 @@ src/
 │   ├── game_playtime.hpp/.cpp
 │   ├── game_profile.hpp/.cpp
 │   ├── game_profile_runtime.hpp/.cpp
+│   ├── game_profile_summary.hpp/.cpp
 │   ├── video_settings.hpp/.cpp
 │   ├── geolith_capabilities.hpp/.cpp
+│   ├── geolith_verification.hpp/.cpp
 │   ├── jollygood_benchmark.hpp/.cpp
 │   ├── jollygood_bios.hpp/.cpp
 │   ├── jollygood_capabilities.hpp
@@ -182,16 +187,50 @@ src/
 │   ├── input_maps.hpp/.cpp
 │   ├── joystick_listener.hpp/.cpp
 │   └── sdl_joystick.hpp/.cpp
+├── update/
+│   ├── release_feed.hpp/.cpp
+│   ├── update_alert.hpp/.cpp
+│   └── update_schedule.hpp/.cpp
 └── ui/
     ├── main_window.hpp
     ├── main_window.cpp
     ├── main_window_ui.cpp
-    ├── main_window_library.cpp
+    ├── main_window_theme.cpp
+    ├── main_window_toolbar.cpp
+    ├── main_window_details_ui.cpp
+    ├── main_window_library_ui.cpp
+    ├── main_window_data.cpp
+    ├── main_window_dialogs.cpp
+    ├── main_window_events.cpp
+    ├── main_window_runtime.cpp
+    ├── main_window_updates.cpp
+    ├── main_window_library_actions.cpp
+    ├── main_window_library_controls.cpp
+    ├── main_window_library_details.cpp
+    ├── main_window_library_interaction.cpp
+    ├── main_window_library_state.cpp
+    ├── main_window_library_view.cpp
+    ├── library_details_presentation.hpp/.cpp
+    ├── library_item_delegate.hpp/.cpp
+    ├── library_item_roles.hpp
+    ├── library_verification_dialog.hpp/.cpp
+    ├── library_view_logic.hpp/.cpp
+    ├── application_shortcuts.hpp
+    ├── capture_hotkeys.hpp
+    ├── gallery_frame.hpp
+    ├── recording_id.hpp
+    ├── update_check.hpp/.cpp
+    ├── game_gallery.cpp
+    ├── game_screenshot.cpp
+    ├── windows_desktop_capture.hpp/.cpp
+    ├── wayland_gif_capture.hpp/.cpp
+    ├── wayland_gif_hotkey.hpp/.cpp
     ├── about_dialog.hpp/.cpp
     ├── audio_export_dialog.hpp/.cpp
     ├── benchmark_dialog.hpp/.cpp
     ├── command_dialog.hpp/.cpp
     ├── game_profile_dialog.hpp/.cpp
+    ├── lithogen_dialog.hpp/.cpp
     ├── logging_dialog.hpp/.cpp
     ├── rescan_dialog.hpp/.cpp
     ├── save_data_dialog.hpp/.cpp
@@ -199,14 +238,18 @@ src/
     ├── tabs/
     │   ├── audio_tab.hpp/.cpp
     │   ├── core_tab.hpp/.cpp
+    │   ├── core_tab_help.hpp
     │   ├── info_tab.hpp/.cpp
     │   ├── misc_tab.hpp/.cpp
     │   └── video_tab.hpp/.cpp
     └── widgets/
         ├── command_notation_view.hpp/.cpp
         ├── controller_button.hpp/.cpp
+        ├── engraved_controls.hpp/.cpp
         ├── game_input_mapping_widget.hpp/.cpp
         ├── input_panel_widgets.hpp/.cpp
+        ├── labelled_spin_box.hpp
+        ├── main_window_panel_widgets.hpp/.cpp
         ├── optional_video_fields.hpp/.cpp
         ├── settings_field.hpp/.cpp
         └── title_bar.hpp/.cpp
@@ -235,11 +278,13 @@ The entry point:
 | Module | Target | Responsibility |
 | --- | --- | --- |
 | `goliath_common` | core | `Config`, defaults, `goliath.ini`, executable base, and paths. |
+| `filesystem_safety` | core | Rejects unsafe/special targets and bounds direct regular-file operations. |
 | `log_file` | core | Refuses unsafe targets and truncates a direct regular runtime log. |
 | `sha1` | core | Lowercase SHA-1 helpers for memory and files. |
 | `paths` | app | Resolves `AppPaths`, JGRF arguments, database, config, BIOS, and data paths. |
+| `qt_path` | core | Lossless `QString`, UTF-8 string, and `std::filesystem::path` boundary conversions. |
 | `debug_logger` | app | Thread-safe startup/runtime log with info, warning, error, and live clear operations. |
-| `theme` | app | Six built-in themes and complete Qt stylesheet generation. |
+| `theme` | app | Thirteen built-in themes, contrast helpers, popup styling, and complete Qt stylesheet generation. |
 
 `get_base_dir()` resolves the directory containing the running executable. All
 relative application paths are based there, never on the shell's current
@@ -296,11 +341,13 @@ launch-process context.
 | `audio_export` | core | Sanitizes portable WAV suggestions, adds collision-free suffixes, and validates non-overwriting output targets. |
 | `command_dat` | core | Parses a bounded user-supplied command catalog and resolves exact-variant, clone, and parent MAME IDs. |
 | `command_notation` | core | Tokenizes supported command markers into lossless visual glyphs while preserving unknown notation verbatim. |
+| `crc32_cache` | core | Persists stable MVS/AES CRC-32 results and rejects mismatched file fingerprints. |
 | `game_model` | core | Defines `Game`/`Rom` and validates `games.json`. |
 | `game_library_state` | core | Validates and atomically persists exact-media Favorites and ratings independently from `games.json`. |
-| `game_playtime` | core | Validates, formats, and atomically persists exact-media playtime statistics. |
+| `game_playtime` | core | Validates, formats, and atomically persists exact-media totals, session count, and last-session start/end/duration. |
 | `game_profile` | core | Persists and validates exact-media launch/video/input overrides independently from `games.json`. |
 | `game_profile_runtime` | core | Composes short isolated JGRF configuration trees and layered input mappings for profiled launches. |
+| `game_profile_summary` | core | Formats effective exact-media profile values for the details panel. |
 | `save_data_manager` | core | Resolves stock JGRF save/state identities and safely inventories, snapshots, validates, restores, and deletes their bounded file set. |
 | `video_settings` | core | Owns the shared JGRF/Geolith video keys, labels, defaults, choices, ranges, and validation used by global and per-game UI. |
 | `db_scanner` | core | Orchestrates media discovery, metadata, verification, and JSON output. |
@@ -312,6 +359,7 @@ launch-process context.
 | `jollygood_executable` | core | Canonical configured JGRF executable resolution. |
 | `jollygood_capabilities` | header-only | Parses JGRF version, Vulkan help, and JG API version. |
 | `geolith_capabilities` | core | Loads the installed Geolith core and queries the JG ABI. |
+| `geolith_verification` | core | Verifies `.neo` cartridge identities against Geolith reference metadata. |
 | `jollygood_benchmark` | core | Builds transient benchmark arguments, parses completion, resolves displayed overrides, and calculates metrics. |
 | `jollygood_launch` | core | Selects media and prepares validated launch state. |
 | `jollygood_process` | app | Starts detached JGRF and redirects both output streams. |
@@ -547,17 +595,35 @@ reconnected in a different order before launch.
 
 ### Main window split
 
-One `MainWindow` class is implemented across three translation units:
+One `MainWindow` class is implemented across small, responsibility-oriented
+translation units. The former `main_window_library.cpp` monolith no longer
+exists.
 
 | File | Responsibility |
 | --- | --- |
-| `main_window.cpp` | Lifecycle, paths, launch preflight, Settings, rescan, and responsive layout. |
-| `main_window_ui.cpp` | UI construction, custom title bar, branch assets, and themes. |
-| `main_window_library.cpp` | Library views, exact-media Rating/Playtime sort and filters, search, details, variants, Random, and actions. |
+| `main_window.hpp` | Shared `MainWindow` contract, owned state, slots, and cross-unit helpers. |
+| `main_window.cpp` | Constructor orchestration and initial persisted-state loading. |
+| `main_window_ui.cpp` | Thin shell construction, status bar, and keyboard shortcuts. |
+| `main_window_theme.cpp` | Theme application plus generated branch/spin assets and elevated-surface colors. |
+| `main_window_toolbar.cpp` | Theme selector, Filters, Random, Tools, Settings, About, and update indicator construction. |
+| `main_window_details_ui.cpp` | Details header, metadata/playtime card, gallery, Description, and details pane. |
+| `main_window_library_ui.cpp` | System selector, List/Grid pages, Search, splitter workspace, and lightweight non-opaque splitter resizing. |
+| `main_window_data.cpp` | Game/profile/playtime/personal-state loading and rescan-result adoption. |
+| `main_window_dialogs.cpp` | Settings, About, logging, BIOS, and other top-level dialog entry points. |
+| `main_window_events.cpp` | Window events, geometry persistence, Classic View thresholds, and close lifecycle. |
+| `main_window_runtime.cpp` | Detached launch observation, session finalization, and runtime companion handling. |
+| `main_window_updates.cpp` | Scheduled/manual update orchestration and toolbar indicator state. |
+| `main_window_library_actions.cpp` | Launch, benchmark, export, capture, folders, and save-data actions. |
+| `main_window_library_controls.cpp` | Sort/filter/search/favorite/rating control behavior. |
+| `main_window_library_details.cpp` | Selection-to-details and gallery presentation updates. |
+| `main_window_library_interaction.cpp` | Double-click, context-menu, selection, and expansion interactions. |
+| `main_window_library_state.cpp` | Tree population, per-system selection/viewport state, and status summaries. |
+| `main_window_library_view.cpp` | Display-mode switching, responsive tiles, sorting, and icon-view synchronization. |
 
 The main content uses a `QSplitter`. The details side collapses below the narrow
 window threshold and restores its previous proportion when sufficient width
-returns.
+returns. Interactive splitter movement uses a lightweight guide and applies
+the expensive card/media resize only when the handle is released.
 
 The top toolbar keeps library controls and Random on the left, then a stretch
 followed by Tools, Settings, and About on the right. The title-bar close button
@@ -591,8 +657,8 @@ eligible selections. Parent expansion performed only to expose an exact filter
 match is tagged as temporary and excluded from the user expansion state carried
 across rebuilds. Random selects visible parents normally and exact media matching
 Search, Favorites, and all active personal filters in a restrictive view. The
-details panel presents Playtime and Sessions separately without duplicating
-their values in hover tooltips.
+details panel presents Playtime, Sessions, Last Started, Last Ended, and Last
+Session separately without duplicating their values in hover tooltips.
 The search line edit uses Qt's native trailing clear action;
 Escape is widget-scoped so it clears only a focused search field, while Ctrl+F
 focuses and selects the current query.
@@ -600,6 +666,31 @@ The Theme, Sort, and Settings combo views and their separate popup containers
 receive the same generated palette explicitly, preventing native Windows frame
 colors from appearing above or below their item views. Settings applies the
 shared popup helper once to every combo descendant across all tabs.
+
+### Library presentation helpers
+
+| Module | Responsibility |
+| --- | --- |
+| `library_view_logic` | Testable display-mode, filter, selection, viewport, sort, badge, and list-presentation decisions. |
+| `library_details_presentation` | Testable formatting for metadata, verification, profile, and session-timing fields. |
+| `library_item_roles` | Stable custom Qt model roles shared by views and delegates. |
+| `library_item_delegate` | List/tile painting, badges, ratings, selection, and theme-aware artwork surfaces. |
+| `library_verification_dialog` | Seven-column exact-media verification presentation and selected-cell copying. |
+
+### Update subsystem
+
+| Module | Responsibility |
+| --- | --- |
+| `update/release_feed` | Parses bounded GitHub release JSON, validates versions, and selects the newest published release. |
+| `update/update_schedule` | Validates Disabled/Daily/Weekly preferences and decides when an automatic check is due. |
+| `update/update_alert` | Atomically persists only the newer-release alert and clears malformed or expired cache state. |
+| `ui/update_check` | Performs the bounded HTTPS request and presents release notes and trusted links. |
+| `main_window_updates` | Restores cached alerts, starts due checks, records successful checks, and drives the compact toolbar indicator. |
+
+The indicator is hidden when no newer release exists. When visible, it sits
+below About without changing toolbar height, uses a compact label on narrow
+windows, and opens the same themed release-details dialog as a manual check.
+Installing that release causes the cached alert to expire on the next launch.
 
 `game_profile_dialog` edits the profile for the exact selected media. Its
 **General** tab owns system/input launch settings, its generated **Video** tab
@@ -626,7 +717,7 @@ main window while JGRF is active hides the UI but keeps Goliath as a background
 observer on Windows and Linux; it saves the complete observed session and exits
 after the final tracked process ends. The main window updates
 `GamePlaytimeStore` only after launch validation, stores the exact-media total
-atomically, and refreshes Playtime/Last Played details. Windows loader failures
+atomically, and refreshes all session timing details. Windows loader failures
 such as missing or incompatible DLLs are rejected from playtime by exit status
 even when their operating-system dialog outlives the normal duration guard.
 Benchmark processes are managed by `benchmark_dialog` and never enter this
@@ -726,6 +817,8 @@ cancellation/close behavior without running scanner logic itself.
 | Module | Responsibility |
 | --- | --- |
 | `title_bar` | Frameless title bar, window drag, system resize, and dialog setup. |
+| `engraved_controls` | Theme-aware engraved toolbar labels, buttons, checks, and combo boxes. |
+| `main_window_panel_widgets` | Elevated/hatched surfaces and clickable details-field labels shared by the main window. |
 | `settings_field` | Shared field specifications, validation, and Qt controls for settings tabs. |
 | `controller_button` | Colored two-line input-mapping button. |
 | `input_panel_widgets` | Visual Neo Geo, Mahjong, V-Liner, Irritating Maze, and System panels. |
@@ -766,12 +859,15 @@ required during a normal build.
 ```text
 tests/
 ├── test_main.cpp
+├── test_animated_gif.cpp
 ├── test_audio.cpp
 ├── test_audio_export.cpp
 ├── test_bios_verify.cpp
+├── test_capture_hotkeys.cpp
 ├── test_command_dat.cpp
 ├── test_command_notation.cpp
 ├── test_db_scanner.cpp
+├── test_gallery_frame.cpp
 ├── test_game_model.cpp
 ├── test_game_library_state.cpp
 ├── test_game_playtime.cpp
@@ -780,10 +876,20 @@ tests/
 ├── test_ini_document.cpp
 ├── test_input_maps.cpp
 ├── test_jollygood_benchmark.cpp
+├── test_jollygood_bios.cpp
+├── test_library_details_presentation.cpp
+├── test_library_view_logic.cpp
 ├── test_log_file.cpp
+├── test_project_legal.cpp
+├── test_release_feed.cpp
 ├── test_save_data_manager.cpp
 ├── test_settings_fields.cpp
 ├── test_sha1.cpp
+├── test_sha1_cache.cpp
+├── test_theme.cpp
+├── test_update_alert.cpp
+├── test_update_schedule.cpp
+├── test_window_geometry.cpp
 └── third_party/
     └── catch2/
         └── catch.hpp
@@ -794,12 +900,15 @@ tests/
 | File | Coverage |
 | --- | --- |
 | `test_main.cpp` | Catch2 test runner entry point. |
+| `test_animated_gif.cpp` | GIF frame timing, palette, encoding, and output validation. |
 | `test_audio.cpp` | Volume bounds, device snapshot state, and default config. |
 | `test_audio_export.cpp` | Portable names, `.wav` normalization, collision avoidance, non-destructive target validation, configured-writer conflicts, and final argument placement. |
+| `test_capture_hotkeys.cpp` | Capture-shortcut parsing, normalization, and collision detection. |
 | `test_command_dat.cpp` | BOM/CRLF/DOS-EOF parsing, aliases, sentinel handling, missing/malformed files, and variant-to-parent lookup order. |
 | `test_command_notation.cpp` | Direction/button markers, legacy labels, move categories, select/follow-up semantics, and verbatim unknown-marker fallback. |
 | `test_bios_verify.cpp` | BIOS catalog, missing paths/archives/members, and optional CD sets. |
 | `test_db_scanner.cpp` | Grouping, metadata, CD verification, cache, path safety, and statistics. |
+| `test_gallery_frame.cpp` | Still/GIF scaling and gallery-frame presentation geometry. |
 | `test_game_model.cpp` | Required fields, invalid rows, `main_rom`, and optional metadata. |
 | `test_game_library_state.cpp` | Exact-media Favorite/rating identity, v1-to-v2 migration, validation, atomic persistence, independent removal, and rescan survival. |
 | `test_game_playtime.cpp` | Exact-media accumulation, formatting, launch/loader validation, atomic persistence, failures, and overflow saturation. |
@@ -808,10 +917,20 @@ tests/
 | `test_ini_document.cpp` | Load, edit, remove, preservation, and save round trips. |
 | `test_input_maps.cpp` | Input normalization, profiles, bounded bindings, analog definitions, and JGRF hotkeys. |
 | `test_jollygood_benchmark.cpp` | Benchmark argument placement, completion parsing, displayed option resolution, and throughput metrics. |
+| `test_jollygood_bios.cpp` | BIOS path preparation, junction/copy policy, and safe migration decisions. |
+| `test_library_details_presentation.cpp` | Metadata, profile, verification, and Last Started/Ended/Session formatting. |
+| `test_library_view_logic.cpp` | Display modes, filtering, sorting, selection, per-system viewport restoration, badges, and responsive tiles. |
 | `test_log_file.cpp` | Missing-log idempotence, regular-file truncation, and unsafe-target refusal. |
+| `test_project_legal.cpp` | Required legal files, notice coverage, and packaging expectations. |
+| `test_release_feed.cpp` | Bounded release JSON parsing, semantic version ordering, and published-release selection. |
 | `test_save_data_manager.cpp` | JGRF basename/layout parity, bounded inventory, snapshot/restore, protective deletion, exact-media isolation, and malicious/foreign ZIP rejection. |
 | `test_settings_fields.cpp` | Field fallback, capabilities, media gating, paths, selection, and profiled launch environment/arguments. |
 | `test_sha1.cpp` | Standard SHA-1 vectors and file hashing. |
+| `test_sha1_cache.cpp` | Stable fingerprints, persistence, legacy temporary-name avoidance, and invalidation. |
+| `test_theme.cpp` | Generated palettes, contrast, selectors, update dialog links, and theme-specific surfaces. |
+| `test_update_alert.cpp` | Atomic newer-release alert persistence, validation, expiry, and clearing. |
+| `test_update_schedule.cpp` | Interval parsing, timestamp validation, and deterministic due decisions. |
+| `test_window_geometry.cpp` | Saved geometry bounds and safe restoration decisions. |
 
 The authoritative release condition is that the complete configured test suite
 passes with no failures. Historical assertion and test-case counts are recorded
@@ -867,6 +986,7 @@ The source tree and runtime tree have different ownership:
 | Category | Examples | Owner |
 | --- | --- | --- |
 | Application config | `goliath.ini` | Goliath `Config` |
+| Newer-release alert | `goliath_update_alert.json` | `update_alert` |
 | Per-game profiles | `config/game_profiles.json` | `GameProfileStore` |
 | Per-game playtime | `config/game_playtime.json` | `GamePlaytimeStore` |
 | Personal library state | `config/game_library_state.json` | `GameLibraryStateStore` |
@@ -907,6 +1027,19 @@ main.cpp
        -> load and validate games.json
        -> build UI and library view
        -> apply saved theme/state
+```
+
+### Update checks
+
+```text
+startup or Settings -> Info manual action
+  -> validate Disabled/Daily/Weekly schedule
+  -> bounded HTTPS request to the configured GitHub releases API
+  -> parse and select the newest published release
+       -> no newer version: clear expired alert and hide indicator
+       -> newer version: atomically save goliath_update_alert.json
+            -> show compact indicator below About
+            -> click opens themed release notes and trusted HTTPS links
 ```
 
 ### Library rescan
@@ -1057,7 +1190,7 @@ Normal game session
   -> exact system + media key
   -> GamePlaytimeStore
   -> config/game_playtime.json
-  -> Playtime / Last Played details
+  -> Playtime / Sessions / Last Started / Last Ended / Last Session details
 
 Favorite toggle / rating selection
   -> exact system + media key
@@ -1131,6 +1264,12 @@ The current organization follows these rules:
 16. Favorites and independent 1–5-star ratings are exact-media personal state
     stored outside `games.json`; rescans may rebuild the library but never
     erase either field.
+17. Update checks accept only the configured HTTPS GitHub API, bound response
+    and release-note sizes, open only trusted HTTPS destinations, and persist
+    only a release newer than the installed build.
+18. `MainWindow` remains one class, but each implementation unit owns a narrow
+    UI, runtime, event, update, or library responsibility; CMake lists every
+    unit explicitly and the retired library monolith must not reappear.
 
 ---
 
@@ -1140,5 +1279,5 @@ The current organization follows these rules:
 README.md     project overview, features, architecture summary, and limits
 HOWTO.md      build, runtime setup, deployment, validation, and troubleshooting
 HISTORY.md    chronological implementation and cleanup history
-STRUCTURA.md  source ownership, target boundaries, and data/control flows
+STRUCTURE.md  source ownership, target boundaries, and data/control flows
 ```

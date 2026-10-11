@@ -1,4 +1,6 @@
 #include "bios_verify.hpp"
+
+#include "common/native_file.hpp"
 #include "miniz.h"
 
 #include <cstddef>
@@ -81,16 +83,18 @@ std::optional<BiosVerifyResult> verify_bios(const fs::path& bios_dir) {
 
         mz_zip_archive zip;
         std::memset(&zip, 0, sizeof(zip));
-        if (!mz_zip_reader_init_file(&zip, zipPath.string().c_str(), 0)) {
+        NativeFile zipFile = open_native_file(zipPath);
+        if (!zipFile ||
+            !mz_zip_reader_init_cfile(&zip, zipFile.get(), 0, 0)) {
             result.problems++;
             result.lines.push_back("  \xE2\x9D\x8C corrupt or not a zip file");
             result.lines.push_back("");
             continue;
         }
 
-        int numFiles = (int)mz_zip_reader_get_num_files(&zip);
+        const mz_uint numFiles = mz_zip_reader_get_num_files(&zip);
         std::set<std::string> names;
-        for (int i = 0; i < numFiles; ++i) {
+        for (mz_uint i = 0; i < numFiles; ++i) {
             mz_zip_archive_file_stat st;
             if (mz_zip_reader_file_stat(&zip, i, &st)) {
                 names.insert(st.m_filename);
@@ -109,7 +113,8 @@ std::optional<BiosVerifyResult> verify_bios(const fs::path& bios_dir) {
             }
 
             std::size_t size = 0;
-            void* buf = mz_zip_reader_extract_to_heap(&zip, idx, &size, 0);
+            void* buf = mz_zip_reader_extract_to_heap(
+                &zip, static_cast<mz_uint>(idx), &size, 0);
             if (!buf) {
                 result.problems++;
                 result.lines.push_back("  \xE2\x9D\x8C " + padRight(fileEntry.member, 20) +

@@ -2,6 +2,7 @@
 
 #include "db_scanner.hpp"
 #include "common/goliath_common.hpp"
+#include "common/qt_path.hpp"
 #include "crc32_cache.hpp"
 #include "geolith_verification.hpp"
 #include "sha1_cache.hpp"
@@ -54,16 +55,8 @@ static std::string to_lower(std::string s) {
     return s;
 }
 
-static QString path_to_qstring(const fs::path& path) {
-#if defined(_WIN32)
-    return QString::fromStdWString(path.wstring());
-#else
-    return QString::fromStdString(path.string());
-#endif
-}
-
 static std::string path_stem(const std::string& filename) {
-    return fs::path(filename).stem().string();
+    return path_to_utf8(path_from_utf8(filename).stem());
 }
 
 static const std::regex g_paren_re(R"(\s*\(.*?\))");
@@ -192,7 +185,8 @@ static std::string make_redump_cd_short(const RedumpGameEntry& entry,
                                         const std::string& relative_path) {
     if (entry.id.has_value() && !entry.id->empty()) {
         std::string id;
-        for (unsigned char c : *entry.id) {
+        for (const char rawC : *entry.id) {
+            const auto c = static_cast<unsigned char>(rawC);
             if (std::isalnum(c))
                 id.push_back(static_cast<char>(std::tolower(c)));
             else
@@ -218,7 +212,8 @@ static std::string make_unknown_cd_short(const std::string& relative_path) {
     // even though neocd.xml could not identify it. FNV-1a is sufficient here;
     // this is an internal key, not a content hash or authenticity check.
     std::uint64_t hash = 1469598103934665603ULL;
-    for (unsigned char c : relative_path) {
+    for (const char rawC : relative_path) {
+        const auto c = static_cast<unsigned char>(rawC);
         hash ^= c;
         hash *= 1099511628211ULL;
     }
@@ -319,7 +314,7 @@ static void copy_catalog_metadata(RomEntry& rom,
 }
 
 static json opt_path_to_json(const std::optional<fs::path>& v) {
-    if (v.has_value()) return json(v->generic_string());
+    if (v.has_value()) return json(path_to_utf8(*v));
     return json(nullptr);
 }
 
@@ -491,7 +486,7 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
         for (const auto& entry : fs::directory_iterator(p.romdir, ec)) {
             ec.clear();
             if (!entry.is_regular_file(ec)) continue;
-            std::string fname = entry.path().filename().string();
+            std::string fname = path_to_utf8(entry.path().filename());
             if (fname.ends_with(".neo")) rom_files.push_back(fname);
         }
     }
@@ -505,7 +500,8 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
                                    progress_callback);
 
     if (!rom_root_available) {
-        std::string msg = "ROM directory not found: " + p.romdir.string() + "\n";
+        std::string msg = "ROM directory not found: " +
+                          path_to_utf8(p.romdir) + "\n";
         if (progress_callback) progress_callback(msg);
         result.error_message = msg;
         return result;
@@ -526,11 +522,11 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
     std::vector<fs::path> cd_files = std::move(cd_discovery.files);
     if (!cd_root_available && progress_callback) {
         progress_callback("Neo Geo CD directory not found; skipping CD scan: " +
-                          p.neocddir.string() + "\n");
+                          path_to_utf8(p.neocddir) + "\n");
     }
 
     std::sort(cd_files.begin(), cd_files.end(), [](const fs::path& a, const fs::path& b) {
-        return to_lower(a.generic_string()) < to_lower(b.generic_string());
+        return to_lower(path_to_utf8(a)) < to_lower(path_to_utf8(b));
     });
 
     if (progress_callback)
@@ -659,7 +655,7 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
         if (expected_crc != geolith_crc_catalog.end()) {
             const std::optional<GeolithCrcVerification> crc_verification =
                 verify_geolith_neo(
-                    filesystem_io_path(p.romdir / fs::path(rom)),
+                    filesystem_io_path(p.romdir / path_from_utf8(rom)),
                     geolith_catalog_file,
                     geolith_crc_catalog, cancel, &geolith_crc32_cache);
             if (is_canceled()) {
@@ -680,7 +676,8 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
                 hash.algorithm = "CRC-32";
                 std::error_code size_ec;
                 const std::uintmax_t size = fs::file_size(
-                    filesystem_io_path(p.romdir / fs::path(rom)), size_ec);
+                    filesystem_io_path(p.romdir / path_from_utf8(rom)),
+                    size_ec);
                 if (!size_ec)
                     hash.size = size;
                 hash.actual = crc_verification->actual_crc32;
@@ -689,7 +686,7 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
                 re.hashes.push_back(std::move(hash));
             } else if (progress_callback) {
                 progress_callback("Warning: could not calculate CRC-32 for " +
-                                  (p.romdir / fs::path(rom)).string() +
+                                  path_to_utf8(p.romdir / path_from_utf8(rom)) +
                                   "\n");
             }
         }
@@ -704,7 +701,7 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
         geolith_crc32_cache.prune_untouched();
     if (!geolith_crc32_cache.save() && progress_callback) {
         progress_callback("Warning: could not write Geolith CRC-32 cache: " +
-                          geolith_crc32_cache.path().string() + "\n");
+                          path_to_utf8(geolith_crc32_cache.path()) + "\n");
     }
     const auto cartridge_finished = ScanClock::now();
 
@@ -724,11 +721,11 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
             return result;
         }
 
-        const std::string rel = rel_path.generic_string();
+        const std::string rel = path_to_utf8(rel_path);
         std::optional<std::string> short_opt =
             find_cd_game(rel_path, cd_match_index);
 
-        const std::string cd_ext = to_lower(rel_path.extension().string());
+        const std::string cd_ext = to_lower(path_to_utf8(rel_path.extension()));
 
         const fs::path cd_image_io_path = filesystem_io_path(p.neocddir / rel_path);
         std::optional<RedumpCueVerification> redump_verification;
@@ -898,9 +895,9 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
             g.identified = false;
             g.source = "unknown";
             g.short_name = make_unknown_cd_short(rel);
-            g.name = strip_grouped_tags(rel_path.stem().string());
+            g.name = strip_grouped_tags(path_to_utf8(rel_path.stem()));
             if (g.name.empty())
-                g.name = rel_path.stem().string();
+                g.name = path_to_utf8(rel_path.stem());
             g.display = g.name;
             g.year = std::nullopt;
             g.manufacturer = std::nullopt;
@@ -978,7 +975,7 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
 
     if (!redump_sha1_cache.save() && progress_callback) {
         progress_callback("Warning: could not write Redump SHA-1 cache: " +
-                          redump_sha1_cache.path().string() + "\n");
+                          path_to_utf8(redump_sha1_cache.path()) + "\n");
     }
     const auto cd_finished = ScanClock::now();
 
@@ -1084,25 +1081,26 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
     if (!output.open(QIODevice::WriteOnly)) {
         result.error_message =
             "Could not open database file for writing: " +
-            p.out_json.string() + ": " + output.errorString().toStdString();
+            path_to_utf8(p.out_json) + ": " +
+            output.errorString().toStdString();
         return result;
     }
     if (output.write(serialized) != serialized.size()) {
         result.error_message =
-            "Could not write database file: " + p.out_json.string() +
+            "Could not write database file: " + path_to_utf8(p.out_json) +
             ": " + output.errorString().toStdString();
         output.cancelWriting();
         return result;
     }
     if (!output.commit()) {
         result.error_message =
-            "Could not replace database file: " + p.out_json.string() +
+            "Could not replace database file: " + path_to_utf8(p.out_json) +
             ": " + output.errorString().toStdString();
         return result;
     }
     const auto database_finished = ScanClock::now();
 
-    std::string msg = "\nCreated: " + p.out_json.string() + "\n";
+    std::string msg = "\nCreated: " + path_to_utf8(p.out_json) + "\n";
     if (progress_callback) progress_callback(msg);
 
     result.rom_file_count = 0;

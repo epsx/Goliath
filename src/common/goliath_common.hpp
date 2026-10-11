@@ -36,6 +36,7 @@ public:
     bool get_bool(const std::string& section, const std::string& key, bool fallback) const;
     void set(const std::string& section, const std::string& key, const std::string& value);
     bool has(const std::string& section, const std::string& key) const;
+    std::string serialized_text() const;
 };
 
 // Folder containing the running executable. All relative config paths are
@@ -57,8 +58,16 @@ std::filesystem::path ensure_config();
 // (in-memory only - not written back to disk).
 Config load_config();
 
-// Writes the config back to goliath.ini next to the executable.
-void save_config(const Config& config);
+// Writes a config transactionally to an explicit path. A failed save leaves
+// an existing destination untouched and optionally describes the error.
+bool save_config_file(const std::filesystem::path& path,
+                      const Config& config,
+                      std::string* error = nullptr);
+
+// Writes the config back to goliath.ini next to the executable. Callers that
+// present an explicit Save action can use the result and error to avoid
+// reporting success when persistence failed.
+bool save_config(const Config& config, std::string* error = nullptr);
 
 // Resolves a key from the [Paths] section. Empty/missing value -> base_dir
 // itself; relative value -> joined onto base_dir; absolute value -> used

@@ -1,5 +1,6 @@
 #include "game/game_library_state.hpp"
 
+#include "common/qt_path.hpp"
 #include "game/game_profile.hpp"
 #include "json.hpp"
 
@@ -26,14 +27,6 @@ bool is_supported_system(const std::string& system) {
     return system == "neogeo" || system == "neogeocd";
 }
 
-QString filesystem_path_to_qstring(const fs::path& path) {
-#if defined(_WIN32)
-    return QString::fromStdWString(path.wstring());
-#else
-    return QString::fromStdString(path.string());
-#endif
-}
-
 } // namespace
 
 bool GameLibraryState::empty() const noexcept {
@@ -55,7 +48,8 @@ bool GameLibraryStateStore::load(const fs::path& path, std::string* error) {
     const bool regular = fs::is_regular_file(path, ec);
     if (ec || !regular) {
         if (error) {
-            *error = "Library state path is not a regular file: " + path.string();
+            *error = "Library state path is not a regular file: " +
+                     path_to_utf8(path);
         }
         return false;
     }
@@ -64,7 +58,8 @@ bool GameLibraryStateStore::load(const fs::path& path, std::string* error) {
         std::ifstream input(path, std::ios::binary);
         if (!input) {
             if (error) {
-                *error = "Could not open library state file: " + path.string();
+                *error = "Could not open library state file: " +
+                         path_to_utf8(path);
             }
             return false;
         }
@@ -162,18 +157,20 @@ bool GameLibraryStateStore::save(const fs::path& path,
     }
 
     const QByteArray serialized = QByteArray::fromStdString(root.dump(2) + '\n');
-    QSaveFile output(filesystem_path_to_qstring(path));
+    QSaveFile output(path_to_qstring(path));
     output.setDirectWriteFallback(false);
     if (!output.open(QIODevice::WriteOnly)) {
         if (error) {
             *error = "Could not open library state file for writing: " +
-                     path.string() + ": " + output.errorString().toStdString();
+                     path_to_utf8(path) + ": " +
+                     output.errorString().toStdString();
         }
         return false;
     }
     if (output.write(serialized) != serialized.size()) {
         if (error) {
-            *error = "Could not write library state file: " + path.string() +
+            *error = "Could not write library state file: " +
+                     path_to_utf8(path) +
                      ": " + output.errorString().toStdString();
         }
         output.cancelWriting();
@@ -181,7 +178,8 @@ bool GameLibraryStateStore::save(const fs::path& path,
     }
     if (!output.commit()) {
         if (error) {
-            *error = "Could not replace library state file: " + path.string() +
+            *error = "Could not replace library state file: " +
+                     path_to_utf8(path) +
                      ": " + output.errorString().toStdString();
         }
         return false;

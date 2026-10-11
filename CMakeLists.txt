@@ -13,6 +13,44 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
+option(GOLIATH_STRICT_WARNINGS
+    "Enable additional compiler warnings for validation builds" OFF)
+option(GOLIATH_WARNINGS_AS_ERRORS
+    "Treat compiler warnings as errors" OFF)
+option(GOLIATH_ENABLE_SANITIZERS
+    "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+
+if(GOLIATH_ENABLE_SANITIZERS)
+    if(MSVC)
+        message(FATAL_ERROR
+            "GOLIATH_ENABLE_SANITIZERS requires a GCC- or Clang-compatible "
+            "AddressSanitizer and UndefinedBehaviorSanitizer toolchain")
+    elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        include(CheckCXXSourceCompiles)
+        include(CMakePushCheckState)
+
+        cmake_push_check_state(RESET)
+        set(CMAKE_REQUIRED_FLAGS
+            "-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=all")
+        list(APPEND CMAKE_REQUIRED_LINK_OPTIONS
+            -fsanitize=address,undefined)
+        unset(GOLIATH_SANITIZERS_AVAILABLE CACHE)
+        check_cxx_source_compiles(
+            "int main() { return 0; }"
+            GOLIATH_SANITIZERS_AVAILABLE)
+        cmake_pop_check_state()
+
+        if(NOT GOLIATH_SANITIZERS_AVAILABLE)
+            message(FATAL_ERROR
+                "The selected compiler cannot compile and link an "
+                "AddressSanitizer/UndefinedBehaviorSanitizer executable")
+        endif()
+    else()
+        message(FATAL_ERROR
+            "GOLIATH_ENABLE_SANITIZERS is unsupported by the selected compiler")
+    endif()
+endif()
+
 find_package(Qt6 REQUIRED COMPONENTS Widgets Network)
 find_package(SDL3 REQUIRED CONFIG)
 
@@ -57,8 +95,55 @@ endif()
 function(goliath_enable_warnings target)
     if(MSVC)
         target_compile_options(${target} PRIVATE /W4 /utf-8)
+        if(GOLIATH_STRICT_WARNINGS)
+            target_compile_options(${target} PRIVATE
+                /permissive-
+                /w14242
+                /w14254
+                /w14263
+                /w14265
+                /w14287
+                /w14296
+                /w14311
+                /w14826
+            )
+        endif()
+        if(GOLIATH_WARNINGS_AS_ERRORS)
+            target_compile_options(${target} PRIVATE /WX)
+        endif()
     else()
         target_compile_options(${target} PRIVATE -Wall -Wextra)
+        if(GOLIATH_STRICT_WARNINGS)
+            target_compile_options(${target} PRIVATE
+                -Wpedantic
+                -Wconversion
+                -Wsign-conversion
+                -Wshadow
+                -Wformat=2
+            )
+        endif()
+        if(GOLIATH_WARNINGS_AS_ERRORS)
+            target_compile_options(${target} PRIVATE -Werror)
+        endif()
+    endif()
+endfunction()
+
+function(goliath_enable_sanitizers target)
+    if(NOT GOLIATH_ENABLE_SANITIZERS)
+        return()
+    endif()
+
+    target_compile_options(${target} PRIVATE
+        -fsanitize=address,undefined
+        -fno-omit-frame-pointer
+        -fno-sanitize-recover=all
+    )
+
+    get_target_property(goliath_target_type ${target} TYPE)
+    if(NOT goliath_target_type STREQUAL "STATIC_LIBRARY")
+        target_link_options(${target} PRIVATE
+            -fsanitize=address,undefined
+        )
     endif()
 endfunction()
 
@@ -73,14 +158,19 @@ add_library(goliath-core STATIC
     src/game/game_profile.cpp
     src/game/game_profile_runtime.cpp
     src/game/game_profile_summary.cpp
+    src/ui/library_details_presentation.cpp
+    src/ui/library_view_logic.cpp
     src/game/save_data_manager.cpp
     src/game/video_settings.cpp
+    src/common/file_transaction.cpp
     src/common/filesystem_safety.cpp
     src/common/goliath_common.cpp
+    src/common/qt_path.cpp
     src/common/debug_logger.cpp
     src/common/log_file.cpp
     src/common/window_geometry.cpp
     src/common/sha1.cpp
+    src/update/update_alert.cpp
     src/update/release_feed.cpp
     src/update/update_schedule.cpp
     src/game/hash_cache.cpp
@@ -110,7 +200,21 @@ add_library(goliath-core STATIC
     third_party/tinyxml2.cpp
 )
 
-if(NOT MSVC)
+if(GOLIATH_STRICT_WARNINGS)
+    if(MSVC)
+        set(goliath_third_party_warning_options /W0)
+    else()
+        set(goliath_third_party_warning_options -w)
+    endif()
+    set_source_files_properties(
+        third_party/miniz.c
+        third_party/miniz_tdef.c
+        third_party/miniz_tinfl.c
+        third_party/miniz_zip.c
+        third_party/tinyxml2.cpp
+        PROPERTIES COMPILE_OPTIONS "${goliath_third_party_warning_options}"
+    )
+elseif(NOT MSVC)
     set_source_files_properties(
         third_party/miniz.c
         third_party/miniz_tdef.c
@@ -140,6 +244,7 @@ if(WIN32)
 endif()
 
 goliath_enable_warnings(goliath-core)
+goliath_enable_sanitizers(goliath-core)
 
 add_executable(goliath-qt
     assets/app_icon.qrc
@@ -148,12 +253,29 @@ add_executable(goliath-qt
     src/ui/update_check.cpp
     src/ui/command_dialog.cpp
     src/ui/main_window.cpp
+    src/ui/main_window_dialogs.cpp
+    src/ui/main_window_events.cpp
+    src/ui/main_window_data.cpp
+    src/ui/main_window_runtime.cpp
+    src/ui/main_window_updates.cpp
     src/ui/game_screenshot.cpp
     src/ui/game_gallery.cpp
     src/ui/library_item_delegate.cpp
     src/ui/main_window_ui.cpp
-    src/ui/main_window_library.cpp
+    src/ui/main_window_theme.cpp
+    src/ui/main_window_toolbar.cpp
+    src/ui/main_window_details_ui.cpp
+    src/ui/main_window_library_ui.cpp
+    src/ui/main_window_library_interaction.cpp
+    src/ui/main_window_library_actions.cpp
+    src/ui/main_window_library_controls.cpp
+    src/ui/main_window_library_state.cpp
+    src/ui/main_window_library_details.cpp
+    src/ui/main_window_library_view.cpp
+    src/ui/library_verification_dialog.cpp
     src/ui/widgets/command_notation_view.cpp
+    src/ui/widgets/engraved_controls.cpp
+    src/ui/widgets/main_window_panel_widgets.cpp
     src/ui/widgets/title_bar.cpp
     src/common/theme.cpp
     src/common/paths.cpp
@@ -241,6 +363,7 @@ add_custom_command(TARGET goliath-qt POST_BUILD
 )
 
 goliath_enable_warnings(goliath-qt)
+goliath_enable_sanitizers(goliath-qt)
 
 if(WIN32)
     enable_language(RC)
@@ -314,6 +437,7 @@ if(BUILD_TESTS)
 
     add_executable(goliath-qt-tests
         tests/test_main.cpp
+        tests/test_goliath_config.cpp
         tests/test_ini_document.cpp
         tests/test_bios_verify.cpp
         tests/test_input_maps.cpp
@@ -334,6 +458,7 @@ if(BUILD_TESTS)
         tests/test_game_system.cpp
         tests/test_game_profiles.cpp
         tests/test_game_playtime.cpp
+        tests/test_library_details_presentation.cpp
         tests/test_library_view_logic.cpp
         tests/test_gallery_frame.cpp
         tests/test_log_file.cpp
@@ -341,6 +466,8 @@ if(BUILD_TESTS)
         tests/test_theme.cpp
         tests/test_window_geometry.cpp
         tests/test_project_legal.cpp
+        tests/test_qt_path.cpp
+        tests/test_update_alert.cpp
         tests/test_release_feed.cpp
         tests/test_update_schedule.cpp
         src/common/theme.cpp
@@ -359,6 +486,7 @@ if(BUILD_TESTS)
     )
 
     goliath_enable_warnings(goliath-qt-tests)
+    goliath_enable_sanitizers(goliath-qt-tests)
 
     if(MINGW AND GOLIATH_STATIC_MINGW_RUNTIME)
         # Match the GUI target using the same filtered static archive.

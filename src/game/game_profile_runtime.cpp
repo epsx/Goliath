@@ -1,6 +1,7 @@
 #include "game/game_profile_runtime.hpp"
 
 #include "common/filesystem_safety.hpp"
+#include "common/qt_path.hpp"
 #include "common/paths.hpp"
 #include "game/game_profile.hpp"
 #include "ini/ini_document.hpp"
@@ -51,7 +52,7 @@ bool copy_regular_file_if_present(const fs::path& source,
     if (destinationInspection.kind == DirectPathKind::Error) {
         if (error) {
             *error = "Could not inspect runtime configuration " +
-                     destination.string() + ": " +
+                     path_to_utf8(destination) + ": " +
                      destinationInspection.error;
         }
         return false;
@@ -62,7 +63,7 @@ bool copy_regular_file_if_present(const fs::path& source,
         !destinationExists) {
         if (error) {
             *error = "Runtime configuration target is not a direct regular "
-                     "file: " + destination.string();
+                     "file: " + path_to_utf8(destination);
         }
         return false;
     }
@@ -70,7 +71,10 @@ bool copy_regular_file_if_present(const fs::path& source,
     std::error_code ec;
     const bool sourceExists = fs::exists(source, ec);
     if (ec) {
-        if (error) *error = "Could not inspect " + source.string() + ": " + ec.message();
+        if (error) {
+            *error = "Could not inspect " + path_to_utf8(source) + ": " +
+                     ec.message();
+        }
         return false;
     }
     if (!sourceExists) {
@@ -80,7 +84,7 @@ bool copy_regular_file_if_present(const fs::path& source,
         if (destinationExists && !fs::remove(destination, ec)) {
             if (error) {
                 *error = "Could not remove stale runtime configuration " +
-                         destination.string();
+                         path_to_utf8(destination);
                 if (ec) *error += ": " + ec.message();
             }
             return false;
@@ -88,7 +92,10 @@ bool copy_regular_file_if_present(const fs::path& source,
         return true;
     }
     if (!fs::is_regular_file(source, ec)) {
-        if (error) *error = "Configuration source is not a regular file: " + source.string();
+        if (error) {
+            *error = "Configuration source is not a regular file: " +
+                     path_to_utf8(source);
+        }
         return false;
     }
 
@@ -98,7 +105,7 @@ bool copy_regular_file_if_present(const fs::path& source,
     if (destinationExists && !fs::remove(destination, ec)) {
         if (error) {
             *error = "Could not replace runtime configuration " +
-                     destination.string();
+                     path_to_utf8(destination);
             if (ec) *error += ": " + ec.message();
         }
         return false;
@@ -107,7 +114,8 @@ bool copy_regular_file_if_present(const fs::path& source,
     fs::copy_file(source, destination, fs::copy_options::none, ec);
     if (ec) {
         if (error) {
-            *error = "Could not copy " + source.string() + ": " + ec.message();
+            *error = "Could not copy " + path_to_utf8(source) + ": " +
+                     ec.message();
         }
         return false;
     }
@@ -115,7 +123,7 @@ bool copy_regular_file_if_present(const fs::path& source,
     if (copied.kind != DirectPathKind::RegularFile) {
         if (error) {
             *error = "Copied runtime configuration is not a direct regular "
-                     "file: " + destination.string();
+                     "file: " + path_to_utf8(destination);
         }
         return false;
     }
@@ -132,7 +140,7 @@ bool save_and_verify(const IniDocument& document,
     if (inspection.kind == DirectPathKind::Error) {
         if (error) {
             *error = "Could not inspect runtime configuration " +
-                     destination.string() + ": " + inspection.error;
+                     path_to_utf8(destination) + ": " + inspection.error;
         }
         return false;
     }
@@ -140,7 +148,7 @@ bool save_and_verify(const IniDocument& document,
         inspection.kind != DirectPathKind::RegularFile) {
         if (error) {
             *error = "Runtime configuration target is not a direct regular "
-                     "file: " + destination.string();
+                     "file: " + path_to_utf8(destination);
         }
         return false;
     }
@@ -150,7 +158,7 @@ bool save_and_verify(const IniDocument& document,
         !fs::remove(destination, ec)) {
         if (error) {
             *error = "Could not replace runtime configuration " +
-                     destination.string();
+                     path_to_utf8(destination);
             if (ec) *error += ": " + ec.message();
         }
         return false;
@@ -159,7 +167,10 @@ bool save_and_verify(const IniDocument& document,
     if (!document.save(destination, error)) return false;
     const DirectPathInspection saved = inspect_direct_path(destination);
     if (saved.kind != DirectPathKind::RegularFile) {
-        if (error) *error = "Could not write runtime configuration: " + destination.string();
+        if (error) {
+            *error = "Could not write runtime configuration: " +
+                     path_to_utf8(destination);
+        }
         return false;
     }
     return true;
@@ -171,12 +182,18 @@ bool load_input_config_or_defaults(const fs::path& source,
     std::error_code ec;
     const bool exists = fs::exists(source, ec);
     if (ec) {
-        if (error) *error = "Could not inspect " + source.string() + ": " + ec.message();
+        if (error) {
+            *error = "Could not inspect " + path_to_utf8(source) + ": " +
+                     ec.message();
+        }
         return false;
     }
     if (exists) {
         if (!fs::is_regular_file(source, ec) || ec) {
-            if (error) *error = "Input configuration is not a regular file: " + source.string();
+            if (error) {
+                *error = "Input configuration is not a regular file: " +
+                         path_to_utf8(source);
+            }
             return false;
         }
         input->load(source);

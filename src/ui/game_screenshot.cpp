@@ -1,6 +1,7 @@
 #include "ui/main_window.hpp"
 
 #include "common/debug_logger.hpp"
+#include "common/qt_path.hpp"
 #include "game/animated_gif.hpp"
 #include "ui/capture_hotkeys.hpp"
 #include "ui/recording_id.hpp"
@@ -36,6 +37,7 @@
 #include <array>
 #include <algorithm>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <utility>
@@ -122,7 +124,7 @@ QPixmap grabVisibleGameRectangle(HWND hwnd) {
     QPixmap result;
     if (surface && pixels) {
         HGDIOBJ previous = SelectObject(memory, surface);
-        if (previous && previous != HGDI_ERROR) {
+        if (previous) {
             if (BitBlt(memory, 0, 0, width, height, desktop,
                        origin.x, origin.y, SRCCOPY | CAPTUREBLT)) {
                 const QImage view(static_cast<const uchar*>(pixels), width, height,
@@ -985,12 +987,12 @@ void MainWindow::recordGameGif() {
         if (IsWindow(hwnd) && isFullscreenGameWindow(hwnd)) {
             DWORD gamePid = 0;
             GetWindowThreadProcessId(hwnd, &gamePid);
-            DWORD foregroundPid = 0;
-            if (const HWND foreground = GetForegroundWindow())
-                GetWindowThreadProcessId(foreground, &foregroundPid);
-            if (gamePid && gamePid == foregroundPid)
+            DWORD activeForegroundPid = 0;
+            if (const HWND activeForeground = GetForegroundWindow())
+                GetWindowThreadProcessId(activeForeground, &activeForegroundPid);
+            if (gamePid && gamePid == activeForegroundPid)
                 image = desktopCapture->nextFrame(hwnd);
-            if (image.isNull() && gamePid == foregroundPid && ++*desktopAttempts < 16)
+            if (image.isNull() && gamePid == activeForegroundPid && ++*desktopAttempts < 16)
                 return; // A mode switch may temporarily invalidate DXGI duplication.
             if (image.isNull()) {
                 timer->stop();
@@ -1058,7 +1060,16 @@ void MainWindow::recordGameGif() {
         for (int i = 0; i < colors.size() && i < 256; ++i)
             palette[static_cast<std::size_t>(i)] = colors[i];
         const int delay = (*frames & 1) ? 13 : 12; // Eight frames per second.
-        if (!encoder->addFrame(image.constBits(), image.bytesPerLine(),
+        const qsizetype stride = image.bytesPerLine();
+        if (stride <= 0 || stride > std::numeric_limits<int>::max()) {
+            timer->stop();
+            timer->deleteLater();
+            m_gifRecording = false;
+            updateScreenshotAction();
+            QMessageBox::warning(this, "Game GIF", "The GIF frame stride is invalid.");
+            return;
+        }
+        if (!encoder->addFrame(image.constBits(), static_cast<int>(stride),
                                palette.data(), static_cast<std::size_t>(colors.size()), delay)) {
             timer->stop();
             timer->deleteLater();
@@ -1081,13 +1092,13 @@ void MainWindow::recordGameGif() {
             return;
         }
 #endif
-        const auto data = encoder->finish();
-        if (data.empty()) return;
+        const auto gifBytes = encoder->finish();
+        if (gifBytes.empty()) return;
         const QString base = recordingIdForMedia(QString::fromStdString(media));
         const QDateTime now = QDateTime::currentDateTime();
-        const QString folder = QString::fromStdWString(
-            (m_paths.base_dir / "recordings" / base.toStdWString() /
-             now.toString("yyyy-MM-dd").toStdWString()).wstring());
+        const QString folder = path_to_qstring(
+            m_paths.base_dir / "recordings" / qstring_to_path(base) /
+            qstring_to_path(now.toString("yyyy-MM-dd")));
         if (!QDir().mkpath(folder)) {
             QMessageBox::warning(this, "Game GIF", "Could not create the recordings folder.");
             return;
@@ -1098,8 +1109,9 @@ void MainWindow::recordGameGif() {
             output = QDir(folder).filePath(stem + "-" + QString::number(suffix) + ".gif");
         QSaveFile file(output);
         if (!file.open(QIODevice::WriteOnly) ||
-            file.write(reinterpret_cast<const char*>(data.data()),
-                       static_cast<qint64>(data.size())) != static_cast<qint64>(data.size()) ||
+            file.write(reinterpret_cast<const char*>(gifBytes.data()),
+                       static_cast<qint64>(gifBytes.size())) !=
+                static_cast<qint64>(gifBytes.size()) ||
             !file.commit()) {
             file.cancelWriting();
             QMessageBox::warning(this, "Game GIF", "Could not save the GIF file.");
@@ -1156,8 +1168,10 @@ void MainWindow::captureGameScreenshotAfter(int delayMs) {
                 this, "Game screenshot", "Select the running game:",
                 gameNames, 0, false, &accepted);
             if (!accepted) return;
-            selected = gameNames.indexOf(choice);
-            if (selected < 0) return;
+            const qsizetype selectedIndex = gameNames.indexOf(choice);
+            if (selectedIndex < 0 ||
+                selectedIndex > std::numeric_limits<int>::max()) return;
+            selected = static_cast<int>(selectedIndex);
         }
     }
 
@@ -1202,8 +1216,8 @@ void MainWindow::captureGameScreenshotAfter(int delayMs) {
     connect(buttons, &QDialogButtonBox::rejected, &preview, &QDialog::reject);
     if (preview.exec() != QDialog::Accepted) return;
 
-    const QString folder = QString::fromStdWString(
-        (m_paths.data_dir / "goliath" / "screenshots").wstring());
+    const QString folder = path_to_qstring(
+        m_paths.data_dir / "goliath" / "screenshots");
     if (!QDir().mkpath(folder)) {
         QMessageBox::warning(this, "Game screenshot",
             "Could not create the screenshots folder.");

@@ -1,6 +1,7 @@
 #include "common/log_file.hpp"
 
 #include "common/filesystem_safety.hpp"
+#include "common/qt_path.hpp"
 
 #include <QByteArray>
 #include <QFile>
@@ -36,20 +37,12 @@ namespace goliath {
 
 namespace {
 
-QString path_to_qstring(const fs::path& path) {
-#if defined(_WIN32)
-    return QString::fromStdWString(path.wstring());
-#else
-    return QString::fromStdString(path.string());
-#endif
-}
-
 std::string path_error(const char* action,
                        const fs::path& path,
                        const std::string& detail = {}) {
     std::string message = action;
     message += ": ";
-    message += path_to_qstring(path).toUtf8().toStdString();
+    message += path_to_utf8(path);
     if (!detail.empty()) {
         message += ": ";
         message += detail;

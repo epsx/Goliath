@@ -1,5 +1,7 @@
 #include "filesystem_io.hpp"
 
+#include "common/qt_path.hpp"
+
 #include <algorithm>
 #include <cctype>
 #include <string>
@@ -205,7 +207,8 @@ CdImageDiscoveryResult discover_neocd_images(
         if (!ec) {
             std::error_code entry_ec;
             if (it->is_regular_file(entry_ec)) {
-                const std::string ext = to_lower(it->path().extension().string());
+                const std::string ext = to_lower(
+                    path_to_utf8(it->path().extension()));
                 if (ext == ".cue" || ext == ".chd") {
                     fs::path rel = it->path().lexically_relative(logical_root);
                     if (!rel.empty())

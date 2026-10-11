@@ -1,5 +1,6 @@
 #include "game/geolith_capabilities.hpp"
 
+#include "common/qt_path.hpp"
 #include "game/jollygood_capabilities.hpp"
 #include "game/jollygood_executable.hpp"
 
@@ -108,7 +109,7 @@ GeolithCapabilities probe_geolith_capabilities(const fs::path& configuredJollygo
         return result;
     }
 
-    QLibrary library(QString::fromStdString(result.core_library.string()));
+    QLibrary library(path_to_qstring(result.core_library));
     if (!library.load()) {
         result.error = library.errorString().toStdString();
         return result;

@@ -193,7 +193,7 @@ void LibraryItemDelegate::paint(
     }
     if (rating > 0) {
         int starX = textRect.right() - ratingStarsWidth;
-        for (int index = 0; index < rating; ++index) {
+        for (int starIndex = 0; starIndex < rating; ++starIndex) {
             const QRectF starRect(
                 starX, ratingStarY, RatingStarSize, RatingStarSize);
             engraved([&](const QRectF& rect, const QColor& color) {

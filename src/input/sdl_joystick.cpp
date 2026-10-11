@@ -25,7 +25,8 @@ std::vector<DetectedJoystick> list_joysticks() {
     SDL_JoystickID* ids = SDL_GetJoysticks(&count);
     if (!ids) return result;
 
-    result.reserve(count);
+    if (count > 0)
+        result.reserve(static_cast<std::size_t>(count));
     for (int i = 0; i < count; ++i) {
         DetectedJoystick dj;
         dj.port = i;

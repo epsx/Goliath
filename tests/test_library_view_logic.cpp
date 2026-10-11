@@ -11,6 +11,7 @@ using goliath::VisibleSelectionDecision;
 using goliath::LibraryDisplayMode;
 using goliath::LibraryPlaytimeFilter;
 using goliath::LibraryRatingFilter;
+using goliath::LibraryListViewportMemory;
 using goliath::detailsScrollTarget;
 using goliath::libraryCatalogIdPresentation;
 using goliath::libraryDetailsTitle;
@@ -173,6 +174,24 @@ TEST_CASE("library selections are remembered separately for each system",
     CHECK(librarySelectionConfigKey("neogeo") == "last_rom_neogeo");
     CHECK(librarySelectionConfigKey("neogeocd") == "last_rom_neogeocd");
     CHECK(librarySelectionConfigKey("unknown") == "last_rom");
+}
+
+TEST_CASE("library viewport positions are remembered separately per system",
+          "[library-view][system]") {
+    LibraryListViewportMemory memory;
+
+    CHECK_FALSE(memory.recall("neogeo").has_value());
+    CHECK_FALSE(memory.recall("neogeocd").has_value());
+
+    memory.remember("neogeo", 37);
+    memory.remember("neogeocd", 8);
+
+    CHECK(memory.recall("neogeo") == 37);
+    CHECK(memory.recall("neogeocd") == 8);
+
+    memory.remember("neogeo", 52);
+    CHECK(memory.recall("neogeo") == 52);
+    CHECK(memory.recall("neogeocd") == 8);
 }
 
 TEST_CASE("system selection memory keeps legacy configuration compatible",

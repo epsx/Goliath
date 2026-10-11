@@ -285,8 +285,9 @@ AboutDialog::AboutDialog(Config& config, QWidget* parent)
     checkUpdates->setObjectName("about_link_button");
     connect(checkUpdates, &QPushButton::clicked, this,
             [this]() {
-                if (checkForUpdates(this)) {
-                    recordSuccessfulUpdateCheck(m_config);
+                const UpdateCheckResult result = checkForUpdates(this);
+                if (result.successful) {
+                    recordSuccessfulUpdateCheck(m_config, result);
                 }
             });
     actionRow->addWidget(checkUpdates);

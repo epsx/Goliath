@@ -13,6 +13,19 @@
 
 namespace goliath {
 
+class IniDocument;
+
+struct IniSaveRequest {
+    std::filesystem::path path;
+    const IniDocument* document = nullptr;
+};
+
+// Stages every document before replacing any destination. If a later commit
+// fails, destinations already replaced during this call are restored to their
+// original contents (or removed when they did not exist before the call).
+bool save_ini_documents(const std::vector<IniSaveRequest>& requests,
+                        std::string* error = nullptr);
+
 class IniDocument {
 public:
     void load(const std::filesystem::path& path); // missing file -> empty document, no error
@@ -20,6 +33,7 @@ public:
     // existing destination untouched and optionally describes the error.
     bool save(const std::filesystem::path& path,
               std::string* error = nullptr) const;
+    std::string serialized_text() const;
 
     bool has_section(const std::string& section) const;
     bool has_option(const std::string& section, const std::string& key) const;

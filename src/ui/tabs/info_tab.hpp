@@ -42,7 +42,6 @@ private:
     void updateRefreshState();
     void saveUpdatePreference();
     void checkUpdatesNow();
-    void rememberSuccessfulUpdateCheck();
     void refreshLastUpdateCheck();
 
     std::filesystem::path m_jollygoodExe;

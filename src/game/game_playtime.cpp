@@ -1,5 +1,6 @@
 #include "game/game_playtime.hpp"
 
+#include "common/qt_path.hpp"
 #include "game/game_profile.hpp"
 #include "json.hpp"
 
@@ -12,6 +13,7 @@
 #include <exception>
 #include <fstream>
 #include <limits>
+#include <utility>
 
 namespace fs = std::filesystem;
 using nlohmann::json;
@@ -54,18 +56,40 @@ bool read_nonnegative_int64(const json& object,
     }
 }
 
+void read_last_session_metadata(const json& object,
+                                std::int64_t legacyEndedEpoch,
+                                GamePlaytimeRecord* record) {
+    if (!record) return;
+
+    // Version 1 originally persisted only last_played_epoch, whose actual
+    // meaning was the end of the last session. Keep that field authoritative
+    // for backward compatibility and treat the clearer metadata as optional.
+    record->last_ended_epoch = legacyEndedEpoch;
+
+    std::int64_t startedEpoch = 0;
+    std::int64_t endedEpoch = 0;
+    std::int64_t sessionSeconds = 0;
+    if (!read_nonnegative_int64(
+            object, "last_started_epoch", &startedEpoch) ||
+        !read_nonnegative_int64(
+            object, "last_ended_epoch", &endedEpoch) ||
+        !read_nonnegative_int64(
+            object, "last_session_seconds", &sessionSeconds) ||
+        startedEpoch == 0 || endedEpoch != legacyEndedEpoch ||
+        sessionSeconds < kMinimumTrackedSessionSeconds ||
+        startedEpoch > endedEpoch ||
+        endedEpoch - startedEpoch != sessionSeconds) {
+        return;
+    }
+
+    record->last_started_epoch = startedEpoch;
+    record->last_session_seconds = sessionSeconds;
+}
+
 std::int64_t saturating_add(std::int64_t current, std::int64_t increment) {
     const std::int64_t maximum = std::numeric_limits<std::int64_t>::max();
     if (increment > maximum - current) return maximum;
     return current + increment;
-}
-
-QString filesystem_path_to_qstring(const fs::path& path) {
-#if defined(_WIN32)
-    return QString::fromStdWString(path.wstring());
-#else
-    return QString::fromStdString(path.string());
-#endif
 }
 
 } // namespace
@@ -97,7 +121,8 @@ bool GamePlaytimeStore::load(const fs::path& path, std::string* error) {
     const bool regular = fs::is_regular_file(path, ec);
     if (ec || !regular) {
         if (error) {
-            *error = "Playtime path is not a regular file: " + path.string();
+            *error = "Playtime path is not a regular file: " +
+                     path_to_utf8(path);
         }
         return false;
     }
@@ -106,7 +131,7 @@ bool GamePlaytimeStore::load(const fs::path& path, std::string* error) {
         std::ifstream input(path, std::ios::binary);
         if (!input) {
             if (error) {
-                *error = "Could not open playtime file: " + path.string();
+                *error = "Could not open playtime file: " + path_to_utf8(path);
             }
             return false;
         }
@@ -138,17 +163,19 @@ bool GamePlaytimeStore::load(const fs::path& path, std::string* error) {
             if (!is_supported_system(system) || media.empty()) continue;
 
             GamePlaytimeRecord record;
+            std::int64_t legacyEndedEpoch = 0;
             if (!read_nonnegative_int64(
                     item, "total_seconds", &record.total_seconds) ||
                 !read_nonnegative_int64(
                     item, "session_count", &record.session_count) ||
                 !read_nonnegative_int64(
-                    item, "last_played_epoch", &record.last_played_epoch) ||
+                    item, "last_played_epoch", &legacyEndedEpoch) ||
                 record.total_seconds < kMinimumTrackedSessionSeconds ||
                 record.session_count == 0 ||
-                record.last_played_epoch == 0) {
+                legacyEndedEpoch == 0) {
                 continue;
             }
+            read_last_session_metadata(item, legacyEndedEpoch, &record);
 
             m_records[make_game_profile_key(system, media)] =
                 Entry{system, media, record};
@@ -183,30 +210,45 @@ bool GamePlaytimeStore::save(const fs::path& path, std::string* error) const {
     root["records"] = json::array();
     for (const auto& [key, entry] : m_records) {
         (void)key;
-        root["records"].push_back({
+        json item = {
             {"system", entry.system},
             {"media", entry.media},
             {"total_seconds", entry.record.total_seconds},
             {"session_count", entry.record.session_count},
-            {"last_played_epoch", entry.record.last_played_epoch},
-        });
+            // Keep the original key so older Goliath builds can still read
+            // files written by this version.
+            {"last_played_epoch", entry.record.last_ended_epoch},
+        };
+        if (entry.record.last_started_epoch > 0 &&
+            entry.record.last_ended_epoch > 0 &&
+            entry.record.last_session_seconds >=
+                kMinimumTrackedSessionSeconds) {
+            item["last_started_epoch"] =
+                entry.record.last_started_epoch;
+            item["last_ended_epoch"] =
+                entry.record.last_ended_epoch;
+            item["last_session_seconds"] =
+                entry.record.last_session_seconds;
+        }
+        root["records"].push_back(std::move(item));
     }
 
     const QByteArray serialized =
         QByteArray::fromStdString(root.dump(2) + "\n");
-    QSaveFile output(filesystem_path_to_qstring(path));
+    QSaveFile output(path_to_qstring(path));
     output.setDirectWriteFallback(false);
     if (!output.open(QIODevice::WriteOnly)) {
         if (error) {
             *error = "Could not open playtime file for writing: " +
-                     path.string() + ": " + output.errorString().toStdString();
+                     path_to_utf8(path) + ": " +
+                     output.errorString().toStdString();
         }
         return false;
     }
 
     if (output.write(serialized) != serialized.size()) {
         if (error) {
-            *error = "Could not write playtime file: " + path.string() +
+            *error = "Could not write playtime file: " + path_to_utf8(path) +
                      ": " + output.errorString().toStdString();
         }
         output.cancelWriting();
@@ -214,7 +256,7 @@ bool GamePlaytimeStore::save(const fs::path& path, std::string* error) const {
     }
     if (!output.commit()) {
         if (error) {
-            *error = "Could not replace playtime file: " + path.string() +
+            *error = "Could not replace playtime file: " + path_to_utf8(path) +
                      ": " + output.errorString().toStdString();
         }
         return false;
@@ -233,7 +275,8 @@ bool GamePlaytimeStore::add_session(const std::string& system,
                                     const std::string& media,
                                     std::int64_t session_seconds,
                                     std::int64_t ended_epoch) {
-    if (session_seconds < kMinimumTrackedSessionSeconds || ended_epoch <= 0 ||
+    if (session_seconds < kMinimumTrackedSessionSeconds ||
+        ended_epoch <= session_seconds ||
         !is_supported_system(system)) {
         return false;
     }
@@ -250,8 +293,11 @@ bool GamePlaytimeStore::add_session(const std::string& system,
     record.total_seconds =
         saturating_add(record.total_seconds, session_seconds);
     record.session_count = saturating_add(record.session_count, 1);
-    record.last_played_epoch =
-        std::max(record.last_played_epoch, ended_epoch);
+    if (ended_epoch >= record.last_ended_epoch) {
+        record.last_started_epoch = ended_epoch - session_seconds;
+        record.last_ended_epoch = ended_epoch;
+        record.last_session_seconds = session_seconds;
+    }
     return true;
 }
 

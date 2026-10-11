@@ -1,5 +1,8 @@
 #include "ini_document.hpp"
 
+#include "common/file_transaction.hpp"
+#include "common/qt_path.hpp"
+
 #include <QByteArray>
 #include <QIODevice>
 #include <QSaveFile>
@@ -22,13 +25,6 @@ std::string trim(const std::string& s) {
     return s.substr(start, end - start + 1);
 }
 
-QString path_to_qstring(const fs::path& path) {
-#if defined(_WIN32)
-    return QString::fromStdWString(path.wstring());
-#else
-    return QString::fromStdString(path.string());
-#endif
-}
 } // namespace
 
 IniDocument::Section* IniDocument::find_section(const std::string& name) {
@@ -75,6 +71,18 @@ void IniDocument::load(const fs::path& path) {
     }
 }
 
+std::string IniDocument::serialized_text() const {
+    std::ostringstream serialized;
+    for (const auto& section : m_sections) {
+        serialized << "[" << section.name << "]\n";
+        for (const auto& e : section.entries) {
+            serialized << e.key << " = " << e.value << "\n";
+        }
+        serialized << "\n";
+    }
+    return serialized.str();
+}
+
 bool IniDocument::save(const fs::path& path, std::string* error) const {
     if (error) error->clear();
 
@@ -87,28 +95,20 @@ bool IniDocument::save(const fs::path& path, std::string* error) const {
         }
     }
 
-    std::ostringstream serialized;
-    for (const auto& section : m_sections) {
-        serialized << "[" << section.name << "]\n";
-        for (const auto& e : section.entries) {
-            serialized << e.key << " = " << e.value << "\n";
-        }
-        serialized << "\n";
-    }
-
-    const QByteArray bytes = QByteArray::fromStdString(serialized.str());
+    const QByteArray bytes = QByteArray::fromStdString(serialized_text());
     QSaveFile output(path_to_qstring(path));
     output.setDirectWriteFallback(false);
     if (!output.open(QIODevice::WriteOnly)) {
         if (error) {
-            *error = "Could not open INI file for writing: " + path.string() +
+            *error = "Could not open INI file for writing: " +
+                     path_to_utf8(path) +
                      ": " + output.errorString().toStdString();
         }
         return false;
     }
     if (output.write(bytes) != bytes.size()) {
         if (error) {
-            *error = "Could not write INI file: " + path.string() +
+            *error = "Could not write INI file: " + path_to_utf8(path) +
                      ": " + output.errorString().toStdString();
         }
         output.cancelWriting();
@@ -116,12 +116,28 @@ bool IniDocument::save(const fs::path& path, std::string* error) const {
     }
     if (!output.commit()) {
         if (error) {
-            *error = "Could not replace INI file: " + path.string() +
+            *error = "Could not replace INI file: " + path_to_utf8(path) +
                      ": " + output.errorString().toStdString();
         }
         return false;
     }
     return true;
+}
+
+bool save_ini_documents(const std::vector<IniSaveRequest>& requests,
+                        std::string* error) {
+    std::vector<FileTransactionRequest> files;
+    files.reserve(requests.size());
+
+    for (const IniSaveRequest& request : requests) {
+        if (!request.document) {
+            if (error) *error = "Cannot save a null INI document.";
+            return false;
+        }
+        files.push_back({request.path, request.document->serialized_text()});
+    }
+
+    return save_files_transactionally(files, error);
 }
 
 bool IniDocument::has_section(const std::string& section) const {

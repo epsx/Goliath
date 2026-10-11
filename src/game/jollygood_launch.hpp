@@ -16,6 +16,7 @@
 #include <string_view>
 #include <vector>
 
+#include "common/qt_path.hpp"
 #include "game/game_model.hpp"
 
 namespace goliath {
@@ -24,7 +25,7 @@ struct AppPaths;
 struct GameLaunchProfile;
 
 inline std::string launch_extension_lower(const std::string& file) {
-    std::string ext = std::filesystem::path(file).extension().string();
+    std::string ext = path_to_utf8(path_from_utf8(file).extension());
     std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char ch) {
         return static_cast<char>(std::tolower(ch));
     });

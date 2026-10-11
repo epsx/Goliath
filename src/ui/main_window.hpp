@@ -36,6 +36,7 @@
 #include "common/paths.hpp"
 #include "ui/library_view_logic.hpp"
 #include "ui/command_dialog.hpp"
+#include "update/release_feed.hpp"
 
 class QCloseEvent;
 class QEvent;
@@ -57,6 +58,8 @@ class QActionGroup;
 class QTimer;
 class QMovie;
 class QKeySequence;
+class QHBoxLayout;
+class QVBoxLayout;
 
 namespace goliath {
 
@@ -124,6 +127,18 @@ private slots:
 
 private:
     void buildUi();
+    void buildToolbar(QVBoxLayout* mainLayout);
+    void buildToolbarFilters(QHBoxLayout* toolbar);
+    void buildToolbarTools(QHBoxLayout* toolbar);
+    void buildLibraryWorkspace(QVBoxLayout* mainLayout);
+    void buildLibraryPanel();
+    QWidget* buildDetailsHeaderCard();
+    QWidget* buildDetailsInfoCard();
+    QWidget* buildDetailsGalleryPanel();
+    void buildDetailsDescription(QVBoxLayout* detailsLayout);
+    void buildDetailsPanel();
+    void buildStatusBar();
+    void setupKeyboardShortcuts();
     // Apply a built-in theme by key; unknown keys fall back to Dark Modern.
     void applyTheme(const QString& themeName);
     void loadGames();
@@ -164,6 +179,9 @@ private:
     void centerWindow();
     void refreshResolvedPaths();
     void startAutomaticUpdateCheckIfDue();
+    void reloadCachedUpdateAlert();
+    void updateAvailableIndicator();
+    void openAvailableUpdate();
     void loadGameProfiles();
     void loadGamePlaytime();
     void loadGameLibraryState();
@@ -198,6 +216,8 @@ private:
     QString selectedRomFile() const;   // bare filename of the currently selected rom, used for persistence
     QString selectedRomPath() const;   // full path of the currently selected rom, used for "Open ROM folder"
     void rememberCurrentLibrarySelection();
+    void rememberCurrentLibraryListViewport();
+    void restoreCurrentLibraryListViewport();
     void restoreSelection(const QString& preferredRom = {});
     void launchItem(QTreeWidgetItem* item);
     void revealInExplorer(const QString& path);
@@ -226,6 +246,7 @@ private:
     bool m_gamePlaytimePersistenceAvailable = true;
     bool m_gameLibraryStatePersistenceAvailable = true;
     bool m_automaticUpdateCheckPending = false;
+    std::optional<PublishedRelease> m_availableUpdate;
     // Diagnostics toggle for this Goliath session only. It is intentionally
     // absent from goliath.ini and exact-media profiles.
     bool m_verboseJgrfLogging = false;
@@ -260,10 +281,12 @@ private:
     LibraryDisplayMode m_libraryDisplayMode = LibraryDisplayMode::List;
     bool m_rebuildingLibraryView = false;
     std::string m_librarySystem = "neogeo";
+    LibraryListViewportMemory m_libraryListViewportMemory;
 
     TitleBar* m_titleBar = nullptr;
     QComboBox* m_themeCombo = nullptr;
     QPushButton* m_filtersButton = nullptr;
+    QPushButton* m_updateAvailableButton = nullptr;
     QActionGroup* m_sortGroup = nullptr;
     QActionGroup* m_libraryDisplayGroup = nullptr;
     QActionGroup* m_ratingFilterGroup = nullptr;
