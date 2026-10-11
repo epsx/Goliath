@@ -164,6 +164,7 @@ add_library(goliath-core STATIC
     src/game/video_settings.cpp
     src/common/file_transaction.cpp
     src/common/filesystem_safety.cpp
+    src/common/diagnostic_report.cpp
     src/common/goliath_common.cpp
     src/common/qt_path.cpp
     src/common/debug_logger.cpp
@@ -254,6 +255,7 @@ add_executable(goliath-qt
     src/ui/command_dialog.cpp
     src/ui/main_window.cpp
     src/ui/main_window_dialogs.cpp
+    src/ui/main_window_diagnostics.cpp
     src/ui/main_window_events.cpp
     src/ui/main_window_data.cpp
     src/ui/main_window_runtime.cpp
@@ -462,6 +464,7 @@ if(BUILD_TESTS)
         tests/test_library_view_logic.cpp
         tests/test_gallery_frame.cpp
         tests/test_log_file.cpp
+        tests/test_diagnostic_report.cpp
         tests/test_save_data_manager.cpp
         tests/test_theme.cpp
         tests/test_window_geometry.cpp

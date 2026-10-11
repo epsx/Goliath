@@ -145,6 +145,7 @@ src/
 │   └── jollygood_audio.hpp/.cpp
 ├── common/
 │   ├── debug_logger.hpp/.cpp
+│   ├── diagnostic_report.hpp/.cpp
 │   ├── filesystem_safety.hpp/.cpp
 │   ├── goliath_common.hpp/.cpp
 │   ├── log_file.hpp/.cpp
@@ -201,6 +202,7 @@ src/
     ├── main_window_library_ui.cpp
     ├── main_window_data.cpp
     ├── main_window_dialogs.cpp
+    ├── main_window_diagnostics.cpp
     ├── main_window_events.cpp
     ├── main_window_runtime.cpp
     ├── main_window_updates.cpp
@@ -280,6 +282,7 @@ The entry point:
 | `goliath_common` | core | `Config`, defaults, `goliath.ini`, executable base, and paths. |
 | `filesystem_safety` | core | Rejects unsafe/special targets and bounds direct regular-file operations. |
 | `log_file` | core | Refuses unsafe targets and truncates a direct regular runtime log. |
+| `diagnostic_report` | core | Collects, bounds, allowlists, redacts, and formats the exportable support report. |
 | `sha1` | core | Lowercase SHA-1 helpers for memory and files. |
 | `paths` | app | Resolves `AppPaths`, JGRF arguments, database, config, BIOS, and data paths. |
 | `qt_path` | core | Lossless `QString`, UTF-8 string, and `std::filesystem::path` boundary conversions. |
@@ -613,6 +616,7 @@ exists.
 | `main_window_library_ui.cpp` | System selector, List/Grid pages, Search, splitter workspace, and lightweight non-opaque splitter resizing. |
 | `main_window_data.cpp` | Game/profile/playtime/personal-state loading and rescan-result adoption. |
 | `main_window_dialogs.cpp` | Settings, About, logging, BIOS, and other top-level dialog entry points. |
+| `main_window_diagnostics.cpp` | Modal worker collection and transactional export of the privacy-redacted diagnostic report. |
 | `main_window_events.cpp` | Window events, geometry persistence, Classic View thresholds, and close lifecycle. |
 | `main_window_runtime.cpp` | Detached launch observation, session finalization, and runtime companion handling. |
 | `main_window_updates.cpp` | Scheduled/manual update orchestration and toolbar indicator state. |
@@ -1170,6 +1174,29 @@ The session checkbox is excluded from the benchmark preparation call. A
 verbose option already present in the configured base arguments is not owned
 by this toggle and therefore remains effective everywhere those arguments are
 used.
+
+### Exportable diagnostic report
+
+```text
+Tools -> Export Diagnostic Report
+  -> choose timestamped .txt destination
+  -> modal worker collection
+       -> Goliath / OS / Qt identity
+       -> JGRF --help and Geolith JG capability probes
+       -> effective global renderer and allowlisted configuration
+       -> required runtime-file and BIOS verification
+       -> bounded tails of both runtime logs
+  -> longest-root-first path replacement
+  -> credential assignment and URL-userinfo redaction
+  -> QSaveFile transactional destination replacement
+```
+
+The report generator accepts a snapshot of `Config`, `AppPaths`, resolved
+library roots, build identity, platform, and session verbose state. It does not
+read arbitrary INI keys: Goliath, JGRF, Geolith, and input settings are selected
+through explicit allowlists. Direct-log helpers refuse links, reparse points,
+directories, and special objects; each log contribution is limited to the last
+100 lines and 128 KiB before whole-report redaction.
 
 ### Settings persistence
 

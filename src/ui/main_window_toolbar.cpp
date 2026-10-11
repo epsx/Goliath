@@ -280,6 +280,9 @@ void MainWindow::buildToolbarTools(QHBoxLayout* toolbar) {
                          this, &MainWindow::verifyBios); // 🔍
     toolsMenu->addSeparator();
     toolsMenu->addAction(QString::fromUtf8(
+                             "\xF0\x9F\x93\x84 Export Diagnostic Report..."), // 📄
+                         this, &MainWindow::exportDiagnosticReport);
+    toolsMenu->addAction(QString::fromUtf8(
                              "\xF0\x9F\xA9\xBA Diagnostics & Logs..."), // 🩺
                          this, &MainWindow::openLogging);
 #if defined(GOLIATH_X11_CAPTURE)

@@ -1094,6 +1094,27 @@ survived a Goliath restart. Close such processes manually before clearing
 `jollygood.log`; otherwise their still-open output handle may continue writing
 to the file.
 
+### Export one diagnostic report
+
+Choose **Tools -> Export Diagnostic Report...** and select a destination for
+the suggested timestamped `.txt` file. Goliath collects its version and build,
+the operating system, the configured global video backend, JGRF and Geolith
+paths and versions, an allowlisted configuration summary, required-file and
+BIOS checks, and the last 100 lines from each runtime log.
+
+Collection runs behind a modal progress window, so a slow JGRF version probe
+or BIOS verification does not freeze the interface. The destination is written
+transactionally; an existing file is replaced only after the complete report
+has been prepared.
+
+The exporter never copies complete INI files. Only configuration keys known to
+Goliath are included. The Goliath, configuration, ROM, Neo Geo CD, snapshot,
+BIOS, metadata, database, and home roots are replaced by descriptive
+placeholders throughout the report, including log excerpts. Common credential
+assignments and credentials embedded in URLs are replaced by `<REDACTED>`.
+Review the text before posting it publicly, especially when custom command-line
+arguments or external paths are in use.
+
 ### Audio
 
 The Audio tab enumerates playback devices asynchronously so opening Settings

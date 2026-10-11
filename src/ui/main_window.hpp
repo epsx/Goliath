@@ -108,6 +108,7 @@ private slots:
     void exportSelectedAudio();
     void captureGameScreenshot();
     void recordGameGifAfter(int delayMs);
+    void exportDiagnosticReport();
     void openLogging();
     void openAbout();
     void focusSearch();
