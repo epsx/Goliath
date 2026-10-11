@@ -2,14 +2,18 @@
 
 #include "audio/jollygood_audio.hpp"
 #include "common/debug_logger.hpp"
+#include "common/diagnostic_report.hpp"
+#include "common/log_file.hpp"
 #include "common/qt_path.hpp"
 #include "game/jollygood_bios.hpp"
 #include "game/jollygood_launch.hpp"
 #include "game/jollygood_process.hpp"
+#include "ui/widgets/title_bar.hpp"
 
 #include <QCoreApplication>
-#include <QMessageBox>
+#include <QFile>
 #include <QString>
+#include <QStringList>
 #include <QTimer>
 
 #include <chrono>
@@ -18,12 +22,156 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 namespace fs = std::filesystem;
 
 namespace goliath {
+namespace {
+
+constexpr qint64 kLaunchLogExcerptBytes = 32 * 1024;
+constexpr std::size_t kLaunchLogExcerptLines = 10;
+
+std::uintmax_t launch_log_offset(const fs::path& path) {
+    QFile file;
+    const LogFileOperationResult opened =
+        open_direct_regular_log_file(file, path, false);
+    if (!opened.success || !opened.existed || !file.isOpen()) return 0;
+    const qint64 size = file.size();
+    return size > 0 ? static_cast<std::uintmax_t>(size) : 0;
+}
+
+QString launch_log_excerpt(const fs::path& path, std::uintmax_t offset) {
+    QFile file;
+    const LogFileOperationResult opened =
+        open_direct_regular_log_file(file, path, false);
+    if (!opened.success || !opened.existed || !file.isOpen()) return {};
+
+    const qint64 size = file.size();
+    if (size <= 0) return {};
+    qint64 start = offset <= static_cast<std::uintmax_t>(size)
+        ? static_cast<qint64>(offset) : 0;
+    if (size - start > kLaunchLogExcerptBytes)
+        start = size - kLaunchLogExcerptBytes;
+    if (!file.seek(start)) return {};
+
+    QByteArray bytes = file.read(kLaunchLogExcerptBytes);
+    if (start > 0 && start != static_cast<qint64>(offset)) {
+        const qsizetype newline = bytes.indexOf('\n');
+        bytes = newline < 0 ? QByteArray{} : bytes.mid(newline + 1);
+    }
+
+    const std::string text(bytes.constData(),
+                           static_cast<std::size_t>(bytes.size()));
+    const std::vector<std::string> lines =
+        diagnostic_tail_lines(text, kLaunchLogExcerptLines);
+    QStringList visible;
+    for (const std::string& line : lines) {
+        if (line.empty()) continue;
+        visible.push_back(QString::fromUtf8(
+            line.data(), static_cast<qsizetype>(line.size())));
+    }
+    return visible.join('\n');
+}
+
+QString launch_exit_code_text(std::optional<std::uint32_t> exitCode) {
+    if (!exitCode.has_value()) return QStringLiteral("unavailable");
+    return QStringLiteral("0x%1").arg(
+        QString::number(*exitCode, 16).rightJustified(8, '0'));
+}
+
+QString tracked_launch_failure_text(
+        const DetachedProcessTracker& tracker,
+        std::int64_t seconds,
+        std::optional<std::uint32_t> exitCode,
+        const fs::path& logPath) {
+    QString reason;
+    if (exitCode.has_value()) {
+        const std::string_view loaderReason =
+            windows_loader_failure_reason(*exitCode);
+        if (!loaderReason.empty()) {
+            reason = QString::fromUtf8(
+                loaderReason.data(),
+                static_cast<qsizetype>(loaderReason.size()));
+        } else if (*exitCode != 0) {
+            reason = QStringLiteral("JGRF exited with code %1.")
+                .arg(launch_exit_code_text(exitCode));
+        }
+    }
+    if (reason.isEmpty()) {
+        reason = QStringLiteral(
+            "JGRF stopped after %1 second(s), before a playable session "
+            "was established.")
+            .arg(static_cast<qlonglong>(seconds));
+    }
+
+    const QString display = tracker.display_name().empty()
+        ? QString::fromStdString(tracker.media())
+        : QString::fromStdString(tracker.display_name());
+    QString message = QStringLiteral(
+        "Game: %1\nMedia: %2\nReason: %3\nExit code: %4")
+        .arg(display)
+        .arg(QString::fromStdString(tracker.media()))
+        .arg(reason)
+        .arg(launch_exit_code_text(exitCode));
+    if (!tracker.effective_system().empty()) {
+        message += QStringLiteral("\nEffective system: %1")
+            .arg(QString::fromStdString(tracker.effective_system()));
+    }
+
+    const QString excerpt =
+        launch_log_excerpt(logPath, tracker.log_offset());
+    if (!excerpt.isEmpty())
+        message += QStringLiteral("\n\nRecent JGRF output:\n%1").arg(excerpt);
+
+    if (tracker.mvs_hardware()) {
+        message += QStringLiteral(
+            "\n\nCompatibility hint: this launch used MVS hardware. "
+            "Some cartridges or homebrew require AES. In Game settings > "
+            "General, try System Type: AES for this exact media. This is a "
+            "suggestion, not an automatic diagnosis.");
+    }
+    return message;
+}
+
+QString unobserved_launch_text(
+        qint64 pid,
+        const DetachedProcessTracker& tracker,
+        const fs::path& logPath) {
+    QString message = QStringLiteral(
+        "JGRF reported a successful detached start (PID %1), but Goliath "
+        "could not attach its process observer. The process may have stopped "
+        "before observation began, or the operating system may have denied "
+        "access.\n\nMedia: %2")
+        .arg(pid)
+        .arg(QString::fromStdString(tracker.media()));
+    if (!tracker.effective_system().empty()) {
+        message += QStringLiteral("\nEffective system: %1")
+            .arg(QString::fromStdString(tracker.effective_system()));
+    }
+
+    const QString excerpt =
+        launch_log_excerpt(logPath, tracker.log_offset());
+    if (!excerpt.isEmpty())
+        message += QStringLiteral("\n\nRecent JGRF output:\n%1").arg(excerpt);
+    else
+        message += QStringLiteral(
+            "\n\nNo new JGRF log output was available. Open Tools > "
+            "Diagnostics & Logs for the complete logs.");
+
+    if (tracker.mvs_hardware()) {
+        message += QStringLiteral(
+            "\n\nCompatibility hint: this launch used MVS hardware. "
+            "Some cartridges or homebrew require AES. In Game settings > "
+            "General, try System Type: AES for this exact media. This is a "
+            "suggestion, not an automatic diagnosis.");
+    }
+    return message;
+}
+
+} // namespace
 
 void MainWindow::loadGamePlaytime() {
     GamePlaytimeStore loaded;
@@ -58,15 +206,25 @@ void MainWindow::saveGamePlaytime() {
 
 bool MainWindow::trackGameProcess(qint64 pid,
                                   const std::string& system,
-                                  const std::string& media) {
+                                  const std::string& media,
+                                  const QString& displayName,
+                                  const JollygoodLaunchPreparation& preparation,
+                                  std::uintmax_t logOffset) {
     auto tracker = std::make_unique<DetachedProcessTracker>(
-        static_cast<std::int64_t>(pid), system, media);
+        static_cast<std::int64_t>(pid), system, media,
+        displayName.toStdString(), preparation.effective_system,
+        preparation.mvs_hardware, logOffset);
     if (!tracker->valid()) {
+        const QString failure = unobserved_launch_text(
+            pid, *tracker, m_paths.base_dir / "jollygood.log");
         DebugLogger::logError(
-            QString("could not observe detached JGRF process %1; "
-                    "playtime will not be recorded for %2")
-                .arg(pid)
-                .arg(QString::fromStdString(media)));
+            QString("could not observe detached JGRF process: %1")
+                .arg(failure));
+        if (!m_closeRequested && isVisible()) {
+            showThemedMessageDialog(
+                this, "JGRF Launch Status Unavailable", failure,
+                ThemedMessageTone::Warning);
+        }
         return false;
     }
 
@@ -167,6 +325,7 @@ void MainWindow::closeCommandCompanion(std::int64_t pid) {
 
 void MainWindow::pollTrackedGameProcesses() {
     bool changed = false;
+    std::vector<QString> startupFailures;
     auto it = m_trackedGameProcesses.begin();
     while (it != m_trackedGameProcesses.end()) {
         DetachedProcessTracker& tracker = **it;
@@ -189,21 +348,39 @@ void MainWindow::pollTrackedGameProcesses() {
                     .arg(static_cast<qlonglong>(seconds))
                     .arg(QString::fromStdString(tracker.media())));
         } else {
-            const QString codeText = exitCode.has_value()
-                ? QString("0x%1").arg(
-                      QString::number(*exitCode, 16).rightJustified(8, '0'))
-                : QStringLiteral("unavailable");
+            const QString codeText = launch_exit_code_text(exitCode);
             DebugLogger::logInfo(
                 QString("JGRF launch did not become a countable play "
                         "session: %1 second(s), exit=%2, %3")
                     .arg(static_cast<qlonglong>(seconds))
                     .arg(codeText)
                     .arg(QString::fromStdString(tracker.media())));
+            if (is_likely_tracked_launch_failure(seconds, exitCode)) {
+                const QString failure = tracked_launch_failure_text(
+                    tracker, seconds, exitCode,
+                    m_paths.base_dir / "jollygood.log");
+                DebugLogger::logError(
+                    QString("JGRF startup failure: %1")
+                        .arg(failure));
+                if (!m_closeRequested &&
+                    !m_exitWhenTrackedProcessesFinish && isVisible()) {
+                    startupFailures.push_back(failure);
+                }
+            }
         }
         it = m_trackedGameProcesses.erase(it);
     }
     updateBareCaptureHotkeys();
     updateScreenshotAction();
+
+    // Remove every exited tracker before entering a modal dialog. The nested
+    // event loop may deliver another timer tick; no failure may be reported
+    // twice merely because its first message is still open.
+    for (const QString& failure : startupFailures) {
+        showThemedMessageDialog(
+            this, "Game Stopped During Startup", failure,
+            ThemedMessageTone::Warning);
+    }
 
     if (changed) {
         saveGamePlaytime();
@@ -288,69 +465,20 @@ void MainWindow::launchMedia(const QString& media, const std::string& system,
                 .arg(preparation.chd_supported ? "yes" : "no"));
     }
 
-    switch (preparation.status) {
-    case LaunchPreparationStatus::ExecutableNotFound:
-        QMessageBox::critical(
-            this,
-            chdLaunch ? "Neo Geo CD CHD Launch" : "Error",
-            QString("Jollygood executable not found: %1")
-                .arg(path_to_qstring(m_paths.jollygood_exe)));
-        return;
-    case LaunchPreparationStatus::CapabilityProbeFailed:
+    if (preparation.status != LaunchPreparationStatus::Ready) {
+        const QString failure = QString::fromStdString(
+            launch_preparation_failure_text(preparation));
         DebugLogger::logError(
-            QString("could not probe Geolith CHD capability: %1")
-                .arg(QString::fromStdString(preparation.detail)));
-        QMessageBox::warning(
+            QString("launch preflight blocked %1: %2")
+                .arg(media, failure));
+        showThemedMessageDialog(
             this,
-            "Neo Geo CD CHD Launch",
-            QString("Goliath could not verify CHD support in the installed Geolith core.\n\n%1\n\n"
-                    "Open Settings > Info and use Refresh Information for details.")
-                .arg(QString::fromStdString(preparation.detail)));
+            waveOutputPath.has_value()
+                ? QStringLiteral("Audio WAV Export Cannot Start")
+                : QStringLiteral("Game Cannot Start"),
+            failure,
+            ThemedMessageTone::Warning);
         return;
-    case LaunchPreparationStatus::ChdUnsupported:
-        QMessageBox::information(
-            this,
-            "Neo Geo CD CHD Launch",
-            QString("The installed Geolith core does not advertise CHD support for Neo Geo CD.\n\n"
-                    "Advertised formats: %1\n\n"
-                    "You can confirm this in Settings > Info.")
-                .arg(preparation.advertised_formats.empty()
-                         ? QString("None")
-                         : QString::fromStdString(preparation.advertised_formats)));
-        return;
-    case LaunchPreparationStatus::UnsupportedMedia:
-        QMessageBox::warning(
-            this,
-            "Neo Geo CD Launch",
-            QString("Unsupported Neo Geo CD image type: %1").arg(media));
-        return;
-    case LaunchPreparationStatus::ProfileConfigurationFailed:
-        DebugLogger::logError(
-            QString("could not prepare per-game launch profile: %1")
-                .arg(QString::fromStdString(preparation.detail)));
-        QMessageBox::warning(
-            this,
-            "Per-game Settings",
-            QString("Goliath could not prepare the isolated configuration for this game.\n\n%1\n\n"
-                    "The global JGRF configuration was not modified.")
-                .arg(QString::fromStdString(preparation.detail)));
-        return;
-    case LaunchPreparationStatus::WaveOutputConflict:
-        QMessageBox::warning(
-            this,
-            "Audio WAV Export",
-            QString("Goliath could not start the one-shot WAV export.\n\n%1")
-                .arg(QString::fromStdString(preparation.detail)));
-        return;
-    case LaunchPreparationStatus::WaveOutputInvalid:
-        QMessageBox::warning(
-            this,
-            "Audio WAV Export",
-            QString("The selected WAV destination is no longer safe to use.\n\n%1")
-                .arg(QString::fromStdString(preparation.detail)));
-        return;
-    case LaunchPreparationStatus::Ready:
-        break;
     }
 
     if (!confirm_jollygood_audio_before_launch(this)) return;
@@ -382,6 +510,8 @@ void MainWindow::launchMedia(const QString& media, const std::string& system,
 
     qint64 pid = 0;
     QString launchError;
+    const std::uintmax_t logOffset =
+        launch_log_offset(m_paths.base_dir / "jollygood.log");
     if (!launch_jollygood_detached(
             preparation.args,
             preparation.working_directory,
@@ -392,15 +522,22 @@ void MainWindow::launchMedia(const QString& media, const std::string& system,
         DebugLogger::logError(
             QString("failed to launch jollygood for %1 media: %2: %3")
                 .arg(QString::fromStdString(system), media, launchError));
-        QMessageBox::critical(
+        showThemedMessageDialog(
             this,
             "JGRF Launch Failed",
-            QString("Could not start the Jollygood process.\n\n%1")
-                .arg(launchError));
+            QString("Could not start the Jollygood process.\n\n"
+                    "Reason: %1\n\nMedia: %2\nEffective system: %3")
+                .arg(launchError)
+                .arg(media)
+                .arg(QString::fromStdString(
+                    preparation.effective_system)),
+            ThemedMessageTone::Critical);
         return;
     }
 
-    if (trackGameProcess(pid, system, media.toStdString()) &&
+    if (trackGameProcess(
+            pid, system, media.toStdString(), commandTitle,
+            preparation, logOffset) &&
         !waveOutputPath.has_value() && m_commandOverlayEnabled) {
         openCommandCompanion(pid, commandTitle, commandLookupIds);
     }

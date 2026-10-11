@@ -8,6 +8,7 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <string_view>
 
 namespace goliath {
 
@@ -35,6 +36,24 @@ inline constexpr bool is_windows_loader_failure_exit_code(
     }
 }
 
+inline constexpr std::string_view windows_loader_failure_reason(
+        std::uint32_t exit_code) noexcept {
+    switch (exit_code) {
+        case 0xC000007Bu:
+            return "Windows rejected a DLL or executable with an incompatible architecture.";
+        case 0xC0000135u:
+            return "Windows could not find a required runtime DLL.";
+        case 0xC0000138u:
+            return "A required DLL does not export the requested ordinal.";
+        case 0xC0000139u:
+            return "A required DLL does not export the requested entry point.";
+        case 0xC0000142u:
+            return "A required DLL failed during initialization.";
+        default:
+            return {};
+    }
+}
+
 inline constexpr bool should_record_tracked_session(
         std::int64_t session_seconds,
         std::optional<std::uint32_t> exit_code = std::nullopt) noexcept {
@@ -49,6 +68,12 @@ inline constexpr bool should_record_tracked_session(
 
     return *exit_code == 0 ||
            session_seconds >= kTrackedLaunchValidationSeconds;
+}
+
+inline constexpr bool is_likely_tracked_launch_failure(
+        std::int64_t session_seconds,
+        std::optional<std::uint32_t> exit_code = std::nullopt) noexcept {
+    return !should_record_tracked_session(session_seconds, exit_code);
 }
 
 struct GamePlaytimeRecord {

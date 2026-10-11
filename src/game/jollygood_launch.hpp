@@ -65,14 +65,14 @@ inline bool jollygood_args_have_wave_output(
     return false;
 }
 
-// Cartridge launch behavior stays unchanged. Neo Geo CD CUE is always
-// launchable; CHD is gated by the exact installed Geolith capability probe.
+// Cartridge launch accepts .neo only. Neo Geo CD CUE is always launchable;
+// CHD is gated by the exact installed Geolith capability probe.
 inline bool media_is_launchable(std::string_view system,
-                                         const std::string& file,
-                                         bool chd_supported) {
-    if (system != "neogeocd") return true;
-
+                                const std::string& file,
+                                bool chd_supported) {
     const std::string ext = launch_extension_lower(file);
+    if (system == "neogeo") return ext == ".neo";
+    if (system != "neogeocd") return false;
     if (ext == ".cue") return true;
     if (ext == ".chd") return chd_supported;
     return false;
@@ -219,6 +219,10 @@ std::optional<std::string> selected_launch_media(const Game& game, int romIndex)
 
 enum class LaunchPreparationStatus {
     Ready,
+    InvalidSystem,
+    MediaMissing,
+    MediaNotRegularFile,
+    MediaInspectionFailed,
     ExecutableNotFound,
     CapabilityProbeFailed,
     ChdUnsupported,
@@ -235,7 +239,10 @@ struct JollygoodLaunchPreparation {
     LaunchPreparationStatus status = LaunchPreparationStatus::Ready;
     std::string detail;
     std::string advertised_formats;
+    std::string effective_system;
+    std::filesystem::path media_path;
     bool chd_supported = false;
+    bool mvs_hardware = false;
     bool profile_applied = false;
     QStringList args;
     QProcessEnvironment environment;
@@ -243,6 +250,12 @@ struct JollygoodLaunchPreparation {
     QString working_directory;
     QString log_path;
 };
+
+// Presentation-ready failure text shared by normal launch, Benchmark, and
+// one-shot WAV export. Every non-ready preparation carries a concrete reason;
+// the media path and effective BIOS/hardware mode provide diagnostic context.
+std::string launch_preparation_failure_text(
+    const JollygoodLaunchPreparation& preparation);
 
 JollygoodLaunchPreparation prepare_jollygood_launch(
     const AppPaths& paths,

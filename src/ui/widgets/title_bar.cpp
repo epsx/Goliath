@@ -6,6 +6,7 @@
 #include <QAbstractSlider>
 #include <QApplication>
 #include <QComboBox>
+#include <QClipboard>
 #include <QCursor>
 #include <QDialog>
 #include <QEvent>
@@ -30,10 +31,13 @@
 #include <QPushButton>
 #include <QScreen>
 #include <QSizeGrip>
+#include <QStyle>
 #include <QTextEdit>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QWindow>
+
+#include <algorithm>
 
 namespace goliath {
 
@@ -547,6 +551,73 @@ void setupFramelessDialog(QDialog* dialog, const QString& title,
 
     if (contentLayout)
         *contentLayout = layout;
+}
+
+void showThemedMessageDialog(QWidget* parent,
+                             const QString& title,
+                             const QString& message,
+                             ThemedMessageTone tone) {
+    QDialog dialog(parent);
+    dialog.setModal(true);
+    dialog.setSizeGripEnabled(false);
+    dialog.setMinimumSize(520, 260);
+    const qsizetype desiredHeight =
+        230 + (message.count('\n') + 1) * 20;
+    dialog.resize(
+        760,
+        static_cast<int>(std::clamp<qsizetype>(desiredHeight, 300, 620)));
+
+    QVBoxLayout* layout = nullptr;
+    setupFramelessDialog(&dialog, title, &layout, true, false);
+
+    auto* card = new QFrame(&dialog);
+    card->setObjectName("about_information_card");
+    auto* cardLayout = new QHBoxLayout(card);
+    cardLayout->setContentsMargins(22, 20, 22, 20);
+    cardLayout->setSpacing(16);
+
+    QStyle::StandardPixmap standardIcon = QStyle::SP_MessageBoxInformation;
+    if (tone == ThemedMessageTone::Warning)
+        standardIcon = QStyle::SP_MessageBoxWarning;
+    else if (tone == ThemedMessageTone::Critical)
+        standardIcon = QStyle::SP_MessageBoxCritical;
+
+    auto* icon = new QLabel(card);
+    icon->setPixmap(dialog.style()->standardIcon(standardIcon).pixmap(40, 40));
+    icon->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
+    cardLayout->addWidget(icon, 0, Qt::AlignTop);
+
+    auto* details = new QLabel(message, card);
+    details->setObjectName("about_body");
+    details->setTextFormat(Qt::PlainText);
+    details->setWordWrap(true);
+    details->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+    details->setTextInteractionFlags(
+        Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
+    cardLayout->addWidget(details, 1);
+    layout->addWidget(card, 1);
+
+    auto* buttonRow = new QHBoxLayout();
+    buttonRow->addStretch();
+    auto* copyButton = new QPushButton("Copy Details", &dialog);
+    QObject::connect(copyButton, &QPushButton::clicked, &dialog,
+                     [message]() {
+                         if (QClipboard* clipboard =
+                                 QGuiApplication::clipboard()) {
+                             clipboard->setText(message);
+                         }
+                     });
+    buttonRow->addWidget(copyButton);
+
+    auto* closeButton = new QPushButton("Close", &dialog);
+    closeButton->setObjectName("about_close_button");
+    closeButton->setDefault(true);
+    QObject::connect(closeButton, &QPushButton::clicked,
+                     &dialog, &QDialog::accept);
+    buttonRow->addWidget(closeButton);
+    layout->addLayout(buttonRow);
+
+    dialog.exec();
 }
 
 void applyComboPopupStyle(QComboBox* combo, const QString& styleSheet) {

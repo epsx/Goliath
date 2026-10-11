@@ -4,11 +4,15 @@
 #include "common/qt_path.hpp"
 #include "game/audio_export.hpp"
 #include "game/game_profile.hpp"
+#include "game/game_profile_summary.hpp"
 #include "game/geolith_capabilities.hpp"
 #include "game/jollygood_executable.hpp"
 #include "game/game_profile_runtime.hpp"
 
 #include <QByteArray>
+
+#include <sstream>
+#include <system_error>
 
 namespace fs = std::filesystem;
 
@@ -89,6 +93,67 @@ JollygoodLaunchPreparation prepare_jollygood_launch(
         std::optional<fs::path> waveOutputPath) {
     JollygoodLaunchPreparation preparation;
 
+    if (system != "neogeo" && system != "neogeocd") {
+        preparation.status = LaunchPreparationStatus::InvalidSystem;
+        preparation.detail = "The selected library item has an unsupported "
+                             "system identifier: " + system;
+        return preparation;
+    }
+
+    const GameProfileGlobalSettings global =
+        load_game_profile_global_settings(paths);
+    const GameLaunchProfile inherited;
+    const GameLaunchProfile& effective = profile ? *profile : inherited;
+    preparation.effective_system =
+        summarize_game_profile(system, profile, global).system;
+    preparation.mvs_hardware =
+        game_profile_uses_mvs_hardware(system, effective, global);
+
+    if (media.empty()) {
+        preparation.status = LaunchPreparationStatus::MediaMissing;
+        preparation.detail =
+            "The selected library item has no launchable media path.";
+        return preparation;
+    }
+
+    const fs::path& mediaDir =
+        system == "neogeocd" ? neocdDir : romDir;
+    preparation.media_path = mediaDir / path_from_utf8(media);
+
+    const std::string extension = launch_extension_lower(media);
+    if ((system == "neogeo" && extension != ".neo") ||
+        (system == "neogeocd" && extension != ".cue" &&
+         extension != ".chd")) {
+        preparation.status = LaunchPreparationStatus::UnsupportedMedia;
+        preparation.detail = "The selected " +
+            std::string(system == "neogeo" ? "cartridge" : "Neo Geo CD") +
+            " media type is unsupported: " + media;
+        return preparation;
+    }
+
+    std::error_code mediaError;
+    const fs::file_status mediaStatus =
+        fs::status(preparation.media_path, mediaError);
+    if (mediaError == std::errc::no_such_file_or_directory ||
+        (!mediaError && !fs::exists(mediaStatus))) {
+        preparation.status = LaunchPreparationStatus::MediaMissing;
+        preparation.detail = "The selected game file no longer exists. "
+                             "Rescan the library or reconnect its storage.";
+        return preparation;
+    }
+    if (mediaError) {
+        preparation.status = LaunchPreparationStatus::MediaInspectionFailed;
+        preparation.detail = "Goliath could not inspect the selected game "
+                             "file: " + mediaError.message();
+        return preparation;
+    }
+    if (!fs::is_regular_file(mediaStatus)) {
+        preparation.status = LaunchPreparationStatus::MediaNotRegularFile;
+        preparation.detail =
+            "The selected game path is not a regular file.";
+        return preparation;
+    }
+
     if (waveOutputPath.has_value()) {
         const AudioExportTargetValidation validation =
             validate_audio_export_target(*waveOutputPath);
@@ -108,13 +173,15 @@ JollygoodLaunchPreparation prepare_jollygood_launch(
 
     fs::path resolvedExecutable;
     if (system == "neogeocd") {
-        const std::string ext = launch_extension_lower(media);
         bool chdSupported = false;
 
-        if (ext == ".chd") {
+        if (extension == ".chd") {
             resolvedExecutable = resolve_jollygood_executable(paths.jollygood_exe);
             if (resolvedExecutable.empty()) {
                 preparation.status = LaunchPreparationStatus::ExecutableNotFound;
+                preparation.detail =
+                    "The configured Jollygood executable was not found: " +
+                    path_to_utf8(paths.jollygood_exe);
                 return preparation;
             }
 
@@ -134,12 +201,20 @@ JollygoodLaunchPreparation prepare_jollygood_launch(
 
             if (!chdSupported) {
                 preparation.status = LaunchPreparationStatus::ChdUnsupported;
+                preparation.detail =
+                    "The installed Geolith core does not advertise CHD "
+                    "support for Neo Geo CD. Advertised formats: " +
+                    (preparation.advertised_formats.empty()
+                         ? std::string("none")
+                         : preparation.advertised_formats);
                 return preparation;
             }
         }
 
         if (!media_is_launchable(system, media, chdSupported)) {
             preparation.status = LaunchPreparationStatus::UnsupportedMedia;
+            preparation.detail =
+                "The selected Neo Geo CD media type is unsupported: " + media;
             return preparation;
         }
     }
@@ -148,6 +223,9 @@ JollygoodLaunchPreparation prepare_jollygood_launch(
         resolvedExecutable = resolve_jollygood_executable(paths.jollygood_exe);
     if (resolvedExecutable.empty()) {
         preparation.status = LaunchPreparationStatus::ExecutableNotFound;
+        preparation.detail =
+            "The configured Jollygood executable was not found: " +
+            path_to_utf8(paths.jollygood_exe);
         return preparation;
     }
 
@@ -189,8 +267,7 @@ JollygoodLaunchPreparation prepare_jollygood_launch(
         "XDG_DATA_HOME",
         environmentPathForWorkingDirectory(paths.data_dir, paths.base_dir));
 
-    const fs::path& mediaDir = (system == "neogeocd") ? neocdDir : romDir;
-    const QString mediaPath = path_to_qstring(mediaDir / path_from_utf8(media));
+    const QString mediaPath = path_to_qstring(preparation.media_path);
     QString wavePath;
     if (waveOutputPath.has_value())
         wavePath = path_to_qstring(*waveOutputPath);
@@ -210,6 +287,33 @@ JollygoodLaunchPreparation prepare_jollygood_launch(
     preparation.log_path = path_to_qstring(paths.base_dir / "jollygood.log");
     preparation.status = LaunchPreparationStatus::Ready;
     return preparation;
+}
+
+std::string launch_preparation_failure_text(
+        const JollygoodLaunchPreparation& preparation) {
+    if (preparation.status == LaunchPreparationStatus::Ready)
+        return {};
+
+    std::ostringstream message;
+    message << "Reason: "
+            << (preparation.detail.empty()
+                    ? "Unknown launch preparation failure."
+                    : preparation.detail);
+    if (!preparation.media_path.empty()) {
+        message << "\n\nMedia: " << path_to_utf8(preparation.media_path);
+    }
+    if (!preparation.effective_system.empty()) {
+        message << "\nEffective system: " << preparation.effective_system;
+    }
+    if (preparation.status ==
+        LaunchPreparationStatus::ProfileConfigurationFailed) {
+        message << "\n\nThe global JGRF configuration was not modified.";
+    } else if (preparation.status ==
+               LaunchPreparationStatus::CapabilityProbeFailed) {
+        message << "\n\nOpen Settings > Info and refresh the installed "
+                   "JGRF/Geolith information.";
+    }
+    return message.str();
 }
 
 } // namespace goliath

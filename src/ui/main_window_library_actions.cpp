@@ -13,6 +13,7 @@
 #include "ui/library_item_roles.hpp"
 #include "ui/library_view_logic.hpp"
 #include "ui/save_data_dialog.hpp"
+#include "ui/widgets/title_bar.hpp"
 
 #include <QDesktopServices>
 #include <QDialog>
@@ -39,38 +40,9 @@ namespace goliath {
 
 namespace {
 QString benchmarkPreparationError(
-        const JollygoodLaunchPreparation& preparation,
-        const AppPaths& paths,
-        const QString& media) {
-    switch (preparation.status) {
-    case LaunchPreparationStatus::Ready:
-        return {};
-    case LaunchPreparationStatus::ExecutableNotFound:
-        return QString("Jollygood executable not found:\n%1")
-            .arg(path_to_qstring(paths.jollygood_exe));
-    case LaunchPreparationStatus::CapabilityProbeFailed:
-        return QString("Goliath could not verify the installed Geolith core's "
-                       "Neo Geo CD capabilities.\n\n%1")
-            .arg(QString::fromStdString(preparation.detail));
-    case LaunchPreparationStatus::ChdUnsupported:
-        return QString("The installed Geolith core does not advertise CHD "
-                       "support for Neo Geo CD.\n\nAdvertised formats: %1")
-            .arg(preparation.advertised_formats.empty()
-                     ? QString("None")
-                     : QString::fromStdString(preparation.advertised_formats));
-    case LaunchPreparationStatus::UnsupportedMedia:
-        return QString("Unsupported Neo Geo CD image type: %1").arg(media);
-    case LaunchPreparationStatus::ProfileConfigurationFailed:
-        return QString("Goliath could not prepare the isolated configuration "
-                       "for this game.\n\n%1\n\nThe global JGRF configuration "
-                       "was not modified.")
-            .arg(QString::fromStdString(preparation.detail));
-    case LaunchPreparationStatus::WaveOutputConflict:
-    case LaunchPreparationStatus::WaveOutputInvalid:
-        return QString("Audio WAV export preparation failed.\n\n%1")
-            .arg(QString::fromStdString(preparation.detail));
-    }
-    return "Unknown benchmark preparation error.";
+        const JollygoodLaunchPreparation& preparation) {
+    return QString::fromStdString(
+        launch_preparation_failure_text(preparation));
 }
 
 } // namespace
@@ -92,7 +64,14 @@ void MainWindow::launchItem(QTreeWidgetItem* item) {
 
     const Game& game = m_games[static_cast<std::size_t>(gameIdx)];
     const auto media = selected_launch_media(game, romIdx);
-    if (!media.has_value()) return;
+    if (!media.has_value()) {
+        showThemedMessageDialog(
+            this, "Game Cannot Start",
+            "The selected library row has no launchable media.\n\n"
+            "Rescan the library to rebuild its parent/variant mapping.",
+            ThemedMessageTone::Warning);
+        return;
+    }
 
     const GameLaunchProfile* profile =
         m_gameProfiles.find(game.system, *media);
@@ -182,9 +161,10 @@ void MainWindow::manageSaveData() {
 void MainWindow::benchmarkSelected() {
     const QList<QTreeWidgetItem*> items = m_tree->selectedItems();
     if (items.isEmpty()) {
-        QMessageBox::information(
+        showThemedMessageDialog(
             this, "Performance Benchmark",
-            "Select a parent, variant/hack, CUE, or CHD first.");
+            "Select a parent, variant/hack, CUE, or CHD first.",
+            ThemedMessageTone::Information);
         return;
     }
 
@@ -197,9 +177,10 @@ void MainWindow::benchmarkSelected() {
     const Game& game = m_games[static_cast<std::size_t>(gameIdx)];
     const auto media = selected_launch_media(game, romIdx);
     if (!media.has_value()) {
-        QMessageBox::warning(
+        showThemedMessageDialog(
             this, "Performance Benchmark",
-            "The selected library row has no launchable media.");
+            "The selected library row has no launchable media.",
+            ThemedMessageTone::Warning);
         return;
     }
 
@@ -214,10 +195,10 @@ void MainWindow::benchmarkSelected() {
     JollygoodLaunchPreparation preparation = prepare_jollygood_launch(
         m_paths, m_romDir, m_neocdDir, game.system, *media, profile);
     if (preparation.status != LaunchPreparationStatus::Ready) {
-        QMessageBox::warning(
+        showThemedMessageDialog(
             this, "Performance Benchmark",
-            benchmarkPreparationError(
-                preparation, m_paths, QString::fromStdString(*media)));
+            benchmarkPreparationError(preparation),
+            ThemedMessageTone::Warning);
         return;
     }
 
@@ -240,9 +221,10 @@ void MainWindow::benchmarkSelected() {
 void MainWindow::exportSelectedAudio() {
     const QList<QTreeWidgetItem*> items = m_tree->selectedItems();
     if (items.isEmpty()) {
-        QMessageBox::information(
+        showThemedMessageDialog(
             this, "Audio WAV Export",
-            "Select a parent, variant/hack, CUE, or CHD first.");
+            "Select a parent, variant/hack, CUE, or CHD first.",
+            ThemedMessageTone::Information);
         return;
     }
 
@@ -254,18 +236,20 @@ void MainWindow::exportSelectedAudio() {
     const Game& game = m_games[static_cast<std::size_t>(gameIdx)];
     const auto media = selected_launch_media(game, romIdx);
     if (!media.has_value()) {
-        QMessageBox::warning(
+        showThemedMessageDialog(
             this, "Audio WAV Export",
-            "The selected library row has no launchable media.");
+            "The selected library row has no launchable media.",
+            ThemedMessageTone::Warning);
         return;
     }
 
     if (jollygood_args_have_wave_output(m_paths.jollygood_args)) {
-        QMessageBox::warning(
+        showThemedMessageDialog(
             this, "Audio WAV Export",
             "JGRF Arguments already contain -o/--wave. Remove that configured "
             "writer from goliath.ini before using Goliath's explicit one-shot "
-            "audio export.");
+            "audio export.",
+            ThemedMessageTone::Warning);
         return;
     }
 

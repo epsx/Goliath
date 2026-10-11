@@ -55,6 +55,7 @@ void MainWindow::centerWindow() {
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {
+    m_closeRequested = true;
     // Harvest processes which ended since the last timer tick before deciding
     // whether the frontend must remain as a background observer.
     pollTrackedGameProcesses();

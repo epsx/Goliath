@@ -364,7 +364,7 @@ launch-process context.
 | `geolith_capabilities` | core | Loads the installed Geolith core and queries the JG ABI. |
 | `geolith_verification` | core | Verifies `.neo` cartridge identities against Geolith reference metadata. |
 | `jollygood_benchmark` | core | Builds transient benchmark arguments, parses completion, resolves displayed overrides, and calculates metrics. |
-| `jollygood_launch` | core | Selects media and prepares validated launch state. |
+| `jollygood_launch` | core | Selects media, validates launch blockers, records the effective system mode, and prepares shared launch state. |
 | `jollygood_process` | app | Starts detached JGRF and redirects both output streams. |
 | `detached_process_tracker` | app | Observes exact detached process objects without controlling them and reads Windows termination status when permitted. |
 | `about_dialog` | app | Presents Goliath identity/build metadata, authorship, upstream acknowledgements, and verified external links. |
@@ -461,19 +461,26 @@ Launch responsibilities are deliberately separated:
 - `jollygood_capabilities` parses information printed by the configured JGRF;
 - `geolith_capabilities` loads exactly
   `cores/geolith/geolith.<dll|so|dylib>` beside that JGRF and queries JG symbols;
-- `jollygood_launch` resolves selected media, checks CHD capability, builds the
+- `jollygood_launch` resolves selected media, validates its type/existence,
+  records the effective AES/MVS/CD mode, checks CHD capability, builds the
   environment/arguments, appends optional session verbose and one-shot WAV
-  options, rejects configured writer conflicts, and returns a status without
-  showing UI;
+  options, rejects configured writer conflicts, and returns a detailed status
+  without showing UI;
 - `jollygood_benchmark` inserts JGRF's transient `-b <frames>` before the final
   media argument, parses its completion marker, resolves displayed CLI
   overrides, and calculates deterministic throughput metrics;
-- `MainWindow` converts status into user-facing decisions;
+- `MainWindow` converts the shared status into user-facing decisions for
+  normal launch, Benchmark, and WAV export, then reports rapid detached-process
+  failures with bounded new JGRF output and effective hardware context;
+- `title_bar` supplies the reusable themed, frameless, selectable/copyable
+  message surface used by new Goliath-owned launch notices instead of native
+  message boxes;
 - `jollygood_process` launches JGRF detached and appends stdout/stderr to
   `jollygood.log` for normal gameplay;
 - `detached_process_tracker` retains an exact Windows process handle or Linux
-  `pidfd` where available, while one `MainWindow` timer polls all active normal
-  launches for playtime accounting;
+  `pidfd` where available, plus immutable title/system/log-offset diagnostic
+  context, while one `MainWindow` timer polls all active normal launches for
+  playtime accounting;
 - `benchmark_dialog` owns the exceptional managed JGRF child used for timing,
   cancellation, completion validation, log capture, and result presentation.
 
@@ -934,7 +941,7 @@ tests/
 | `test_project_legal.cpp` | Required legal files, notice coverage, and packaging expectations. |
 | `test_release_feed.cpp` | Bounded release JSON parsing, semantic version ordering, and published-release selection. |
 | `test_save_data_manager.cpp` | JGRF basename/layout parity, bounded inventory, snapshot/restore, protective deletion, exact-media isolation, and malicious/foreign ZIP rejection. |
-| `test_settings_fields.cpp` | Field fallback, capabilities, media gating, paths, selection, and profiled launch environment/arguments. |
+| `test_settings_fields.cpp` | Field fallback, capabilities, media gating/preflight reasons, effective AES/MVS context, paths, selection, and profiled launch environment/arguments. |
 | `test_sha1.cpp` | Standard SHA-1 vectors and file hashing. |
 | `test_sha1_cache.cpp` | Stable fingerprints, persistence, legacy temporary-name avoidance, and invalidation. |
 | `test_theme.cpp` | Generated palettes, contrast, selectors, update dialog links, and theme-specific surfaces. |
@@ -1099,6 +1106,8 @@ selected tree row
   -> selected_launch_media(Game, variant)
   -> exact-media GameProfileStore lookup
   -> prepare_jollygood_launch
+       -> validate system + media type + selected regular file
+       -> resolve effective AES/MVS/CD hardware and region
        -> resolve configured JGRF
        -> gate CHD through installed Geolith capability
        -> materialize isolated profile INIs when present
@@ -1116,6 +1125,8 @@ selected tree row
        -> exact-process playtime observation
             -> ignore sessions shorter than five seconds
             -> reject validated loader/early-start failures
+            -> show exit code + bounded new JGRF log tail
+            -> suggest exact-media AES only after an MVS failure
             -> remain windowless after UI close until every session ends
             -> atomically update config/game_playtime.json
 ```
@@ -1303,6 +1314,9 @@ The current organization follows these rules:
 18. `MainWindow` remains one class, but each implementation unit owns a narrow
     UI, runtime, event, update, or library responsibility; CMake lists every
     unit explicitly and the retired library monolith must not reappear.
+19. Launch failure reporting may recommend an AES retry after an MVS startup
+    failure, but it never infers compatibility from one process exit and never
+    mutates global or exact-media configuration automatically.
 
 ---
 

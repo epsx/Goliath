@@ -20,6 +20,12 @@ class QWidget;
 
 namespace goliath {
 
+enum class ThemedMessageTone {
+    Information,
+    Warning,
+    Critical,
+};
+
 // Title bar for any frameless top-level widget (QMainWindow or QDialog).
 // Optionally hides the minimize/maximize buttons (e.g. for modal dialogs).
 class TitleBar : public QFrame {
@@ -70,6 +76,15 @@ void setupFramelessDialog(QDialog* dialog, const QString& title,
                           QVBoxLayout** contentLayout = nullptr,
                           bool resizable = true, bool showMinMax = true,
                           bool showTitleBar = true);
+
+// Consistent one-button application message used instead of a native
+// QMessageBox whenever new Goliath-owned UI reports a result or failure.
+// Details remain selectable and can be copied verbatim for support.
+void showThemedMessageDialog(
+    QWidget* parent,
+    const QString& title,
+    const QString& message,
+    ThemedMessageTone tone = ThemedMessageTone::Information);
 
 // Requests a native DWM shadow for a frameless Windows top-level without
 // making its Qt client surface translucent. Other platforms remain

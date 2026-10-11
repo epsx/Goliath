@@ -19,7 +19,11 @@ class DetachedProcessTracker {
 public:
     DetachedProcessTracker(std::int64_t pid,
                            std::string system,
-                           std::string media);
+                           std::string media,
+                           std::string display_name = {},
+                           std::string effective_system = {},
+                           bool mvs_hardware = false,
+                           std::uintmax_t log_offset = 0);
     ~DetachedProcessTracker();
 
     DetachedProcessTracker(const DetachedProcessTracker&) = delete;
@@ -35,6 +39,12 @@ public:
     std::int64_t pid() const noexcept { return m_pid; }
     const std::string& system() const noexcept { return m_system; }
     const std::string& media() const noexcept { return m_media; }
+    const std::string& display_name() const noexcept { return m_displayName; }
+    const std::string& effective_system() const noexcept {
+        return m_effectiveSystem;
+    }
+    bool mvs_hardware() const noexcept { return m_mvsHardware; }
+    std::uintmax_t log_offset() const noexcept { return m_logOffset; }
 
 private:
     enum class ObserverKind {
@@ -48,6 +58,10 @@ private:
     std::int64_t m_pid = 0;
     std::string m_system;
     std::string m_media;
+    std::string m_displayName;
+    std::string m_effectiveSystem;
+    bool m_mvsHardware = false;
+    std::uintmax_t m_logOffset = 0;
     std::chrono::steady_clock::time_point m_started =
         std::chrono::steady_clock::now();
     ObserverKind m_observerKind = ObserverKind::None;

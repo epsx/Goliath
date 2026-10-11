@@ -149,6 +149,7 @@ TEST_CASE("one-shot JGRF WAV output is conflict-safe and keeps media last",
     std::error_code ec;
     fs::remove_all(root, ec);
     fs::create_directories(root / "captures", ec);
+    fs::create_directories(root / "roms", ec);
     REQUIRE_FALSE(ec);
 #if defined(_WIN32)
     const fs::path executable = root / "jollygood.exe";
@@ -156,6 +157,7 @@ TEST_CASE("one-shot JGRF WAV output is conflict-safe and keeps media last",
     const fs::path executable = root / "jollygood";
 #endif
     write_test_file(executable);
+    write_test_file(root / "roms" / "mslug.neo");
 
     AppPaths paths;
     paths.base_dir = root;

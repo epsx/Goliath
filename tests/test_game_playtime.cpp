@@ -16,7 +16,9 @@ using goliath::GamePlaytimeStore;
 using goliath::kMinimumTrackedSessionSeconds;
 using goliath::kTrackedLaunchValidationSeconds;
 using goliath::is_windows_loader_failure_exit_code;
+using goliath::is_likely_tracked_launch_failure;
 using goliath::should_record_tracked_session;
+using goliath::windows_loader_failure_reason;
 
 namespace {
 
@@ -89,23 +91,36 @@ TEST_CASE("playtime validation rejects Windows loader failures even after a long
 
     for (const std::uint32_t code : loaderFailures) {
         CHECK(is_windows_loader_failure_exit_code(code));
+        CHECK_FALSE(windows_loader_failure_reason(code).empty());
         CHECK_FALSE(should_record_tracked_session(10 * 60, code));
+        CHECK(is_likely_tracked_launch_failure(10 * 60, code));
     }
     CHECK_FALSE(is_windows_loader_failure_exit_code(0));
     CHECK_FALSE(is_windows_loader_failure_exit_code(1));
+    CHECK(windows_loader_failure_reason(0).empty());
 }
 
 TEST_CASE("playtime validation preserves real sessions and rejects early abnormal exits",
           "[game_playtime][launch-validation]") {
     CHECK_FALSE(should_record_tracked_session(
         kMinimumTrackedSessionSeconds - 1));
+    CHECK(is_likely_tracked_launch_failure(
+        kMinimumTrackedSessionSeconds - 1));
     CHECK(should_record_tracked_session(
+        kMinimumTrackedSessionSeconds));
+    CHECK_FALSE(is_likely_tracked_launch_failure(
         kMinimumTrackedSessionSeconds));
     CHECK(should_record_tracked_session(
         kMinimumTrackedSessionSeconds, 0));
+    CHECK(is_likely_tracked_launch_failure(
+        kMinimumTrackedSessionSeconds - 1, 0));
     CHECK_FALSE(should_record_tracked_session(
         kTrackedLaunchValidationSeconds - 1, 1));
+    CHECK(is_likely_tracked_launch_failure(
+        kTrackedLaunchValidationSeconds - 1, 1));
     CHECK(should_record_tracked_session(
+        kTrackedLaunchValidationSeconds, 1));
+    CHECK_FALSE(is_likely_tracked_launch_failure(
         kTrackedLaunchValidationSeconds, 1));
 }
 

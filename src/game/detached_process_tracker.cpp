@@ -45,10 +45,18 @@ DetachedProcessState probe_pid(std::int64_t pid) noexcept {
 
 DetachedProcessTracker::DetachedProcessTracker(std::int64_t pid,
                                                std::string system,
-                                               std::string media)
+                                               std::string media,
+                                               std::string displayName,
+                                               std::string effectiveSystem,
+                                               bool mvsHardware,
+                                               std::uintmax_t logOffset)
     : m_pid(pid),
       m_system(std::move(system)),
       m_media(std::move(media)),
+      m_displayName(std::move(displayName)),
+      m_effectiveSystem(std::move(effectiveSystem)),
+      m_mvsHardware(mvsHardware),
+      m_logOffset(logOffset),
       m_started(std::chrono::steady_clock::now()) {
     if (m_pid <= 0) return;
 
@@ -105,10 +113,16 @@ DetachedProcessTracker::DetachedProcessTracker(
     : m_pid(other.m_pid),
       m_system(std::move(other.m_system)),
       m_media(std::move(other.m_media)),
+      m_displayName(std::move(other.m_displayName)),
+      m_effectiveSystem(std::move(other.m_effectiveSystem)),
+      m_mvsHardware(other.m_mvsHardware),
+      m_logOffset(other.m_logOffset),
       m_started(other.m_started),
       m_observerKind(other.m_observerKind),
       m_observer(other.m_observer) {
     other.m_pid = 0;
+    other.m_mvsHardware = false;
+    other.m_logOffset = 0;
     other.m_observerKind = ObserverKind::None;
     other.m_observer = -1;
 }
@@ -121,11 +135,17 @@ DetachedProcessTracker& DetachedProcessTracker::operator=(
     m_pid = other.m_pid;
     m_system = std::move(other.m_system);
     m_media = std::move(other.m_media);
+    m_displayName = std::move(other.m_displayName);
+    m_effectiveSystem = std::move(other.m_effectiveSystem);
+    m_mvsHardware = other.m_mvsHardware;
+    m_logOffset = other.m_logOffset;
     m_started = other.m_started;
     m_observerKind = other.m_observerKind;
     m_observer = other.m_observer;
 
     other.m_pid = 0;
+    other.m_mvsHardware = false;
+    other.m_logOffset = 0;
     other.m_observerKind = ObserverKind::None;
     other.m_observer = -1;
     return *this;

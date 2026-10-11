@@ -766,6 +766,22 @@ jollygood <configured arguments> -e neogeocd <media.cue|media.chd>
 CUE is accepted directly. CHD is accepted only when the installed Geolith core
 advertises `chd` for `neogeocd` through the JG API.
 
+Every normal launch, Performance Benchmark, and one-shot WAV export uses the
+same preflight. It rejects an unsupported system or media type, a missing,
+inaccessible, or non-regular selected file, an unresolved JGRF executable,
+an unavailable CHD capability result, and an unsafe profile or WAV setup. The
+dialog includes the exact selected path and the effective system mode (for
+example, `MVS (Arcade) / EU` or `AES (Console) / US`).
+
+After a detached launch, Goliath also watches for a process that stops before a
+playable session is established. The startup dialog includes the exit code and
+up to ten new lines appended to `jollygood.log` since that launch. Known Windows
+loader codes receive a direct DLL/architecture explanation. If the failed
+launch used MVS hardware, Goliath suggests trying an exact-media AES override;
+this is a compatibility hint only and never changes the profile automatically.
+Launch notices use Goliath's themed frameless dialog; their complete plain-text
+details can be selected or copied with **Copy Details**.
+
 ---
 
 ## 11. Configure Settings, input, and audio
@@ -1260,9 +1276,17 @@ Do not reuse that cache. Configure a new directory such as
 
 ### A game does not launch
 
-- Review `goliath-qt-debug.log`, then `jollygood.log`.
+- Read the displayed **Game Cannot Start** or **Game Stopped During Startup**
+  reason first. It includes the selected media, effective hardware/region, and
+  any available exit code or newly appended JGRF output.
+- Review `goliath-qt-debug.log`, then the complete `jollygood.log` if the
+  bounded dialog excerpt is insufficient.
 - Verify the JGRF path, selected media path, BIOS report, and deployed core.
 - For MVS/AES, confirm the selected `main_rom` exists under the ROM root.
+- If the dialog says the launch used MVS and the title is known to require
+  console hardware, open **Game Settings -> General**, set **System Type** to
+  **AES** for that exact media, and retry. Goliath deliberately does not infer
+  or persist this override from one failed process.
 - For CHD, also confirm the installed capability result in Settings -> Info.
 
 ### A per-game profile does not apply
@@ -1411,6 +1435,14 @@ launch for more than five seconds. Confirm exact-media totals/session counts,
 Last Started/Ended/Session display, persistence after restarting Goliath,
 exclusion of a Benchmark run, and complete background observation after
 closing the visible Goliath window before the detached game.
+
+For a launch-diagnostics change, temporarily rename one selected `.neo` file
+and confirm Launch, Performance Benchmark, and WAV export report the same
+missing path. Restore it, launch a title that fails rapidly under MVS, and
+confirm the dialog shows MVS, an exit code when available, new JGRF output, and
+the AES compatibility hint. Set only that title to AES and confirm a successful
+launch produces no failure dialog. Also close a healthy game manually within
+five seconds to review the intentionally conservative early-stop message.
 
 For a save-data-manager change, create representative `.st0`/`.st1` and
 persistent data through normal gameplay, then confirm inventory, manual backup,

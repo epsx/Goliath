@@ -64,6 +64,7 @@ class QVBoxLayout;
 namespace goliath {
 
 class LibraryTileDelegate;
+struct JollygoodLaunchPreparation;
 
 class TitleBar;
 class RescanWorker;
@@ -188,7 +189,10 @@ private:
     void loadGameLibraryState();
     void saveGamePlaytime();
     bool trackGameProcess(qint64 pid, const std::string& system,
-                          const std::string& media);
+                          const std::string& media,
+                          const QString& displayName,
+                          const JollygoodLaunchPreparation& preparation,
+                          std::uintmax_t logOffset);
     void openCommandCompanion(
         qint64 pid, const QString& gameTitle,
         const std::vector<std::string>& lookupIds);
@@ -260,6 +264,7 @@ private:
     std::optional<std::uintmax_t> m_commandCatalogSize;
     bool m_commandCatalogLoaded = false;
     QTimer* m_playtimeTimer = nullptr;
+    bool m_closeRequested = false;
     bool m_exitWhenTrackedProcessesFinish = false;
     bool m_screenshotHotkeyRegistered = false;
     bool m_pngHotkeyRegistered = false;

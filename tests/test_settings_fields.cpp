@@ -142,6 +142,8 @@ TEST_CASE("Neo Geo CD CHD launch is gated on installed core capability",
     const std::vector<std::string> baseArgs = {"-c", "geolith", "-f"};
 
     REQUIRE(media_is_launchable("neogeo", "kof98.neo", false));
+    REQUIRE_FALSE(media_is_launchable("neogeo", "kof98.zip", true));
+    REQUIRE_FALSE(media_is_launchable("banana", "kof98.neo", true));
     REQUIRE(media_is_launchable("neogeocd", "Metal Slug.cue", false));
     REQUIRE(media_is_launchable("neogeocd", "METAL SLUG.CUE", false));
     REQUIRE_FALSE(media_is_launchable("neogeocd", "Metal Slug.chd", false));
@@ -247,6 +249,7 @@ TEST_CASE("per-game launch uses isolated config and shared data",
     std::error_code ec;
     fs::remove_all(root, ec);
     fs::create_directories(root / "config" / "jollygood", ec);
+    fs::create_directories(root / "roms", ec);
     REQUIRE_FALSE(ec);
 
 #if defined(_WIN32)
@@ -257,6 +260,10 @@ TEST_CASE("per-game launch uses isolated config and shared data",
     {
         std::ofstream output(executable, std::ios::binary);
         output << "test";
+    }
+    {
+        std::ofstream output(root / "roms" / "kof98.neo", std::ios::binary);
+        output << "test media";
     }
 
     AppPaths paths;
@@ -286,6 +293,8 @@ TEST_CASE("per-game launch uses isolated config and shared data",
         &profile, true);
     REQUIRE(preparation.status == LaunchPreparationStatus::Ready);
     REQUIRE(preparation.profile_applied);
+    CHECK(preparation.mvs_hardware);
+    CHECK(preparation.effective_system == "MVS (Arcade) / US");
     REQUIRE_FALSE(preparation.profile_config_root.isEmpty());
     REQUIRE(preparation.environment.value("XDG_CONFIG_HOME") ==
             QString::fromStdString(
@@ -349,6 +358,10 @@ TEST_CASE("launch preparation preserves Unicode filesystem paths",
 
     const fs::path media =
         qstring_to_path(QStringLiteral(u"Joc 日本.neo"));
+    {
+        std::ofstream output(romDir / media, std::ios::binary);
+        output << "test media";
+    }
     const auto preparation = prepare_jollygood_launch(
         paths, romDir, root / "neocd", "neogeo", path_to_utf8(media));
 
@@ -369,6 +382,7 @@ TEST_CASE("per-game launch measures the XDG config path passed to JGRF",
     std::error_code ec;
     fs::remove_all(root, ec);
     fs::create_directories(root / "config" / "jollygood", ec);
+    fs::create_directories(root / "neocd", ec);
     REQUIRE_FALSE(ec);
 
 #if defined(_WIN32)
@@ -379,6 +393,11 @@ TEST_CASE("per-game launch measures the XDG config path passed to JGRF",
     {
         std::ofstream output(executable, std::ios::binary);
         output << "test";
+    }
+    {
+        std::ofstream output(
+            root / "neocd" / "fatal-fury-3.cue", std::ios::binary);
+        output << "FILE \"track.bin\" BINARY\n";
     }
 
     AppPaths paths;
@@ -422,6 +441,9 @@ TEST_CASE("per-game launch measures the XDG config path passed to JGRF",
     REQUIRE(rejected.status ==
             LaunchPreparationStatus::ProfileConfigurationFailed);
     REQUIRE(rejected.detail.find("path is too long") != std::string::npos);
+    REQUIRE(launch_preparation_failure_text(rejected).find(
+                "global JGRF configuration was not modified") !=
+            std::string::npos);
     REQUIRE_FALSE(fs::exists(external.profile_runtime_dir));
 
     fs::remove_all(root, ec);
@@ -514,4 +536,101 @@ TEST_CASE("launch media selection keeps parent and explicit variants distinct",
         paths, std::filesystem::path("roms"), std::filesystem::path("neocd"),
         "neogeocd", "disc.iso");
     REQUIRE(unsupported.status == LaunchPreparationStatus::UnsupportedMedia);
+}
+
+TEST_CASE("launch preflight explains missing and invalid media with hardware context",
+          "[launch][diagnostics][preflight]") {
+    namespace fs = std::filesystem;
+
+    const fs::path root =
+        fs::temp_directory_path() / "goliath_launch_diagnostics_test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root / "config" / "jollygood", ec);
+    fs::create_directories(root / "roms" / "directory.neo", ec);
+    REQUIRE_FALSE(ec);
+
+#if defined(_WIN32)
+    const fs::path executable = root / "jollygood.exe";
+#else
+    const fs::path executable = root / "jollygood";
+#endif
+    {
+        std::ofstream output(executable, std::ios::binary);
+        output << "test";
+    }
+
+    AppPaths paths;
+    paths.base_dir = root;
+    paths.config_dir = root / "config";
+    paths.data_dir = root / "data";
+    paths.jollygood_exe = executable;
+    paths.jollygood_args = {"-c", "geolith"};
+    paths.jollygood_settings_ini =
+        paths.config_dir / "jollygood" / "settings.ini";
+    paths.geolith_ini = paths.config_dir / "jollygood" / "geolith.ini";
+    paths.input_config =
+        paths.config_dir / "jollygood" / "geolith_input.ini";
+    paths.profile_runtime_dir = paths.config_dir / "p";
+    {
+        std::ofstream output(paths.geolith_ini, std::ios::binary);
+        output << "[geolith]\nsystem = 1\nregion = 3\n";
+    }
+
+    const JollygoodLaunchPreparation missing = prepare_jollygood_launch(
+        paths, root / "roms", root / "neocd", "neogeo", "missing.neo");
+    REQUIRE(missing.status == LaunchPreparationStatus::MediaMissing);
+    CHECK(missing.media_path == root / "roms" / "missing.neo");
+    CHECK(missing.mvs_hardware);
+    CHECK(missing.effective_system == "MVS (Arcade) / EU");
+    const std::string missingText =
+        launch_preparation_failure_text(missing);
+    CHECK(missingText.find("no longer exists") != std::string::npos);
+    CHECK(missingText.find("missing.neo") != std::string::npos);
+    CHECK(missingText.find("MVS (Arcade) / EU") != std::string::npos);
+
+    const JollygoodLaunchPreparation directory = prepare_jollygood_launch(
+        paths, root / "roms", root / "neocd", "neogeo", "directory.neo");
+    REQUIRE(directory.status ==
+            LaunchPreparationStatus::MediaNotRegularFile);
+    CHECK(directory.detail.find("not a regular file") != std::string::npos);
+
+    const JollygoodLaunchPreparation unsupported = prepare_jollygood_launch(
+        paths, root / "roms", root / "neocd", "neogeo", "archive.zip");
+    REQUIRE(unsupported.status ==
+            LaunchPreparationStatus::UnsupportedMedia);
+    CHECK(unsupported.detail.find("archive.zip") != std::string::npos);
+
+    {
+        std::ofstream output(root / "roms" / "present.neo", std::ios::binary);
+        output << "test media";
+    }
+    AppPaths missingExecutablePaths = paths;
+    missingExecutablePaths.jollygood_exe = root / "missing-jollygood";
+    const JollygoodLaunchPreparation missingExecutable =
+        prepare_jollygood_launch(
+            missingExecutablePaths, root / "roms", root / "neocd",
+            "neogeo", "present.neo");
+    REQUIRE(missingExecutable.status ==
+            LaunchPreparationStatus::ExecutableNotFound);
+    CHECK(launch_preparation_failure_text(missingExecutable).find(
+              "missing-jollygood") != std::string::npos);
+
+    GameLaunchProfile aesProfile;
+    aesProfile.cartridge_system = 0;
+    const JollygoodLaunchPreparation aesMissing = prepare_jollygood_launch(
+        paths, root / "roms", root / "neocd", "neogeo", "missing.neo",
+        &aesProfile);
+    REQUIRE(aesMissing.status == LaunchPreparationStatus::MediaMissing);
+    CHECK_FALSE(aesMissing.mvs_hardware);
+    CHECK(aesMissing.effective_system == "AES (Console) / EU");
+
+    const JollygoodLaunchPreparation invalidSystem =
+        prepare_jollygood_launch(
+            paths, root / "roms", root / "neocd", "banana", "game.neo");
+    REQUIRE(invalidSystem.status == LaunchPreparationStatus::InvalidSystem);
+    CHECK(invalidSystem.detail.find("banana") != std::string::npos);
+
+    fs::remove_all(root, ec);
+    REQUIRE_FALSE(ec);
 }
