@@ -88,6 +88,11 @@ private:
 
     void loadInputConfig();
     void createDefaultInputConfig(int device = -1);
+    void updateInputMappingPresentation();
+    void resetOneInputMapping(const QString& section, const QString& key);
+    void configureInputButton(QPushButton* button,
+                              const QString& section,
+                              const QString& key);
     std::string canonicalInputKey(const std::string& section, const std::string& key) const;
     // Returns {stored_value, display_text}.
     std::pair<std::string, std::string> normalizeInputValue(const std::string& value) const;
@@ -118,6 +123,7 @@ private:
     QWidget* m_inputContainer = nullptr;
     QComboBox* m_inputDeviceCombo = nullptr;
     QSpinBox* m_axisDeadzoneSpin = nullptr;
+    QLabel* m_inputConflictSummary = nullptr;
     QKeySequenceEdit* m_gifHotkeyEdit = nullptr;
     QComboBox* m_gifDurationCombo = nullptr;
     QKeySequenceEdit* m_pngHotkeyEdit = nullptr;

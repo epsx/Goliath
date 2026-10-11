@@ -331,6 +331,39 @@ std::optional<std::string> normalize_input_binding_for_definition(
     return stored;
 }
 
+InputBindingConflicts find_input_binding_conflicts(
+        const std::vector<InputBindingAssignment>& assignments) {
+    InputBindingConflicts conflicts;
+
+    for (const InputBindingAssignment& assignment : assignments) {
+        const std::string canonicalKey =
+            canonical_input_key(assignment.section, assignment.key);
+        const auto normalized = normalize_input_binding_for_definition(
+            assignment.section, canonicalKey, assignment.value);
+        if (!normalized.has_value()) continue;
+
+        auto& uses = conflicts[*normalized];
+        const bool duplicateLocation = std::any_of(
+            uses.begin(), uses.end(), [&](const InputBindingAssignment& use) {
+                return use.section == assignment.section &&
+                       use.key == canonicalKey;
+            });
+        if (duplicateLocation) continue;
+
+        uses.push_back(InputBindingAssignment{
+            assignment.section,
+            canonicalKey,
+            *normalized,
+            assignment.overridden,
+        });
+    }
+
+    std::erase_if(conflicts, [](const auto& item) {
+        return item.second.size() < 2;
+    });
+    return conflicts;
+}
+
 std::optional<std::string> jgrf_hotkey_action(int scancode) {
     // Keep this table synchronized with JGRF src/input.c's direct,
     // modifier-free frontend hotkeys. Shift+1..8 are intentionally omitted:

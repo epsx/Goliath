@@ -18,6 +18,16 @@ inline constexpr int kJgrfJoystickAxisCount = 6;
 inline constexpr int kJgrfJoystickButtonCount = 32;
 inline constexpr int kJgrfHatDirectionCount = 4;
 
+struct InputBindingAssignment {
+    std::string section;
+    std::string key;
+    std::string value;
+    bool overridden = false;
+};
+
+using InputBindingConflicts =
+    std::map<std::string, std::vector<InputBindingAssignment>>;
+
 // section -> canonical key names, in the order Jollygood/geolith expects.
 const std::map<std::string, std::vector<std::string>>& input_defs();
 
@@ -67,6 +77,13 @@ std::optional<std::string> normalize_input_binding_for_definition(
     const std::string& section,
     const std::string& key,
     const std::string& value);
+
+// Groups valid assignments that resolve to the same physical input. A group
+// is returned only when at least two distinct section/key locations share the
+// binding. Invalid values and duplicate descriptions of the same location are
+// ignored. Callers may warn, but should not block intentional duplicates.
+InputBindingConflicts find_input_binding_conflicts(
+    const std::vector<InputBindingAssignment>& assignments);
 
 // Returns the JGRF frontend action associated with a direct keyboard
 // scancode, or std::nullopt when the key is not a frontend hotkey.

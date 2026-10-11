@@ -6,6 +6,7 @@
 #include "ui/widgets/input_panel_widgets.hpp"
 
 #include <QAction>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QEvent>
 #include <QHBoxLayout>
@@ -104,16 +105,42 @@ InputPanelWidget* create_input_panel(const std::string& section,
     return nullptr;
 }
 
-QString mapping_tooltip(const std::string& stored, bool overridden) {
+QString mapping_tooltip(
+        const std::string& stored,
+        bool overridden,
+        const std::string& section,
+        const std::string& key,
+        const InputBindingConflicts& conflicts) {
     const QString shownValue = stored.empty()
         ? QStringLiteral("not set")
         : QString::fromStdString(stored);
     QString text = overridden
-        ? QString("Custom mapping for this game.\nStored value: %1"
+        ? QString("Custom override for this game.\nStored value: %1"
                   "\n\nRight-click to inherit the global mapping.")
               .arg(shownValue)
-        : QString("Inherited from the global mapping.\nStored value: %1")
+        : QString("Inherited from Settings -> Input or the built-in default."
+                  "\nStored value: %1")
               .arg(shownValue);
+
+    const auto normalized = normalize_input_binding_for_definition(
+        section, key, stored);
+    if (normalized.has_value()) {
+        const auto conflict = conflicts.find(*normalized);
+        if (conflict != conflicts.end()) {
+            text += QString::fromUtf8(
+                "\n\n\xE2\x9A\xA0 Also assigned to:");
+            for (const InputBindingAssignment& use : conflict->second) {
+                if (use.section == section && use.key == key) continue;
+                text += QString("\n- %1 / %2 (%3)")
+                    .arg(friendlySectionName(
+                             QString::fromStdString(use.section)),
+                         QString::fromStdString(use.key),
+                         use.overridden ? QStringLiteral("custom")
+                                        : QStringLiteral("inherited"));
+            }
+            text += "\n\nThis warning does not block saving.";
+        }
+    }
 
     const auto action = jgrf_hotkey_action_for_binding(stored);
     if (action.has_value()) {
@@ -149,7 +176,9 @@ GameInputMappingWidget::GameInputMappingWidget(
         "does not change General -> Emulated Input. V-Liner and Irritating "
         "Maze are auto-detected by Geolith. "
         "Click a waiting control again to cancel; right-click a custom "
-        "mapping to restore inheritance.");
+        "mapping to restore inheritance. A curved arrow marks inherited "
+        "values, a bullet marks custom overrides, and a warning marks "
+        "duplicate physical inputs. Conflicts remain saveable.");
     note->setWordWrap(true);
     note->setObjectName("themed_note");
     layout->addWidget(note);
@@ -174,6 +203,16 @@ GameInputMappingWidget::GameInputMappingWidget(
                 rebuild();
             });
     profileRow->addWidget(m_mappingProfileCombo);
+    m_overridesOnlyCheck = new QCheckBox("Overrides only");
+    m_overridesOnlyCheck->setToolTip(
+        "Shows only controls customized for this exact game. Conflict "
+        "tooltips can still identify inherited controls that share an input.");
+    connect(m_overridesOnlyCheck, &QCheckBox::toggled,
+            this, [this](bool) {
+                cancelListening();
+                rebuild();
+            });
+    profileRow->addWidget(m_overridesOnlyCheck);
     profileRow->addStretch();
     layout->addLayout(profileRow);
 
@@ -281,7 +320,8 @@ void GameInputMappingWidget::updateButtonDisplay(
         QPushButton* button,
         const IniDocument& globalConfig,
         const std::string& section,
-        const std::string& key) {
+        const std::string& key,
+        const InputBindingConflicts& conflicts) {
     bool overridden = false;
     const std::string value =
         effectiveValue(globalConfig, section, key, &overridden);
@@ -290,16 +330,21 @@ void GameInputMappingWidget::updateButtonDisplay(
     QString shown = value.empty()
         ? QStringLiteral("--")
         : QString::fromStdString(display);
-    if (overridden)
-        shown.prepend(QString::fromUtf8("\xE2\x80\xA2 "));
+    shown.prepend(overridden
+        ? QString::fromUtf8("\xE2\x80\xA2 ")
+        : QString::fromUtf8("\xE2\x86\xB3 "));
 
-    if (!value.empty() &&
-        !normalize_input_binding_for_definition(section, key, stored).has_value()) {
+    const auto normalized = normalize_input_binding_for_definition(
+        section, key, stored);
+    if (!value.empty() && !normalized.has_value()) {
         shown = QStringLiteral("Invalid: ") + shown;
+    } else if (normalized.has_value() && conflicts.contains(*normalized)) {
+        shown.prepend(QString::fromUtf8("\xE2\x9A\xA0 "));
     }
 
     setButtonDisplayText(button, shown);
-    button->setToolTip(mapping_tooltip(stored, overridden));
+    button->setToolTip(
+        mapping_tooltip(stored, overridden, section, key, conflicts));
 }
 
 void GameInputMappingWidget::rebuild() {
@@ -316,22 +361,80 @@ void GameInputMappingWidget::rebuild() {
 
     const int mappingProfile =
         m_mappingProfileCombo->currentData().toInt();
-    for (const QString& sectionName :
-         sections_for_mapping_profile(mappingProfile)) {
+    const QStringList profileSections =
+        sections_for_mapping_profile(mappingProfile);
+    const bool overridesOnly =
+        m_overridesOnlyCheck && m_overridesOnlyCheck->isChecked();
+
+    std::vector<InputBindingAssignment> assignments;
+    for (const QString& sectionName : profileSections) {
         const std::string section = sectionName.toStdString();
         const auto definition = input_defs().find(section);
         if (definition == input_defs().end()) continue;
+        for (const std::string& key : definition->second) {
+            bool overridden = false;
+            const std::string value =
+                effectiveValue(globalConfig, section, key, &overridden);
+            if (!value.empty()) {
+                assignments.push_back({section, key, value, overridden});
+            }
+        }
+    }
+    const InputBindingConflicts conflicts =
+        find_input_binding_conflicts(assignments);
+
+    std::size_t conflictGroups = 0;
+    std::size_t conflictedActions = 0;
+    for (const auto& [binding, uses] : conflicts) {
+        static_cast<void>(binding);
+        const bool relevant = !overridesOnly || std::any_of(
+            uses.begin(), uses.end(), [](const InputBindingAssignment& use) {
+                return use.overridden;
+            });
+        if (!relevant) continue;
+        ++conflictGroups;
+        conflictedActions += uses.size();
+    }
+    if (conflictGroups > 0) {
+        auto* warning = new QLabel(
+            QString::fromUtf8(
+                "\xE2\x9A\xA0 %1 conflicting input %2 across %3 actions. "
+                "Saving remains allowed; hover marked controls for details.")
+                .arg(static_cast<qulonglong>(conflictGroups))
+                .arg(conflictGroups == 1 ? "binding" : "bindings")
+                .arg(static_cast<qulonglong>(conflictedActions)));
+        warning->setWordWrap(true);
+        warning->setObjectName("themed_note");
+        m_containerLayout->addWidget(warning);
+    }
+
+    bool addedAnyMapping = false;
+    for (const QString& sectionName : profileSections) {
+        const std::string section = sectionName.toStdString();
+        const auto definition = input_defs().find(section);
+        if (definition == input_defs().end()) continue;
+
+        const auto sectionOverride = m_overrides.find(section);
+        const auto hasOverride = [&](const std::string& key) {
+            return sectionOverride != m_overrides.end() &&
+                   sectionOverride->second.contains(key);
+        };
+        const bool sectionHasOverrides = std::any_of(
+            definition->second.begin(), definition->second.end(), hasOverride);
+        if (overridesOnly && !sectionHasOverrides) continue;
 
         auto* heading = new QLabel(
             QString("<b>%1</b>").arg(friendlySectionName(sectionName)));
         heading->setObjectName("section_heading");
         m_containerLayout->addWidget(heading);
 
-        InputPanelWidget* panel =
-            create_input_panel(section, m_container);
+        InputPanelWidget* panel = overridesOnly
+            ? nullptr
+            : create_input_panel(section, m_container);
         if (panel) m_containerLayout->addWidget(panel);
 
         for (const std::string& key : definition->second) {
+            if (overridesOnly && !hasOverride(key)) continue;
             QPushButton* button =
                 panel ? panel->button(QString::fromStdString(key)) : nullptr;
             if (!button) {
@@ -345,7 +448,9 @@ void GameInputMappingWidget::rebuild() {
                 m_containerLayout->addWidget(rowWidget);
             }
 
-            updateButtonDisplay(button, globalConfig, section, key);
+            updateButtonDisplay(
+                button, globalConfig, section, key, conflicts);
+            addedAnyMapping = true;
             connect(button, &QPushButton::clicked,
                     this, [this, button, section, key]() {
                         startListening(button, section, key);
@@ -357,15 +462,25 @@ void GameInputMappingWidget::rebuild() {
                         QMenu menu(button);
                         QAction* resetAction =
                             menu.addAction("Inherit global mapping");
-                        const auto sectionOverride = m_overrides.find(section);
-                        const bool hasOverride =
-                            sectionOverride != m_overrides.end() &&
-                            sectionOverride->second.contains(key);
-                        resetAction->setEnabled(hasOverride);
+                        const auto currentSectionOverride =
+                            m_overrides.find(section);
+                        const bool mappingIsOverridden =
+                            currentSectionOverride != m_overrides.end() &&
+                            currentSectionOverride->second.contains(key);
+                        resetAction->setEnabled(mappingIsOverridden);
                         if (menu.exec(button->mapToGlobal(point)) == resetAction)
                             resetOneMapping(section, key);
                     });
         }
+    }
+
+    if (overridesOnly && !addedAnyMapping) {
+        auto* empty = new QLabel(
+            "No custom mappings exist in this mapping profile. All controls "
+            "currently inherit Settings -> Input or built-in defaults.");
+        empty->setWordWrap(true);
+        empty->setObjectName("themed_note");
+        m_containerLayout->addWidget(empty);
     }
 
     m_containerLayout->addStretch();
@@ -513,7 +628,6 @@ void GameInputMappingWidget::applyMapping(
     setButtonDisplayText(
         m_listeningButton,
         QString::fromUtf8("\xE2\x80\xA2 ") + display);
-    m_listeningButton->setToolTip(mapping_tooltip(*stored, true));
     resetButtonStyle(m_listeningButton);
 
     m_listeningButton = nullptr;
@@ -522,6 +636,7 @@ void GameInputMappingWidget::applyMapping(
     m_listeningDisplay.clear();
     m_listeningTooltip.clear();
     if (QWidget::keyboardGrabber() == this) releaseKeyboard();
+    rebuild();
 }
 
 void GameInputMappingWidget::resetOneMapping(

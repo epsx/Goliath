@@ -17,6 +17,7 @@
 #include "input/sdl_joystick.hpp"
 #include "ui/tabs/video_tab.hpp"
 
+#include <QAction>
 #include <QCloseEvent>
 #include <QComboBox>
 #include <QFileDialog>
@@ -30,6 +31,7 @@
 #include <QLabel>
 #include <QGroupBox>
 #include <QLineEdit>
+#include <QMenu>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
@@ -478,10 +480,20 @@ void SettingsDialog::buildInputTab(QWidget* inputWidget) {
         "<br><br><b>JGRF hotkeys:</b> Keyboard mappings may overlap with frontend hotkeys "
         "(for example <b>F</b> = Fullscreen, <b>M</b> = Mute, <b>P</b> = Pause). "
         "Hover a mapped button for details. Press <b>Shift+Tab</b> in JGRF to "
-        "toggle frontend hotkey processing."));
+        "toggle frontend hotkey processing."
+        "<br><br><b>Conflicts:</b> A warning marks inputs assigned to more than "
+        "one displayed action. Conflicts remain saveable because some duplicate "
+        "assignments are intentional. Right-click a control to reset only that "
+        "mapping to its built-in default."));
     hotkeyNote->setWordWrap(true);
     hotkeyNote->setObjectName("themed_note");
     layout->addWidget(hotkeyNote);
+
+    m_inputConflictSummary = new QLabel();
+    m_inputConflictSummary->setWordWrap(true);
+    m_inputConflictSummary->setObjectName("themed_note");
+    m_inputConflictSummary->hide();
+    layout->addWidget(m_inputConflictSummary);
 
     m_inputContainer = new QWidget();
     m_inputLayout = new QVBoxLayout(m_inputContainer);
@@ -734,15 +746,129 @@ void SettingsDialog::addInputRow(const QString& section, const QString& key, con
     auto [stored, display] = normalizeInputValue(value);
     auto* btn = new QPushButton(!value.empty() ? QString::fromStdString(display) : "--");
     btn->setProperty("input_value", !value.empty() ? QString::fromStdString(stored) : QString());
-    btn->setToolTip(inputMappingTooltip(!value.empty() ? QString::fromStdString(stored) : QString()));
-
-    connect(btn, &QPushButton::clicked, this, [this, btn, section, key]() {
-        startListening(btn, section, key);
-    });
+    configureInputButton(btn, section, key);
     row->addWidget(btn);
 
     m_inputEntries.push_back(InputRow{section, key, btn});
     m_inputLayout->addWidget(rowWidget);
+}
+
+void SettingsDialog::configureInputButton(
+        QPushButton* button,
+        const QString& section,
+        const QString& key) {
+    connect(button, &QPushButton::clicked,
+            this, [this, button, section, key]() {
+                startListening(button, section, key);
+            });
+    button->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(button, &QWidget::customContextMenuRequested,
+            this, [this, button, section, key](const QPoint& point) {
+                QMenu menu(button);
+                QAction* resetAction = menu.addAction("Reset this mapping to default");
+                if (menu.exec(button->mapToGlobal(point)) == resetAction)
+                    resetOneInputMapping(section, key);
+            });
+}
+
+void SettingsDialog::resetOneInputMapping(
+        const QString& section,
+        const QString& key) {
+    cancelListening();
+
+    std::string value;
+    const std::string stdSection = section.toStdString();
+    const std::string stdKey = key.toStdString();
+    const auto defaultSection = default_input_config().find(stdSection);
+    if (defaultSection != default_input_config().end()) {
+        const auto defaultKey = defaultSection->second.find(stdKey);
+        if (defaultKey != defaultSection->second.end())
+            value = defaultKey->second;
+    }
+
+    for (const InputRow& row : m_inputEntries) {
+        if (row.section == section && row.key == key) {
+            row.button->setProperty(
+                "input_value", QString::fromStdString(value));
+            break;
+        }
+    }
+    updateInputMappingPresentation();
+}
+
+void SettingsDialog::updateInputMappingPresentation() {
+    std::vector<InputBindingAssignment> assignments;
+    assignments.reserve(m_inputEntries.size());
+    for (const InputRow& row : m_inputEntries) {
+        const QString stored = row.button->property("input_value").toString();
+        if (stored.isEmpty()) continue;
+        assignments.push_back({
+            row.section.toStdString(),
+            row.key.toStdString(),
+            stored.toStdString(),
+            false,
+        });
+    }
+
+    const InputBindingConflicts conflicts =
+        find_input_binding_conflicts(assignments);
+    std::size_t conflictedActions = 0;
+    for (const auto& [binding, uses] : conflicts) {
+        static_cast<void>(binding);
+        conflictedActions += uses.size();
+    }
+
+    if (m_inputConflictSummary) {
+        if (conflicts.empty()) {
+            m_inputConflictSummary->hide();
+        } else {
+            m_inputConflictSummary->setText(
+                QString::fromUtf8(
+                    "\xE2\x9A\xA0 %1 conflicting input %2 across %3 actions. "
+                    "Saving remains allowed; hover the marked controls for details.")
+                    .arg(static_cast<qulonglong>(conflicts.size()))
+                    .arg(conflicts.size() == 1 ? "binding" : "bindings")
+                    .arg(static_cast<qulonglong>(conflictedActions)));
+            m_inputConflictSummary->show();
+        }
+    }
+
+    for (const InputRow& row : m_inputEntries) {
+        const std::string section = row.section.toStdString();
+        const std::string key = row.key.toStdString();
+        const QString rawValue = row.button->property("input_value").toString();
+        const auto [stored, display] = normalizeInputValue(rawValue.toStdString());
+        const auto normalized = normalize_input_binding_for_definition(
+            section, key, stored);
+
+        QString shown = rawValue.isEmpty()
+            ? QStringLiteral("--")
+            : QString::fromStdString(display);
+        QString tooltip = inputMappingTooltip(
+            rawValue.isEmpty() ? QString() : QString::fromStdString(stored));
+
+        if (!rawValue.isEmpty() && !normalized.has_value()) {
+            shown = QStringLiteral("Invalid: ") + shown;
+        } else if (normalized.has_value()) {
+            const auto conflict = conflicts.find(*normalized);
+            if (conflict != conflicts.end()) {
+                shown.prepend(QString::fromUtf8("\xE2\x9A\xA0 "));
+                tooltip += QString::fromUtf8(
+                    "\n\n\xE2\x9A\xA0 Also assigned to:");
+                for (const InputBindingAssignment& use : conflict->second) {
+                    if (use.section == section && use.key == key) continue;
+                    tooltip += QString("\n- %1 / %2")
+                        .arg(friendlySectionName(
+                                 QString::fromStdString(use.section)),
+                             QString::fromStdString(use.key));
+                }
+                tooltip += "\n\nThis warning does not block saving.";
+            }
+        }
+
+        setButtonDisplayText(row.button, shown);
+        row.button->setToolTip(tooltip);
+    }
 }
 
 void SettingsDialog::loadInputConfig() {
@@ -825,24 +951,12 @@ void SettingsDialog::loadInputConfig() {
                 continue;
             }
 
-            auto [stored, display] = normalizeInputValue(value);
-            setButtonDisplayText(btn, !value.empty() ? QString::fromStdString(display) : "--");
+            const std::string stored = normalizeInputValue(value).first;
             btn->setProperty("input_value", !value.empty() ? QString::fromStdString(stored) : QString());
-            btn->setToolTip(inputMappingTooltip(!value.empty() ? QString::fromStdString(stored) : QString()));
-            if (is_analog_input_definition(section, key) && !value.empty() &&
-                !is_joystick_axis_binding(stored)) {
-                setButtonDisplayText(btn, QString("Analog required: ") +
-                    QString::fromStdString(display));
-                btn->setToolTip(
-                    QString("Invalid analog-axis mapping: %1. Move a physical analog axis to remap.")
-                        .arg(QString::fromStdString(stored)));
-            }
 
             QString qsection = qs;
             QString qkey = QString::fromStdString(key);
-            connect(btn, &QPushButton::clicked, this, [this, btn, qsection, qkey]() {
-                startListening(btn, qsection, qkey);
-            });
+            configureInputButton(btn, qsection, qkey);
 
             m_inputEntries.push_back(InputRow{qsection, qkey, btn});
         }
@@ -850,6 +964,7 @@ void SettingsDialog::loadInputConfig() {
 
     m_inputLayout->addStretch();
     m_lastInputDevice = device;
+    updateInputMappingPresentation();
 }
 
 void SettingsDialog::refreshJoystickList() {
@@ -958,28 +1073,21 @@ void SettingsDialog::cancelListening() {
 void SettingsDialog::applyMapping(const QString& code, const QString& displayNameIn) {
     if (!m_listeningBtn) return;
 
-    QString stored = code;
-    QString display;
-    if (!displayNameIn.isEmpty()) {
-        display = QString("%1 (%2)").arg(displayNameIn, code);
-    } else if (code.startsWith("j") || code.startsWith("mb")) {
-        display = code;
-    } else {
-        bool ok = false;
-        int num = code.toInt(&ok);
-        if (ok) {
-            auto& names = sdl_scancode_names();
-            auto it = names.find(num);
-            QString name = it != names.end() ? QString::fromStdString(it->second) : code;
-            display = QString("%1 (%2)").arg(name).arg(num);
-        } else {
-            display = code;
-        }
+    const auto normalized = normalize_input_binding_for_definition(
+        m_listeningSection.toStdString(),
+        m_listeningKey.toStdString(),
+        code.toStdString());
+    if (!normalized.has_value()) {
+        setButtonDisplayText(m_listeningBtn, "Unsupported input; try again...");
+        m_listeningBtn->setToolTip(
+            "This value is not safe for the selected JGRF input definition. "
+            "Click the control again to cancel.");
+        return;
     }
 
-    setButtonDisplayText(m_listeningBtn, display);
-    m_listeningBtn->setProperty("input_value", stored);
-    m_listeningBtn->setToolTip(inputMappingTooltip(stored));
+    static_cast<void>(displayNameIn);
+    m_listeningBtn->setProperty(
+        "input_value", QString::fromStdString(*normalized));
     resetButtonStyle(m_listeningBtn);
     stopJoystickListener();
     m_listeningBtn = nullptr;
@@ -988,6 +1096,7 @@ void SettingsDialog::applyMapping(const QString& code, const QString& displayNam
     m_listeningDisplay.clear();
     m_listeningTooltip.clear();
     if (QWidget::keyboardGrabber() == this) releaseKeyboard();
+    updateInputMappingPresentation();
 }
 
 bool SettingsDialog::event(QEvent* e) {
@@ -1073,7 +1182,10 @@ void SettingsDialog::saveInputConfig() {
         if (value.isEmpty()) {
             value = buttonDisplayText(row.button);
         }
-        if (value.isEmpty() || value == "--") continue;
+        if (value.isEmpty() || value == "--") {
+            config.remove_option(section, key);
+            continue;
+        }
 
         config.set(section, key, value.toStdString());
     }

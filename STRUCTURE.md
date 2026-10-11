@@ -583,6 +583,9 @@ keys, comments, ordering, or key case. This is separate from Goliath's simpler
 used as digital buttons, maps frontend-only device profiles to valid Geolith
 values, detects keyboard bindings that overlap JGRF hotkeys, and rejects input
 codes that would exceed JGRF 2.0.1's fixed keyboard/axis/button/hat arrays.
+It also canonicalizes active-profile assignments for non-blocking duplicate
+binding detection; aliases such as `space` and `44` therefore identify the
+same physical input while invalid values never produce false conflicts.
 `joystick_listener` limits capture to those same six axes and 32 buttons.
 
 SDL3 is used so Goliath's joystick ordering follows the same connection-order
@@ -700,6 +703,9 @@ visual input panels and captures keyboard or bounded SDL inputs. CRTea custom
 controls follow upstream preset semantics, and video-only reset does not alter
 other profile fields. Every unchanged control inherits the global mapping;
 custom controls are removable individually or by displayed mapping profile.
+Inherited and custom values have distinct markers, an **Overrides only** filter
+provides a compact custom-value view, and shared physical inputs receive a
+non-blocking warning whose tooltip lists every affected action and source.
 **Reset to Global** removes the whole record. The dialog dynamically disables
 MVS-only settings, validates four-player mode, and explains the connection-
 order limitation of JGRF controller ports. Active profiles receive a gear

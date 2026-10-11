@@ -782,7 +782,12 @@ button. Closing the dialog does not imply that an unsaved tab was written.
 3. Use **Refresh** if a newly connected SDL3 controller is missing.
 4. Click a control, then press a keyboard key or move the controller input.
    Click the same waiting control again to cancel without changing its mapping.
-5. Save the input configuration. Changing tabs, profiles, or controllers also
+5. A warning symbol marks a physical input assigned to more than one action
+   in the displayed profile. Hover either control to see every conflicting
+   action. The warning is informational and does not block intentional shared
+   mappings. Right-click one control to reset only that mapping to its built-in
+   default.
+6. Save the input configuration. Changing tabs, profiles, or controllers also
    cancels an unfinished capture safely.
 
 Profiles cover Neo Geo Joysticks, Mahjong, 4-Player, V-Liner, Irritating Maze,
@@ -807,11 +812,16 @@ hotkey processing when testing a conflicting binding.
    press a keyboard key or move the selected controller input.
 6. A bullet marks an exact-media mapping. Right-click it and choose **Inherit
    global mapping** to clear only that control, or use **Reset shown mappings
-   to Global** for the displayed mapping profile.
-7. Choose **Save Profile**. A gear appears beside the row.
-8. Use **Reset to Global** to remove every setting and input mapping for that
+   to Global** for the displayed mapping profile. A curved arrow marks an
+   inherited value. Enable **Overrides only** for a compact list containing
+   only exact-media mappings.
+7. A warning symbol marks mappings that share one physical input. Its tooltip
+   identifies the other action and whether that action is inherited or custom.
+   Conflicts remain saveable because shared mappings can be intentional.
+8. Choose **Save Profile**. A gear appears beside the row.
+9. Use **Reset to Global** to remove every setting and input mapping for that
    media.
-9. To inspect the generated INIs, right-click a row with a gear and choose
+10. To inspect the generated INIs, right-click a row with a gear and choose
    **Open per-game config folder**. Goliath refreshes that exact media's
    runtime configuration before opening `config/p/<hash>/jollygood/`.
 

@@ -9,6 +9,8 @@ using goliath::make_joystick_button_mapping;
 using goliath::make_joystick_hat_mapping;
 using goliath::canonical_input_key;
 using goliath::default_input_config;
+using goliath::find_input_binding_conflicts;
+using goliath::InputBindingAssignment;
 using goliath::normalize_input_value;
 using goliath::geolith_input_setting_for_device;
 using goliath::is_analog_input_definition;
@@ -329,4 +331,51 @@ TEST_CASE("JGRF hotkey detection accepts keyboard aliases and ignores gamepad bi
     REQUIRE_FALSE(jgrf_hotkey_action_for_binding("j0b3").has_value());
     REQUIRE_FALSE(jgrf_hotkey_action_for_binding("j0a1+").has_value());
     REQUIRE_FALSE(jgrf_hotkey_action_for_binding("j0h00").has_value());
+}
+
+TEST_CASE("input conflicts group canonical duplicate bindings",
+          "[input][conflicts]") {
+    const auto conflicts = find_input_binding_conflicts({
+        {"neogeojs1", "A", "space", false},
+        {"neogeojs1", "B", "44", true},
+        {"neogeojs2", "Start", "j1b3", false},
+        {"neogeosystem", "Coin1", "j1b3", true},
+    });
+
+    REQUIRE(conflicts.size() == 2);
+    REQUIRE(conflicts.at("44").size() == 2);
+    CHECK(conflicts.at("44")[0].section == "neogeojs1");
+    CHECK(conflicts.at("44")[0].key == "A");
+    CHECK_FALSE(conflicts.at("44")[0].overridden);
+    CHECK(conflicts.at("44")[1].key == "B");
+    CHECK(conflicts.at("44")[1].overridden);
+    REQUIRE(conflicts.at("j1b3").size() == 2);
+}
+
+TEST_CASE("input conflicts ignore invalid values and duplicate locations",
+          "[input][conflicts]") {
+    const auto conflicts = find_input_binding_conflicts({
+        {"neogeojs1", "a", "4", false},
+        {"neogeojs1", "A", "a", true},
+        {"neogeojs1", "B", "invalid", false},
+        {"neogeoirrmaze", "XAxis", "j0a0", false},
+        {"neogeoirrmaze", "YAxis", "j0a0+", false},
+    });
+
+    REQUIRE(conflicts.empty());
+}
+
+TEST_CASE("input conflicts keep analog and digital axis bindings distinct",
+          "[input][conflicts]") {
+    const auto conflicts = find_input_binding_conflicts({
+        {"neogeoirrmaze", "XAxis", "j0a0", false},
+        {"neogeoirrmaze", "YAxis", "j0a0", false},
+        {"neogeojs1", "Left", "j0a0-", false},
+        {"neogeojs1", "Right", "j0a0+", false},
+    });
+
+    REQUIRE(conflicts.size() == 1);
+    REQUIRE(conflicts.at("j0a0").size() == 2);
+    REQUIRE_FALSE(conflicts.contains("j0a0-"));
+    REQUIRE_FALSE(conflicts.contains("j0a0+"));
 }

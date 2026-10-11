@@ -11,9 +11,11 @@
 
 #include "common/paths.hpp"
 #include "game/game_profile.hpp"
+#include "input/input_maps.hpp"
 #include "input/sdl_joystick.hpp"
 
 class QComboBox;
+class QCheckBox;
 class QEvent;
 class QKeyEvent;
 class QPushButton;
@@ -61,13 +63,15 @@ private:
     void updateButtonDisplay(QPushButton* button,
                              const IniDocument& globalConfig,
                              const std::string& section,
-                             const std::string& key);
+                             const std::string& key,
+                             const InputBindingConflicts& conflicts);
 
     AppPaths m_paths;
     std::string m_system;
     GameInputOverrides m_overrides;
 
     QComboBox* m_mappingProfileCombo = nullptr;
+    QCheckBox* m_overridesOnlyCheck = nullptr;
     QComboBox* m_joystickCombo = nullptr;
     QVBoxLayout* m_containerLayout = nullptr;
     QWidget* m_container = nullptr;
