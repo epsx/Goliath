@@ -20,6 +20,7 @@
 #include <QStringList>
 #include <QTableWidget>
 #include <QTableWidgetItem>
+#include <QTimer>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -194,6 +195,17 @@ void showLibraryVerificationDialog(
     buttonRow->addWidget(copyButton);
     buttonRow->addWidget(closeButton);
     layout->addLayout(buttonRow);
+
+    // This table can require more than one compositor frame for its initial
+    // layout and paint on Windows. Keep the newly created native surface
+    // transparent for that first frame so DWM never exposes an empty dialog
+    // outline before the title bar and cells are ready.
+    layout->activate();
+    dialog.ensurePolished();
+    dialog.setWindowOpacity(0.0);
+    QTimer::singleShot(30, &dialog, [&dialog]() {
+        dialog.setWindowOpacity(1.0);
+    });
     dialog.exec();
 }
 

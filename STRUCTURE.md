@@ -162,6 +162,7 @@ src/
 │   ├── db_scanner.hpp/.cpp
 │   ├── detached_process_tracker.hpp/.cpp
 │   ├── filesystem_io.hpp/.cpp
+│   ├── game_integrity.hpp/.cpp
 │   ├── game_model.hpp/.cpp
 │   ├── game_library_state.hpp/.cpp
 │   ├── game_playtime.hpp/.cpp
@@ -348,6 +349,7 @@ launch-process context.
 | `game_model` | core | Defines `Game`/`Rom` and validates `games.json`. |
 | `game_library_state` | core | Validates and atomically persists exact-media Favorites and ratings independently from `games.json`. |
 | `game_playtime` | core | Validates, formats, and atomically persists exact-media totals, session count, and last-session start/end/duration. |
+| `game_integrity` | core | Rechecks exact-media existence, size, CRC-32, file SHA-1, and CHD combined SHA-1 against scan-preserved references without mutating the library. |
 | `game_profile` | core | Persists and validates exact-media launch/video/input overrides independently from `games.json`. |
 | `game_profile_runtime` | core | Composes short isolated JGRF configuration trees and layered input mappings for profiled launches. |
 | `game_profile_summary` | core | Formats effective exact-media profile values for the details panel. |
@@ -627,7 +629,7 @@ exists.
 | `main_window_events.cpp` | Window events, geometry persistence, Classic View thresholds, and close lifecycle. |
 | `main_window_runtime.cpp` | Detached launch observation, session finalization, and runtime companion handling. |
 | `main_window_updates.cpp` | Scheduled/manual update orchestration and toolbar indicator state. |
-| `main_window_library_actions.cpp` | Launch, benchmark, export, capture, folders, and save-data actions. |
+| `main_window_library_actions.cpp` | Launch, integrity verification, benchmark, export, capture, folders, and save-data actions. |
 | `main_window_library_controls.cpp` | Sort/filter/search/favorite/rating control behavior. |
 | `main_window_library_details.cpp` | Selection-to-details and gallery presentation updates. |
 | `main_window_library_interaction.cpp` | Double-click, context-menu, selection, and expansion interactions. |
@@ -690,6 +692,15 @@ shared popup helper once to every combo descendant across all tabs.
 | `library_item_roles` | Stable custom Qt model roles shared by views and delegates. |
 | `library_item_delegate` | List/tile painting, badges, ratings, selection, and theme-aware artwork surfaces. |
 | `library_verification_dialog` | Seven-column exact-media verification presentation and selected-cell copying. |
+
+The library context menu's **Verify game integrity...** action snapshots the
+selected `Rom` metadata, then runs `game_integrity` on a worker thread behind a
+themed cancelable progress surface. Digest caches are reused only while their
+path/size/mtime fingerprint remains valid and are updated without pruning
+other games. The result is presented through `library_verification_dialog`, or
+through the shared themed message dialog when only existence/readability can be
+established. The operation never writes `games.json`; a rescan remains the only
+authority that updates persistent verification badges.
 
 ### Update subsystem
 
@@ -928,6 +939,7 @@ tests/
 | `test_gallery_frame.cpp` | Still/GIF scaling and gallery-frame presentation geometry. |
 | `test_game_model.cpp` | Required fields, invalid rows, `main_rom`, and optional metadata. |
 | `test_game_library_state.cpp` | Exact-media Favorite/rating identity, v1-to-v2 migration, validation, atomic persistence, independent removal, and rescan survival. |
+| `test_game_integrity.cpp` | Live CRC-32, CUE/track SHA-1, CHD combined SHA-1, missing/unsafe files, limited references, and cancellation. |
 | `test_game_playtime.cpp` | Exact-media accumulation, formatting, launch/loader validation, atomic persistence, failures, and overflow saturation. |
 | `test_game_profiles.cpp` | Exact-media keys, authoritative video schema, validated video/input JSON, isolated layered INIs/defaults, constraints, controller retargeting, and path limits. |
 | `test_game_system.cpp` | System/source/identity compatibility and legacy defaults. |
@@ -1317,6 +1329,9 @@ The current organization follows these rules:
 19. Launch failure reporting may recommend an AES retry after an MVS startup
     failure, but it never infers compatibility from one process exit and never
     mutates global or exact-media configuration automatically.
+20. An on-demand game integrity check may refresh digest-cache entries, but it
+    never rewrites scanner output or verification badges; only a rescan adopts
+    new persistent library state.
 
 ---
 

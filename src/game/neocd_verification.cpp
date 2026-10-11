@@ -243,6 +243,18 @@ std::optional<std::string> read_chd_combined_sha1(const fs::path& path) {
 
 } // namespace
 
+std::optional<std::vector<fs::path>> resolve_cue_track_paths(
+        const fs::path& cuePath) {
+    const auto files = cue_track_files(cuePath);
+    if (!files.has_value()) return std::nullopt;
+
+    std::vector<fs::path> paths;
+    paths.reserve(files->size());
+    for (const CueTrackFile& file : *files)
+        paths.push_back(file.path);
+    return paths;
+}
+
 std::size_t RedumpLayoutIndex::TrackLayoutHash::operator()(
     const TrackLayout& layout) const noexcept {
     std::size_t seed = layout.size();

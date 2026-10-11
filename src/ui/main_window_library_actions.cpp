@@ -1,6 +1,8 @@
 #include "ui/main_window.hpp"
 
 #include "common/qt_path.hpp"
+#include "common/debug_logger.hpp"
+#include "game/game_integrity.hpp"
 #include "game/game_profile_runtime.hpp"
 #include "game/game_profile_summary.hpp"
 #include "game/jollygood_benchmark.hpp"
@@ -12,22 +14,35 @@
 #include "ui/library_details_presentation.hpp"
 #include "ui/library_item_roles.hpp"
 #include "ui/library_view_logic.hpp"
+#include "ui/library_verification_dialog.hpp"
 #include "ui/save_data_dialog.hpp"
 #include "ui/widgets/title_bar.hpp"
 
 #include <QDesktopServices>
 #include <QDialog>
+#include <QElapsedTimer>
+#include <QEventLoop>
 #include <QFileInfo>
+#include <QHBoxLayout>
+#include <QLabel>
 #include <QLineEdit>
 #include <QList>
 #include <QMessageBox>
+#include <QProgressBar>
+#include <QPushButton>
 #include <QString>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
+#include <QThread>
+#include <QTimer>
 #include <QUrl>
+#include <QVBoxLayout>
 
+#include <atomic>
 #include <cstddef>
+#include <exception>
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <random>
 #include <string>
@@ -216,6 +231,199 @@ void MainWindow::benchmarkSelected() {
         display, QString::fromStdString(*media), preparation.profile_applied,
         videoApi, shader, std::move(preparation), this);
     dialog.exec();
+}
+
+void MainWindow::verifySelectedGameIntegrity() {
+    const QList<QTreeWidgetItem*> items = m_tree->selectedItems();
+    if (items.isEmpty()) return;
+
+    QTreeWidgetItem* item = items.first();
+    const int gameIdx = item->data(0, GameIndexRole).toInt();
+    const int romIdx = item->data(0, RomIndexRole).toInt();
+    if (gameIdx < 0 ||
+        static_cast<std::size_t>(gameIdx) >= m_games.size()) {
+        return;
+    }
+
+    const Game& game = m_games[static_cast<std::size_t>(gameIdx)];
+    const auto media = selected_launch_media(game, romIdx);
+    if (!media.has_value()) {
+        showThemedMessageDialog(
+            this, "Game Integrity Check",
+            "The selected library row has no game media to verify.",
+            ThemedMessageTone::Warning);
+        return;
+    }
+
+    QString display = QString::fromStdString(game.display);
+    if (romIdx >= 0 &&
+        static_cast<std::size_t>(romIdx) < game.roms.size()) {
+        display = libraryVariantFullName(
+            game.roms[static_cast<std::size_t>(romIdx)]);
+    }
+
+    const Rom* metadataRom = libraryDetailsRom(game, romIdx);
+    const std::optional<Rom> romSnapshot = metadataRom
+        ? std::optional<Rom>(*metadataRom)
+        : std::nullopt;
+    const fs::path mediaRoot =
+        game.system == "neogeocd" ? m_neocdDir : m_romDir;
+    const fs::path cacheDirectory = m_paths.json_file.parent_path();
+    const std::string mediaName = *media;
+
+    auto result = std::make_shared<GameIntegrityResult>();
+    auto failure = std::make_shared<std::string>();
+    auto cancel = std::make_shared<std::atomic<bool>>(false);
+    QThread* worker = QThread::create(
+        [mediaRoot, mediaName, romSnapshot, cacheDirectory,
+         result, failure, cancel]() {
+            try {
+                *result = verify_game_integrity(
+                    mediaRoot, mediaName,
+                    romSnapshot.has_value() ? &*romSnapshot : nullptr,
+                    cacheDirectory, cancel.get());
+            } catch (const std::exception& error) {
+                *failure = error.what();
+            } catch (...) {
+                *failure = "Unknown integrity verification error.";
+            }
+        });
+
+    QDialog progress(this);
+    progress.setModal(true);
+    progress.resize(640, 220);
+    progress.setMinimumSize(520, 200);
+    QVBoxLayout* progressLayout = nullptr;
+    setupFramelessDialog(
+        &progress, "Game Integrity Check", &progressLayout, false, false);
+
+    auto* progressText = new QLabel(
+        QString("Checking %1 against the latest library references...")
+            .arg(display),
+        &progress);
+    progressText->setWordWrap(true);
+    progressLayout->addWidget(progressText);
+
+    auto* progressBar = new QProgressBar(&progress);
+    progressBar->setRange(0, 0);
+    progressBar->setTextVisible(false);
+    progressLayout->addWidget(progressBar);
+
+    auto* buttonRow = new QHBoxLayout();
+    buttonRow->addStretch();
+    auto* cancelButton = new QPushButton("Cancel", &progress);
+    cancelButton->setObjectName("about_close_button");
+    buttonRow->addWidget(cancelButton);
+    progressLayout->addLayout(buttonRow);
+
+    connect(cancelButton, &QPushButton::clicked, &progress,
+            [cancel, cancelButton, progressText]() {
+                cancel->store(true, std::memory_order_release);
+                cancelButton->setEnabled(false);
+                cancelButton->setText("Stopping...");
+                progressText->setText(
+                    "Stopping the integrity check safely...");
+            });
+    connect(&progress, &QDialog::rejected, &progress,
+            [cancel]() {
+                cancel->store(true, std::memory_order_release);
+            });
+    QEventLoop verificationLoop;
+    QTimer progressDelay;
+    QElapsedTimer progressVisibleTimer;
+    progressDelay.setSingleShot(true);
+    progressDelay.setInterval(500);
+    connect(&progressDelay, &QTimer::timeout, &progress,
+            [&progress, &progressVisibleTimer]() {
+                progressVisibleTimer.start();
+                progress.show();
+                progress.raise();
+                progress.activateWindow();
+            });
+    connect(worker, &QThread::finished, &progress,
+            [&progress, &progressVisibleTimer, &verificationLoop]() {
+                auto finishProgress = [&progress, &verificationLoop]() {
+                    if (progress.isVisible()) progress.accept();
+                    verificationLoop.quit();
+                };
+                if (!progress.isVisible() ||
+                    !progressVisibleTimer.isValid()) {
+                    finishProgress();
+                    return;
+                }
+
+                constexpr qint64 minimumVisibleMs = 300;
+                const qint64 elapsedMs = progressVisibleTimer.elapsed();
+                if (elapsedMs >= minimumVisibleMs) {
+                    finishProgress();
+                    return;
+                }
+
+                QTimer::singleShot(
+                    static_cast<int>(minimumVisibleMs - elapsedMs),
+                    &progress, finishProgress);
+            });
+
+    worker->start();
+    progressDelay.start();
+    if (worker->isRunning()) verificationLoop.exec();
+    progressDelay.stop();
+    progress.hide();
+    if (worker->isRunning())
+        cancel->store(true, std::memory_order_release);
+    worker->wait();
+    delete worker;
+
+    if (!failure->empty()) {
+        DebugLogger::logError(
+            QString("game integrity verification failed: %1")
+                .arg(QString::fromStdString(*failure)));
+        showThemedMessageDialog(
+            this, "Game Integrity Check Failed",
+            QString("The integrity check could not be completed.\n\n%1")
+                .arg(QString::fromStdString(*failure)),
+            ThemedMessageTone::Critical);
+        return;
+    }
+    if (result->status == GameIntegrityStatus::Canceled) return;
+
+    const QString mediaPath = path_to_qstring(result->media_path);
+    DebugLogger::logInfo(
+        QString("game integrity result for %1: matched=%2 problems=%3")
+            .arg(mediaPath)
+            .arg(static_cast<qulonglong>(result->matched_files))
+            .arg(static_cast<qulonglong>(result->problem_files)));
+
+    if (result->hashes.empty()) {
+        showThemedMessageDialog(
+            this,
+            result->status == GameIntegrityStatus::ProblemsFound
+                ? QStringLiteral("Game Integrity Problems Found")
+                : QStringLiteral("Game File Available"),
+            QString("%1\n\nMedia: %2")
+                .arg(QString::fromStdString(result->detail), mediaPath),
+            result->status == GameIntegrityStatus::ProblemsFound
+                ? ThemedMessageTone::Warning
+                : ThemedMessageTone::Information);
+        return;
+    }
+
+    Rom current = romSnapshot.value_or(Rom{});
+    current.hashes = result->hashes;
+    LibraryVerificationPresentation presentation;
+    presentation.label = "Current integrity";
+    presentation.value =
+        result->status == GameIntegrityStatus::Passed
+            ? "Passed"
+            : "Problems found";
+    presentation.tooltip = result->detail + " Media: " +
+        path_to_utf8(result->media_path);
+    presentation.tone =
+        result->status == GameIntegrityStatus::Passed
+            ? VerificationTone::Success
+            : VerificationTone::Error;
+    presentation.details_available = true;
+    showLibraryVerificationDialog(display, current, presentation, this);
 }
 
 void MainWindow::exportSelectedAudio() {

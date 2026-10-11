@@ -65,6 +65,11 @@ private:
         candidates_;
 };
 
+// Resolves the ordered physical files referenced by one CUE with the same
+// traversal rejection and final-component case handling used by the scanner.
+std::optional<std::vector<std::filesystem::path>> resolve_cue_track_paths(
+    const std::filesystem::path& cue_path);
+
 std::optional<RedumpCueVerification> verify_redump_cue(
     const std::filesystem::path& cue_path,
     const RedumpCatalog& catalog,

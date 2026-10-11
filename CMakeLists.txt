@@ -153,6 +153,7 @@ add_library(goliath-core STATIC
     src/game/command_dat.cpp
     src/game/command_notation.cpp
     src/game/game_model.cpp
+    src/game/game_integrity.cpp
     src/game/game_library_state.cpp
     src/game/game_playtime.cpp
     src/game/game_profile.cpp
@@ -456,6 +457,7 @@ if(BUILD_TESTS)
         tests/test_sha1_cache.cpp
         tests/test_db_scanner.cpp
         tests/test_game_model.cpp
+        tests/test_game_integrity.cpp
         tests/test_game_library_state.cpp
         tests/test_game_system.cpp
         tests/test_game_profiles.cpp

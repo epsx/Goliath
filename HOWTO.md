@@ -782,6 +782,27 @@ this is a compatibility hint only and never changes the profile automatically.
 Launch notices use Goliath's themed frameless dialog; their complete plain-text
 details can be selected or copied with **Copy Details**.
 
+### Check one game's integrity now
+
+Right-click an exact parent, variant/hack, CUE, or CHD and choose **Verify game
+integrity...**. Goliath checks the files currently on disk against the size and
+digest references preserved by the latest library scan:
+
+- `.neo` cartridges use CRC-32;
+- CUE descriptors and their physical tracks use SHA-1;
+- CHD images use the internal combined SHA-1 from the CHD v4/v5 header.
+
+The work runs outside the GUI thread in a themed, cancelable progress dialog.
+The result table shows the current size/hash beside the expected value and
+supports the same selectable/copyable cells as the library verification
+details. A missing, unreadable, replaced, or mismatched file is reported
+without launching JGRF. If the last scan had no catalog digest for that media,
+Goliath still checks that the selected file exists and can be opened, then
+labels the result as limited rather than claiming a verified match.
+
+This command does not rewrite `games.json` or its verification badge. Correct
+the files and run a normal rescan when the library result must be refreshed.
+
 ---
 
 ## 11. Configure Settings, input, and audio
@@ -1443,6 +1464,13 @@ confirm the dialog shows MVS, an exit code when available, new JGRF output, and
 the AES compatibility hint. Set only that title to AES and confirm a successful
 launch produces no failure dialog. Also close a healthy game manually within
 five seconds to review the intentionally conservative early-stop message.
+
+For a game-integrity change, use the context menu on one verified `.neo`, one
+verified CUE set, and one CHD. Confirm the current values match, then temporarily
+rename one referenced track and confirm it is reported as missing without a
+launch. Test **Cancel** during a non-cached SHA-1 pass, and verify that media
+without catalog hashes receives a limited/readable result rather than a false
+success badge. Restore the files and rescan afterward.
 
 For a save-data-manager change, create representative `.st0`/`.st1` and
 persistent data through normal gameplay, then confirm inventory, manual backup,

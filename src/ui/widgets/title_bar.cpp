@@ -43,6 +43,9 @@ namespace goliath {
 
 namespace {
 
+constexpr auto DEFERRED_DIALOG_SHADOW_PROPERTY =
+    "goliathDeferredDialogShadow";
+
 #if defined(_WIN32)
 void setElevatedPanelEffectsEnabled(QWidget* window, bool enabled) {
     if (!window) return;
@@ -148,6 +151,13 @@ protected:
         if (watched != m_dialog) return false;
 
         if (event->type() == QEvent::Show) {
+            if (m_dialog->property(
+                    DEFERRED_DIALOG_SHADOW_PROPERTY).toBool()) {
+                m_dialog->setProperty(
+                    DEFERRED_DIALOG_SHADOW_PROPERTY, false);
+                installFramelessWindowShadow(
+                    m_dialog, QStringLiteral("dialog_shadow_surface"));
+            }
             if (auto* layout = m_dialog->layout()) layout->activate();
             connectWindowHandle();
             setScreen(initialScreen());
@@ -523,8 +533,12 @@ void setupFramelessDialog(QDialog* dialog, const QString& title,
 
     // The command overlay intentionally uses a translucent top-level surface;
     // replacing it with an opaque DWM frame would break its presentation.
+    // Creating the native window here can briefly expose an empty top-level
+    // surface while a complex dialog is still adding its child widgets. Delay
+    // DWM setup until QEvent::Show, when the dialog content is complete but has
+    // not yet received its first visible paint.
     if (showTitleBar)
-        installFramelessWindowShadow(dialog, "dialog_shadow_surface");
+        dialog->setProperty(DEFERRED_DIALOG_SHADOW_PROPERTY, true);
 
     // Inherit the main window stylesheet so the title bar/cursor keep the theme.
     if (auto* pw = dialog->parentWidget(); pw && !pw->styleSheet().isEmpty())

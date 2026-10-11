@@ -147,7 +147,16 @@ void MainWindow::showLibraryContextMenu(
     const int gameIdx = item->data(0, GameIndexRole).toInt();
 
     QMenu menu(this);
-    menu.addAction("Launch", this, &MainWindow::launchSelected);
+    auto addDeferredAction = [this, &menu](
+            const QString& text, auto action) {
+        menu.addAction(text, this, [this, action]() {
+            QTimer::singleShot(0, this, [this, action]() {
+                (this->*action)();
+            });
+        });
+    };
+    addDeferredAction(QStringLiteral("Launch"),
+                      &MainWindow::launchSelected);
     if (gameIdx >= 0 && static_cast<std::size_t>(gameIdx) < m_games.size()) {
         const Game& game = m_games[static_cast<std::size_t>(gameIdx)];
         const auto media = selected_launch_media(game, romIdx);
@@ -161,11 +170,16 @@ void MainWindow::showLibraryContextMenu(
                 });
         }
     }
-    menu.addAction("Export audio WAV...", this,
-                   &MainWindow::exportSelectedAudio);
-    menu.addAction("Game settings...", this, &MainWindow::openGameSettings);
-    menu.addAction("Save Data Manager...", this, &MainWindow::manageSaveData);
-    menu.addAction("Benchmark...", this, &MainWindow::benchmarkSelected);
+    addDeferredAction(QStringLiteral("Export audio WAV..."),
+                      &MainWindow::exportSelectedAudio);
+    addDeferredAction(QStringLiteral("Game settings..."),
+                      &MainWindow::openGameSettings);
+    addDeferredAction(QStringLiteral("Save Data Manager..."),
+                      &MainWindow::manageSaveData);
+    addDeferredAction(QStringLiteral("Benchmark..."),
+                      &MainWindow::benchmarkSelected);
+    addDeferredAction(QStringLiteral("Verify game integrity..."),
+                      &MainWindow::verifySelectedGameIntegrity);
     menu.addSeparator();
     menu.addAction("Open ROM folder", this, &MainWindow::openRomFolder);
     menu.addAction("Open snapshot folder", this, &MainWindow::openSnapshotFolder);

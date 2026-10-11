@@ -106,6 +106,7 @@ private slots:
     void showVerificationDetails();
     void manageSaveData();
     void benchmarkSelected();
+    void verifySelectedGameIntegrity();
     void exportSelectedAudio();
     void captureGameScreenshot();
     void recordGameGifAfter(int delayMs);
