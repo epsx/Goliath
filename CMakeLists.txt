@@ -253,6 +253,7 @@ add_executable(goliath-qt
     assets/app_icon.qrc
     src/main.cpp
     src/ui/about_dialog.cpp
+    src/ui/bios_verification_dialog.cpp
     src/ui/update_check.cpp
     src/ui/command_dialog.cpp
     src/ui/main_window.cpp

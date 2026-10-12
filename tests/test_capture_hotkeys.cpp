@@ -10,7 +10,7 @@ using goliath::parseCaptureHotkey;
 
 TEST_CASE("Goliath application shortcuts are present and unique",
           "[hotkeys][ui]") {
-    REQUIRE(goliath::kApplicationShortcuts.size() == 7);
+    REQUIRE(goliath::kApplicationShortcuts.size() == 8);
     std::set<std::string_view> sequences;
     for (const auto& shortcut : goliath::kApplicationShortcuts) {
         CHECK_FALSE(std::string_view(shortcut.action).empty());
@@ -18,6 +18,7 @@ TEST_CASE("Goliath application shortcuts are present and unique",
         CHECK(sequences.insert(shortcut.sequence).second);
     }
     CHECK(std::string_view(goliath::kRandomGameShortcut) == "Ctrl+R");
+    CHECK(std::string_view(goliath::kVerifyBiosShortcut) == "F6");
 }
 
 TEST_CASE("Windows capture shortcuts accept one modified key and allow disabling",

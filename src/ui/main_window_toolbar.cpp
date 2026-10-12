@@ -276,8 +276,11 @@ void MainWindow::buildToolbarTools(QHBoxLayout* toolbar) {
         QString::fromUtf8("\xF0\x9F\x94\x84 Rescan ROMs (%1)").arg(
             QKeySequence(kRescanRomsShortcut).toString(QKeySequence::NativeText)),
         this, &MainWindow::rescanRoms);
-    toolsMenu->addAction(QString::fromUtf8("\xF0\x9F\x94\x8D Verify BIOS"),
-                         this, &MainWindow::verifyBios); // 🔍
+    toolsMenu->addAction(
+        QString::fromUtf8("\xF0\x9F\x94\x8D Verify BIOS (%1)").arg(
+            QKeySequence(kVerifyBiosShortcut).toString(
+                QKeySequence::NativeText)),
+        this, &MainWindow::verifyBios); // 🔍
     toolsMenu->addSeparator();
     toolsMenu->addAction(QString::fromUtf8(
                              "\xF0\x9F\x93\x84 Export Diagnostic Report..."), // 📄

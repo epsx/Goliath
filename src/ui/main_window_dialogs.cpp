@@ -5,21 +5,16 @@
 #include "game/bios_verify.hpp"
 #include "game/jollygood_launch.hpp"
 #include "ui/about_dialog.hpp"
+#include "ui/bios_verification_dialog.hpp"
 #include "ui/logging_dialog.hpp"
 #include "ui/settings_dialog.hpp"
 #include "ui/widgets/title_bar.hpp"
 
-#include <QDialog>
-#include <QFont>
 #include <QKeySequence>
-#include <QMessageBox>
-#include <QPushButton>
 #include <QScrollBar>
 #include <QStringList>
-#include <QTextEdit>
 #include <QTimer>
 #include <QTreeWidget>
-#include <QVBoxLayout>
 
 #include <algorithm>
 #include <filesystem>
@@ -32,35 +27,15 @@ namespace goliath {
 void MainWindow::verifyBios() {
     auto resultOpt = verify_bios(m_paths.bios_dir);
     if (!resultOpt.has_value()) {
-        QMessageBox::warning(this, "Verify BIOS",
-            QString("BIOS folder not found:\n%1").arg(path_to_qstring(m_paths.bios_dir)));
+        showThemedMessageDialog(
+            this, "Verify BIOS",
+            QString("BIOS folder not found:\n%1")
+                .arg(path_to_qstring(m_paths.bios_dir)),
+            ThemedMessageTone::Warning);
         return;
     }
-    const BiosVerifyResult& result = *resultOpt;
 
-    QString header;
-    if (result.problems == 0) {
-        header = QString::fromUtf8("\xE2\x9C\x85 All BIOS files are compatible with geolith.\n\n");
-    } else {
-        header = QString::fromUtf8("\xE2\x9A\xA0 %1 problem(s) found. Geolith needs BIOS files from a recent MAME set.\n\n")
-                     .arg(result.problems);
-    }
-
-    QString body;
-    for (const std::string& line : result.lines) body += QString::fromStdString(line) + "\n";
-
-    QDialog dialog(this);
-    dialog.resize(640, 480);
-    QVBoxLayout* layout = nullptr;
-    setupFramelessDialog(&dialog, "Verify BIOS", &layout);
-    auto* text = new QTextEdit();
-    text->setReadOnly(true);
-    text->setFont(QFont("Consolas", 9));
-    text->setPlainText(header + body);
-    layout->addWidget(text);
-    auto* closeBtn = new QPushButton("Close");
-    connect(closeBtn, &QPushButton::clicked, &dialog, &QDialog::accept);
-    layout->addWidget(closeBtn, 0, Qt::AlignRight);
+    BiosVerificationDialog dialog(*resultOpt, m_paths.bios_dir, this);
     dialog.exec();
 }
 
@@ -68,10 +43,11 @@ void MainWindow::warnIfBiosMissing() {
     std::error_code ec;
 
     if (!fs::is_directory(m_paths.bios_dir, ec)) {
-        QMessageBox::warning(this, "BIOS folder not found",
+        showThemedMessageDialog(this, "BIOS folder not found",
             QString("The configured BIOS folder does not exist:\n%1\n\n"
                     "Set it in Settings > Path, or run Tools > Verify BIOS.")
-                .arg(path_to_qstring(m_paths.bios_dir)));
+                .arg(path_to_qstring(m_paths.bios_dir)),
+            ThemedMessageTone::Warning);
         return;
     }
 
@@ -85,11 +61,12 @@ void MainWindow::warnIfBiosMissing() {
     }
 
     if (!missing.isEmpty()) {
-        QMessageBox::warning(this, "Missing BIOS files",
+        showThemedMessageDialog(this, "Missing BIOS files",
             QString("The following BIOS archives are missing from:\n%1\n\n%2\n\n"
                     "Games may fail to launch. Run Tools > Verify BIOS for details.")
                 .arg(path_to_qstring(m_paths.bios_dir))
-                .arg(missing.join("\n")));
+                .arg(missing.join("\n")),
+            ThemedMessageTone::Warning);
         return;
     }
 }

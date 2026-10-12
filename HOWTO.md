@@ -545,7 +545,17 @@ Do not reuse a dependency list from a different build.
 ## 8. Install and verify BIOS files
 
 Set the BIOS directory in **Settings -> Path**, then run **Tools -> Verify
-BIOS**.
+BIOS** or press **F6**.
+
+The verifier opens a compact themed summary with one row per known archive.
+**Ready** means that every required member was readable and its CRC-32 matched.
+A missing optional archive or optional BIOS mode is reported separately and
+does not invalidate another usable mode in the same archive. Click any archive
+card to inspect only its member checks; opening another card closes the first.
+The cards also support **Enter** and **Space**. The bottom **Technical Details**
+button remains available for the complete copyable report. Its expanded
+section resizes on the next layout pass and remains constrained to the active
+monitor's work area.
 
 The verifier recognizes:
 
@@ -562,7 +572,9 @@ neocdz.zip
 
 - Front Loader and Top Loader use their BIOS files from `neocd.zip`;
 - their auxiliary `000-lo.lo` comes from `neocdz.zip`;
-- CDZ and Universe BIOS modes use `neocdz.zip`.
+- CDZ uses `neocd.bin` from `neocdz.zip`;
+- CD Universe BIOS additionally uses the optional `uni-bioscd33.rom` member
+  from `neocdz.zip`. Its absence disables only that mode.
 
 The Geolith CD settings are stored in `config/jollygood/geolith.ini`:
 

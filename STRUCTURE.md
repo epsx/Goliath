@@ -232,6 +232,7 @@ src/
     ├── about_dialog.hpp/.cpp
     ├── audio_export_dialog.hpp/.cpp
     ├── benchmark_dialog.hpp/.cpp
+    ├── bios_verification_dialog.hpp/.cpp
     ├── command_dialog.hpp/.cpp
     ├── game_profile_dialog.hpp/.cpp
     ├── lithogen_dialog.hpp/.cpp
@@ -362,7 +363,7 @@ launch-process context.
 | `neogeo_metadata` | core | MAME/Redump/INI/history parsing and title matching. |
 | `neocd_verification` | core | Complete Redump set and MAME set content verification. |
 | `sha1_cache` | core | Persistent Redump BIN-track hash cache and fingerprint validation. |
-| `bios_verify` | core | BIOS ZIP presence, member, and known CRC32 checks. |
+| `bios_verify` | core | Structured BIOS ZIP/archive/member status plus presence and known CRC32 checks, with a compatible text transcript for diagnostics. |
 | `jollygood_executable` | core | Canonical configured JGRF executable resolution. |
 | `jollygood_capabilities` | header-only | Parses JGRF version, Vulkan help, and JG API version. |
 | `geolith_capabilities` | core | Loads the installed Geolith core and queries the JG ABI. |
@@ -374,6 +375,7 @@ launch-process context.
 | `about_dialog` | app | Presents Goliath identity/build metadata, authorship, upstream acknowledgements, and verified external links. |
 | `audio_export_dialog` | app | Selects, probes, and confirms a new one-shot WAV destination without creating the requested target. |
 | `benchmark_dialog` | app | Supervises, times, cancels, logs, and reports a selected-media JGRF benchmark. |
+| `bios_verification_dialog` | app | Presents compact per-archive BIOS state and expandable member/CRC details without parsing the diagnostic transcript. |
 | `command_dialog` | app | Presents a titleless, compact, movable transparent command overlay with source-line search whose lifetime is associated with one tracked JGRF PID. |
 | `command_notation_view` | app | Draws and reflows resolution-independent directions, buttons, qualifiers, move categories, accented headings, and highlighted search results with raw-text fallback. |
 | `logging_dialog` | app | Owns session verbose launch state and guarded open/clear controls for both runtime logs. |
@@ -561,7 +563,18 @@ media paths with the same result share those files by design.
 ### BIOS components
 
 `bios_verify` is deterministic core logic. It reads the known BIOS ZIP sets
-with miniz and validates required members and known CRC32 values.
+with miniz and validates required members and known CRC32 values. The result
+contains authoritative archive/member states and aggregate counters for the
+interactive UI, while retaining the bounded human-readable lines consumed by
+the exportable diagnostic report.
+
+`bios_verification_dialog` renders those structured states as a compact custom
+Goliath summary. Each keyboard-accessible archive card expands inline and the
+accordion keeps at most one card open. Optional unavailable archives or modes
+are distinct from failures; expected and calculated CRC-32 values are visible
+per card and remain available together in the complete technical section.
+Missing folder and launch-time archive warnings also use the shared themed
+message dialog.
 
 `jollygood_bios` performs runtime integration. It prepares the BIOS location
 expected by unmodified JGRF, including a Windows NTFS junction when appropriate,
@@ -942,7 +955,7 @@ tests/
 | `test_capture_hotkeys.cpp` | Capture-shortcut parsing, normalization, and collision detection. |
 | `test_command_dat.cpp` | BOM/CRLF/DOS-EOF parsing, aliases, sentinel handling, missing/malformed files, and variant-to-parent lookup order. |
 | `test_command_notation.cpp` | Direction/button markers, legacy labels, move categories, select/follow-up semantics, and verbatim unknown-marker fallback. |
-| `test_bios_verify.cpp` | BIOS catalog, missing paths/archives/members, and optional CD sets. |
+| `test_bios_verify.cpp` | BIOS catalog, structured archive/member states and counters, missing paths/archives/members, invalid ZIPs, and optional CD sets. |
 | `test_db_scanner.cpp` | Grouping, metadata, CD verification, cache, path safety, and statistics. |
 | `test_gallery_frame.cpp` | Still/GIF scaling and gallery-frame presentation geometry. |
 | `test_game_model.cpp` | Required fields, invalid rows, `main_rom`, and optional metadata. |

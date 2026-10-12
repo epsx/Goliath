@@ -881,10 +881,91 @@ QFrame#about_information_card {
 }
 
 QFrame#rescan_summary_card,
-QFrame#rescan_change_card {
+QFrame#rescan_change_card,
+QFrame#bios_summary_card,
+QFrame#bios_metric_card,
+QFrame#bios_archive_row {
     background-color: @bg_secondary@;
     border: 1px solid @border@;
     border-radius: 12px;
+}
+
+QFrame#bios_archive_row:hover,
+QFrame#bios_archive_row:focus {
+    border-color: @accent@;
+}
+
+QFrame#bios_archive_details {
+    background-color: transparent;
+    border: none;
+    border-top: 1px solid @border@;
+}
+
+QScrollArea#bios_archive_scroll,
+QScrollArea#bios_archive_scroll QWidget#qt_scrollarea_viewport,
+QWidget#bios_archive_scroll_contents,
+QWidget#bios_archive_header,
+QWidget#bios_member_row {
+    background-color: transparent;
+    border: none;
+}
+
+QLabel#bios_section_heading,
+QLabel#bios_archive_name,
+QLabel#bios_archive_chevron,
+QLabel#bios_member_name {
+    color: @accent@;
+    font-weight: 600;
+}
+
+QLabel#bios_archive_chevron {
+    font-size: 18px;
+}
+
+QLabel#bios_status_heading {
+    color: @text_primary@;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+QLabel#bios_status_heading[biosStatus="ready"],
+QFrame#bios_metric_card[biosMetric="ready"] QLabel#bios_metric_value,
+QLabel#bios_archive_status[biosStatus="ready"],
+QLabel#bios_member_status[biosStatus="ready"] {
+    color: @success@;
+}
+
+QLabel#bios_status_heading[biosStatus="problem"],
+QFrame#bios_metric_card[biosMetric="problem"] QLabel#bios_metric_value,
+QLabel#bios_archive_status[biosStatus="problem"],
+QLabel#bios_member_status[biosStatus="problem"] {
+    color: @danger@;
+}
+
+QFrame#bios_metric_card[biosMetric="optional"] QLabel#bios_metric_value,
+QLabel#bios_archive_status[biosStatus="optional"],
+QLabel#bios_member_status[biosStatus="optional"] {
+    color: @text_secondary@;
+}
+
+QLabel#bios_metric_value {
+    color: @text_primary@;
+    font-size: 19px;
+    font-weight: 700;
+}
+
+QLabel#bios_metric_label,
+QLabel#bios_folder_path,
+QLabel#bios_archive_purpose,
+QLabel#bios_archive_requirement,
+QLabel#bios_member_description,
+QLabel#bios_member_crc {
+    color: @text_secondary@;
+}
+
+QLabel#bios_archive_status,
+QLabel#bios_member_status {
+    font-weight: 600;
 }
 
 QLabel#rescan_status {

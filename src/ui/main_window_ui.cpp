@@ -41,6 +41,8 @@ void MainWindow::setupKeyboardShortcuts() {
     // Keyboard shortcuts
     connect(new QShortcut(QKeySequence(kRescanRomsShortcut), this),
             &QShortcut::activated, this, &MainWindow::rescanRoms);
+    connect(new QShortcut(QKeySequence(kVerifyBiosShortcut), this),
+            &QShortcut::activated, this, &MainWindow::verifyBios);
     connect(new QShortcut(QKeySequence(kFocusSearchShortcut), this),
             &QShortcut::activated, this, &MainWindow::focusSearch);
     connect(new QShortcut(QKeySequence(kRandomGameShortcut), this),

@@ -411,14 +411,17 @@ TEST_CASE("About Goliath remains theme-aware across every palette", "[theme]") {
     }
 }
 
-TEST_CASE("rescan summary uses semantic colors across every palette",
-          "[theme][rescan]") {
+TEST_CASE("rescan and BIOS summaries use semantic colors across every palette",
+          "[theme][rescan][bios]") {
     for (const Theme& theme : all_themes()) {
         INFO("theme=" << theme.key);
         const std::string stylesheet = generate_theme_style(theme);
         const std::string expected_cards =
             "QFrame#rescan_summary_card,\n"
-            "QFrame#rescan_change_card {\n"
+            "QFrame#rescan_change_card,\n"
+            "QFrame#bios_summary_card,\n"
+            "QFrame#bios_metric_card,\n"
+            "QFrame#bios_archive_row {\n"
             "    background-color: " + theme.bg_secondary + ";\n"
             "    border: 1px solid " + theme.border + ";\n"
             "    border-radius: 12px;\n"
@@ -428,8 +431,46 @@ TEST_CASE("rescan summary uses semantic colors across every palette",
             "    color: " + theme.danger + ";\n"
             "    font-weight: 700;\n"
             "}";
+        const std::string expected_bios_ready =
+            "QLabel#bios_status_heading[biosStatus=\"ready\"],\n"
+            "QFrame#bios_metric_card[biosMetric=\"ready\"] QLabel#bios_metric_value,\n"
+            "QLabel#bios_archive_status[biosStatus=\"ready\"],\n"
+            "QLabel#bios_member_status[biosStatus=\"ready\"] {\n"
+            "    color: " + theme.success + ";\n"
+            "}";
+        const std::string expected_bios_problem =
+            "QLabel#bios_status_heading[biosStatus=\"problem\"],\n"
+            "QFrame#bios_metric_card[biosMetric=\"problem\"] QLabel#bios_metric_value,\n"
+            "QLabel#bios_archive_status[biosStatus=\"problem\"],\n"
+            "QLabel#bios_member_status[biosStatus=\"problem\"] {\n"
+            "    color: " + theme.danger + ";\n"
+            "}";
+        const std::string expected_bios_optional =
+            "QFrame#bios_metric_card[biosMetric=\"optional\"] QLabel#bios_metric_value,\n"
+            "QLabel#bios_archive_status[biosStatus=\"optional\"],\n"
+            "QLabel#bios_member_status[biosStatus=\"optional\"] {\n"
+            "    color: " + theme.text_secondary + ";\n"
+            "}";
+        const std::string expected_bios_hover =
+            "QFrame#bios_archive_row:hover,\n"
+            "QFrame#bios_archive_row:focus {\n"
+            "    border-color: " + theme.accent + ";\n"
+            "}";
+        const std::string expected_bios_transparency =
+            "QWidget#bios_archive_scroll_contents,\n"
+            "QWidget#bios_archive_header,\n"
+            "QWidget#bios_member_row {\n"
+            "    background-color: transparent;\n"
+            "    border: none;\n"
+            "}";
         CHECK(stylesheet.find(expected_cards) != std::string::npos);
         CHECK(stylesheet.find(expected_problem) != std::string::npos);
+        CHECK(stylesheet.find(expected_bios_ready) != std::string::npos);
+        CHECK(stylesheet.find(expected_bios_problem) != std::string::npos);
+        CHECK(stylesheet.find(expected_bios_optional) != std::string::npos);
+        CHECK(stylesheet.find(expected_bios_hover) != std::string::npos);
+        CHECK(stylesheet.find(expected_bios_transparency) !=
+              std::string::npos);
     }
 }
 
