@@ -366,8 +366,8 @@ void MainWindow::restoreCurrentLibraryListViewport() {
 }
 
 void MainWindow::updateStatus() {
-    std::size_t totalRoms = 0;
-    std::size_t parents = 0;
+    const LibraryMediaCounts mediaCounts =
+        libraryMediaCounts(m_games, m_librarySystem);
     std::size_t homebrew = 0;
     std::size_t identified = 0;
     std::size_t verifiedSets = 0;
@@ -378,8 +378,6 @@ void MainWindow::updateStatus() {
     std::size_t favorites = 0;
     for (const Game& g : m_games) {
         if (g.system != m_librarySystem) continue;
-        totalRoms += g.roms.size();
-        parents++;
         if (g.source == "homebrew") homebrew++;
 
         const auto parentMedia = selected_launch_media(g, -1);
@@ -411,15 +409,13 @@ void MainWindow::updateStatus() {
             }
         }
     }
-    const std::size_t variants = totalRoms >= parents ? totalRoms - parents : 0;
-
     QString message;
     if (m_librarySystem == "neogeocd") {
         message = QString(
                       "Neo Geo CD - Games: %1 - Identified: %2 - Verified sets: %3 - "
                       "CUE mismatch: %4 - CHD mismatch: %5 - Metadata only: %6 - "
                       "Unknown: %7")
-                      .arg(parents)
+                      .arg(mediaCounts.groups)
                       .arg(identified)
                       .arg(verifiedSets)
                       .arg(cueMismatch)
@@ -428,7 +424,10 @@ void MainWindow::updateStatus() {
                       .arg(unknown);
     } else {
         message = QString("Neo Geo MVS/AES - ROMs: %1 - Parents: %2 - Variants: %3 - Homebrew: %4")
-                      .arg(totalRoms).arg(parents).arg(variants).arg(homebrew);
+                      .arg(mediaCounts.media)
+                      .arg(mediaCounts.parents)
+                      .arg(mediaCounts.variants)
+                      .arg(homebrew);
     }
 
     message += QString(" - Favorites: %1").arg(

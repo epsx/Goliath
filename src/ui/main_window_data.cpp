@@ -72,7 +72,7 @@ void MainWindow::rescanRoms() {
         m_rescanWorker = nullptr;
     }
 
-    auto* worker = new RescanWorker(m_config, this);
+    auto* worker = new RescanWorker(m_config, m_games, this);
     m_rescanWorker = worker;
     connect(worker, &RescanWorker::completed, this, &MainWindow::onRescanFinished);
     connect(worker, &RescanWorker::error, this, &MainWindow::onRescanError);

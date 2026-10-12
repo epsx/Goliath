@@ -24,6 +24,7 @@ using goliath::libraryTileMetrics;
 using goliath::libraryExpansionShouldBePreserved;
 using goliath::libraryGameListTitles;
 using goliath::libraryListVisibleRowUsesAlternateBackground;
+using goliath::libraryMediaCounts;
 using goliath::libraryMetricPrecedes;
 using goliath::libraryListVariantTooltip;
 using goliath::libraryMvsAesHumanTitle;
@@ -586,4 +587,64 @@ TEST_CASE("verification presentation distinguishes matches and mismatches",
     CHECK(presentation.value == "Mismatch");
     CHECK(presentation.tone == VerificationTone::Error);
     CHECK(presentation.details_available);
+}
+
+TEST_CASE("missing cartridge parent has an explicit verification status",
+          "[library-view][verification]") {
+    goliath::Game game;
+    game.identified = true;
+    game.system = "neogeo";
+    game.short_name = "aof3";
+
+    goliath::Rom clone;
+    clone.file = "aof3k.neo";
+    clone.mame = "aof3k";
+    clone.cloneof = "aof3";
+    clone.verification = "geolith-crc32";
+    clone.crc32 = "12345678";
+    game.roms.push_back(clone);
+
+    const auto parent = libraryVerificationPresentation(game, nullptr);
+    CHECK(parent.label == "Parent ROM missing");
+    CHECK(parent.value.empty());
+    CHECK(parent.tone == VerificationTone::Neutral);
+    CHECK_FALSE(parent.details_available);
+
+    const auto variant = libraryVerificationPresentation(
+        game, &game.roms.front());
+    CHECK(variant.label == "Geolith / CRC-32");
+    CHECK(variant.value == "12345678");
+    CHECK(variant.tone == VerificationTone::Success);
+}
+
+TEST_CASE("library media counts do not promote a surviving clone to parent",
+          "[library-view][media-counts]") {
+    goliath::Game complete;
+    complete.system = "neogeo";
+    goliath::Rom parent;
+    parent.file = "mslug.neo";
+    parent.main = true;
+    complete.roms.push_back(parent);
+
+    goliath::Game cloneOnly;
+    cloneOnly.system = "neogeo";
+    goliath::Rom clone;
+    clone.file = "aof3k.neo";
+    clone.cloneof = "aof3";
+    clone.main = false;
+    cloneOnly.roms.push_back(clone);
+
+    goliath::Game cd;
+    cd.system = "neogeocd";
+    goliath::Rom cue;
+    cue.file = "ignored.cue";
+    cue.main = true;
+    cd.roms.push_back(cue);
+
+    const auto counts = libraryMediaCounts(
+        {complete, cloneOnly, cd}, "neogeo");
+    CHECK(counts.groups == 2);
+    CHECK(counts.media == 2);
+    CHECK(counts.parents == 1);
+    CHECK(counts.variants == 1);
 }

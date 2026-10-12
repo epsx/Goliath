@@ -7,6 +7,7 @@
 
 #include <atomic>
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <string>
 
@@ -53,6 +54,16 @@ struct ScanResult {
     std::size_t cd_redump_sha1_calculated_files = 0;
     std::size_t cd_redump_sha1_cache_entries = 0;
     std::size_t cd_redump_sha1_cache_pruned = 0;
+
+    // Individual stages are exposed so the GUI can render a compact summary
+    // without parsing the human-readable progress transcript.
+    std::int64_t metadata_and_indexes_ms = 0;
+    std::int64_t file_discovery_ms = 0;
+    std::int64_t cartridge_verification_ms = 0;
+    std::int64_t cd_verification_ms = 0;
+    std::int64_t database_build_write_ms = 0;
+    std::int64_t statistics_ms = 0;
+    std::int64_t total_ms = 0;
 };
 
 // Scans the configured MVS/AES and Neo Geo CD roots and writes

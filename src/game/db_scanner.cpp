@@ -579,18 +579,27 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
 
         const bool main_flag = is_main_rom(short_name, neogeo_metadata);
 
+        // A clone can remain in the library while its canonical parent file
+        // is temporarily absent.  The top-level row is still the canonical
+        // game group, so seed it from the parent's catalog metadata instead
+        // of visually promoting the first discovered clone to parent.
+        const SoftwareEntry* group_data = &data;
+        const auto group_metadata = neogeo_metadata.find(game_short);
+        if (group_metadata != neogeo_metadata.end())
+            group_data = &group_metadata->second;
+
         auto game_it = games.find(game_short);
         if (game_it == games.end()) {
             GameEntry g;
-            g.name = data.description;
-            g.display = clean_display(data.description);
+            g.name = group_data->description;
+            g.display = clean_display(group_data->description);
             g.short_name = game_short;
             g.source = source;
-            g.year = data.year;
+            g.year = group_data->year;
             // Keep the existing JSON/UI contract:
             // MAME software-list <publisher> is exposed through the historical
             // "manufacturer" field. A later schema cleanup can rename it.
-            g.manufacturer = data.publisher;
+            g.manufacturer = group_data->publisher;
             g.developer = std::nullopt;
             g.publisher = std::nullopt;
 
@@ -611,8 +620,8 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
             g.series_val = map_get(supplemental.series, game_short);
             g.history_val = map_get(supplemental.history.neogeo, game_short);
 
-            g.icon = find_icon(p.icondir, short_name, neogeo_metadata);
-            g.snapshot = find_snapshot(p.snapdir, short_name);
+            g.icon = find_icon(p.icondir, game_short, neogeo_metadata);
+            g.snapshot = find_snapshot(p.snapdir, game_short);
             g.main_rom = std::nullopt;
 
             game_it = games.emplace(game_short, std::move(g)).first;
@@ -1153,6 +1162,7 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
         result.game_count++;
         result.rom_file_count += g.roms.size();
         for (const RomEntry& rom : g.roms) {
+            if (!rom.is_main) result.variant_count++;
             if (rom.verification ==
                 std::optional<std::string>("geolith-crc32")) {
                 result.neo_geolith_crc32_verified_files++;
@@ -1167,11 +1177,21 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
         if (g.source == "homebrew") result.homebrew_games++;
         if (g.main_rom.has_value()) result.parent_games++;
     }
-    result.variant_count =
-        result.rom_file_count >= result.game_count
-            ? result.rom_file_count - result.game_count
-            : 0;
     const auto scan_finished = ScanClock::now();
+
+    result.metadata_and_indexes_ms =
+        elapsed_ms(scan_started, metadata_finished);
+    result.file_discovery_ms =
+        elapsed_ms(metadata_finished, discovery_finished);
+    result.cartridge_verification_ms =
+        elapsed_ms(discovery_finished, cartridge_finished);
+    result.cd_verification_ms =
+        elapsed_ms(cartridge_finished, cd_finished);
+    result.database_build_write_ms =
+        elapsed_ms(cd_finished, database_finished);
+    result.statistics_ms =
+        elapsed_ms(database_finished, scan_finished);
+    result.total_ms = elapsed_ms(scan_started, scan_finished);
 
     std::string summary = "\n========== GOLIATH DATABASE ==========\n\n";
     summary += "Neo Geo MVS/AES\n\n";
@@ -1214,28 +1234,19 @@ ScanResult scan_roms(const Config& config, ScanProgressCallback progress_callbac
     summary += "Redump SHA-1 pruned      : " + std::to_string(result.cd_redump_sha1_cache_pruned) + "\n\n";
     summary += "Scan timing (ms)\n\n";
     summary += "Metadata and indexes     : " +
-               std::to_string(elapsed_ms(scan_started, metadata_finished)) +
-               "\n";
+               std::to_string(result.metadata_and_indexes_ms) + "\n";
     summary += "File discovery           : " +
-               std::to_string(elapsed_ms(metadata_finished,
-                                         discovery_finished)) +
-               "\n";
+               std::to_string(result.file_discovery_ms) + "\n";
     summary += "MVS/AES verification     : " +
-               std::to_string(elapsed_ms(discovery_finished,
-                                         cartridge_finished)) +
-               "\n";
+               std::to_string(result.cartridge_verification_ms) + "\n";
     summary += "Neo Geo CD verification  : " +
-               std::to_string(elapsed_ms(cartridge_finished, cd_finished)) +
-               "\n";
+               std::to_string(result.cd_verification_ms) + "\n";
     summary += "Database build/write     : " +
-               std::to_string(elapsed_ms(cd_finished, database_finished)) +
-               "\n";
+               std::to_string(result.database_build_write_ms) + "\n";
     summary += "Statistics               : " +
-               std::to_string(elapsed_ms(database_finished, scan_finished)) +
-               "\n";
+               std::to_string(result.statistics_ms) + "\n";
     summary += "Total                    : " +
-               std::to_string(elapsed_ms(scan_started, scan_finished)) +
-               "\n\n";
+               std::to_string(result.total_ms) + "\n\n";
     summary += "======================================\n";
 
 

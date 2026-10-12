@@ -125,6 +125,16 @@ struct LibraryCatalogIdPresentation {
     std::string url;
 };
 
+struct LibraryMediaCounts {
+    std::size_t groups = 0;
+    std::size_t media = 0;
+    std::size_t parents = 0;
+    std::size_t variants = 0;
+};
+
+LibraryMediaCounts libraryMediaCounts(
+    const std::vector<Game>& games, std::string_view system);
+
 LibraryCatalogIdPresentation libraryCatalogIdPresentation(
     const Game& game, const Rom* rom);
 

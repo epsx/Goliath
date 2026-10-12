@@ -411,6 +411,28 @@ TEST_CASE("About Goliath remains theme-aware across every palette", "[theme]") {
     }
 }
 
+TEST_CASE("rescan summary uses semantic colors across every palette",
+          "[theme][rescan]") {
+    for (const Theme& theme : all_themes()) {
+        INFO("theme=" << theme.key);
+        const std::string stylesheet = generate_theme_style(theme);
+        const std::string expected_cards =
+            "QFrame#rescan_summary_card,\n"
+            "QFrame#rescan_change_card {\n"
+            "    background-color: " + theme.bg_secondary + ";\n"
+            "    border: 1px solid " + theme.border + ";\n"
+            "    border-radius: 12px;\n"
+            "}";
+        const std::string expected_problem =
+            "QLabel#rescan_metric_problem {\n"
+            "    color: " + theme.danger + ";\n"
+            "    font-weight: 700;\n"
+            "}";
+        CHECK(stylesheet.find(expected_cards) != std::string::npos);
+        CHECK(stylesheet.find(expected_problem) != std::string::npos);
+    }
+}
+
 TEST_CASE("combo popup remains readable across every palette", "[theme]") {
     constexpr const char* popup_selector =
         "QAbstractItemView#theme_selector_popup";

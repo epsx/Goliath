@@ -613,7 +613,22 @@ The configured cartridge directory must exist even for a CD-focused setup.
 3. Save the Path settings.
 4. Choose **Tools -> Rescan ROMs**, or press **F5**.
 5. Let the progress dialog finish.
-6. Review its summary, then inspect both library views.
+6. Review **Changes this rescan** and the three compact MVS/AES, Neo Geo CD,
+   and timing cards, then inspect both library views.
+
+The change row compares the validated library that was visible before the
+scan with the newly written database. **Added** and **Removed** represent exact
+system/media identities, while **Updated** means the same media remains but
+scanner-owned metadata or verification details changed. Use **Show Changes**
+for the affected titles and **Technical Details** for hash-cache statistics.
+
+If a canonical MVS/AES parent `.neo` is absent but one of its variants remains,
+the normal parent/variant group is preserved. The parent row reports
+**Parent ROM missing**; select the child variant to inspect its own CRC-32
+verification. Removing only the parent is reported as one removed exact-media
+item and does not falsely mark the surviving variant as updated.
+The MVS/AES rescan card and main-window status bar both count present parent
+ROMs and variant files directly, so their totals remain consistent.
 
 The worker rebuilds `database/games.json` outside the UI thread. The library is
 reloaded automatically after a successful scan; no separate `goliath-db`
@@ -1471,6 +1486,15 @@ rename one referenced track and confirm it is reported as missing without a
 launch. Test **Cancel** during a non-cached SHA-1 pass, and verify that media
 without catalog hashes receives a limited/readable result rather than a false
 success badge. Restore the files and rescan afterward.
+
+For a rescan-summary change, first rescan an unchanged library and confirm all
+entries are **Unchanged**. Add one media file, remove another, and alter trusted
+metadata for a third exact media item; rescan and confirm the Added, Removed,
+and Updated counts plus **Show Changes**. Check **Technical Details**, all three
+summary cards, and a theme with a narrow display before restoring the files.
+Also remove a parent `.neo` while retaining a clone: the parent must be the only
+removed item, the clone must remain unchanged and selectable, and the group row
+must show **Parent ROM missing** rather than **Metadata only**.
 
 For a save-data-manager change, create representative `.st0`/`.st1` and
 persistent data through normal gameplay, then confirm inventory, manual backup,

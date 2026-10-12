@@ -880,6 +880,63 @@ QFrame#about_information_card {
     border-radius: 12px;
 }
 
+QFrame#rescan_summary_card,
+QFrame#rescan_change_card {
+    background-color: @bg_secondary@;
+    border: 1px solid @border@;
+    border-radius: 12px;
+}
+
+QLabel#rescan_status {
+    color: @text_primary@;
+    font-weight: 600;
+}
+
+QLabel#rescan_section_heading,
+QLabel#rescan_card_heading {
+    color: @accent@;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QLabel#rescan_metric_label,
+QLabel#rescan_change_label,
+QLabel#rescan_comparison_total {
+    color: @text_secondary@;
+}
+
+QLabel#rescan_metric_value {
+    color: @text_primary@;
+    font-weight: 600;
+}
+
+QLabel#rescan_metric_problem {
+    color: @danger@;
+    font-weight: 700;
+}
+
+QLabel#rescan_change_value {
+    color: @text_primary@;
+    font-size: 19px;
+    font-weight: 700;
+}
+
+QFrame#rescan_change_card[changeKind="added"] QLabel#rescan_change_value {
+    color: @success@;
+}
+
+QFrame#rescan_change_card[changeKind="removed"] QLabel#rescan_change_value {
+    color: @danger@;
+}
+
+QFrame#rescan_change_card[changeKind="updated"] QLabel#rescan_change_value {
+    color: @accent@;
+}
+
+QFrame#rescan_change_card[changeKind="unchanged"] QLabel#rescan_change_value {
+    color: @text_secondary@;
+}
+
 QLabel#about_product_name {
     color: @text_primary@;
     font-size: 26px;

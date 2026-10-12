@@ -163,6 +163,7 @@ src/
 │   ├── detached_process_tracker.hpp/.cpp
 │   ├── filesystem_io.hpp/.cpp
 │   ├── game_integrity.hpp/.cpp
+│   ├── library_rescan_comparison.hpp/.cpp
 │   ├── game_model.hpp/.cpp
 │   ├── game_library_state.hpp/.cpp
 │   ├── game_playtime.hpp/.cpp
@@ -350,6 +351,7 @@ launch-process context.
 | `game_library_state` | core | Validates and atomically persists exact-media Favorites and ratings independently from `games.json`. |
 | `game_playtime` | core | Validates, formats, and atomically persists exact-media totals, session count, and last-session start/end/duration. |
 | `game_integrity` | core | Rechecks exact-media existence, size, CRC-32, file SHA-1, and CHD combined SHA-1 against scan-preserved references without mutating the library. |
+| `library_rescan_comparison` | core | Compares validated pre/post-scan snapshots by exact system/media identity and reports added, removed, updated, and unchanged entries. |
 | `game_profile` | core | Persists and validates exact-media launch/video/input overrides independently from `games.json`. |
 | `game_profile_runtime` | core | Composes short isolated JGRF configuration trees and layered input mappings for profiled launches. |
 | `game_profile_summary` | core | Formats effective exact-media profile values for the details panel. |
@@ -837,8 +839,14 @@ disabled when those destinations have not been published.
 ### Rescan dialog
 
 `rescan_dialog` is the modal progress surface for `RescanWorker`. It shows live
-scanner messages, an indeterminate progress bar, the final summary, errors, and
-cancellation/close behavior without running scanner logic itself.
+scanner messages and an indeterminate progress bar, then renders structured
+change counters and three compact statistics cards. Exact affected entries and
+hash-cache counters remain available through collapsed detail sections, while
+errors and close behavior stay inside the custom Goliath dialog. It never
+parses the scanner's human-readable transcript or runs scanner logic itself.
+The MVS/AES card counts present parent ROMs and clone/variant files separately;
+a clone-only group therefore remains arithmetically complete. The main-window
+status bar consumes the same `libraryMediaCounts` classification.
 
 ### Reusable widgets
 
@@ -940,6 +948,7 @@ tests/
 | `test_game_model.cpp` | Required fields, invalid rows, `main_rom`, and optional metadata. |
 | `test_game_library_state.cpp` | Exact-media Favorite/rating identity, v1-to-v2 migration, validation, atomic persistence, independent removal, and rescan survival. |
 | `test_game_integrity.cpp` | Live CRC-32, CUE/track SHA-1, CHD combined SHA-1, missing/unsafe files, limited references, and cancellation. |
+| `test_library_rescan_comparison.cpp` | Exact-media added/removed/updated/unchanged classification, ordering independence, and first-scan behavior. |
 | `test_game_playtime.cpp` | Exact-media accumulation, formatting, launch/loader validation, atomic persistence, failures, and overflow saturation. |
 | `test_game_profiles.cpp` | Exact-media keys, authoritative video schema, validated video/input JSON, isolated layered INIs/defaults, constraints, controller retargeting, and path limits. |
 | `test_game_system.cpp` | System/source/identity compatibility and legacy defaults. |
@@ -1082,8 +1091,13 @@ Tools / F5
        -> enumerate MVS/AES .neo files
        -> recursively discover CD CUE/CHD images
        -> verify content and update hash cache
-       -> assemble parent/variant games
+       -> assemble canonical parent/variant games
+          -> retain parent catalog metadata when only a clone is present
        -> write games.json
+  -> validate the new games.json through game_model
+  -> compare old/new exact-media snapshots
+  -> RescanReport with typed statistics and change lists
+  -> compact RescanDialog cards and optional details
   -> MainWindow reloads Game/ROM rows
   -> library view and status are rebuilt
 ```
@@ -1332,6 +1346,9 @@ The current organization follows these rules:
 20. An on-demand game integrity check may refresh digest-cache entries, but it
     never rewrites scanner output or verification badges; only a rescan adopts
     new persistent library state.
+21. Rescan presentation consumes typed scanner results and compares validated
+    exact-media snapshots; it never parses the human-readable progress log to
+    infer statistics or library changes.
 
 ---
 

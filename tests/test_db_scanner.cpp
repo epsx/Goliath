@@ -716,6 +716,55 @@ TEST_CASE("db scanner uses parent metadata when clone sorts first", "[db][scanne
     fs::remove_all(root);
 }
 
+TEST_CASE("db scanner retains canonical parent group when only clone exists",
+          "[db][scanner][parent][clone]") {
+    fs::path root = make_test_root("clone_without_parent");
+    create_common_metadata(root);
+
+    write_file(
+        root / "metadata/neogeo.xml",
+        R"xml(<?xml version="1.0"?>
+<softwarelist name="neogeo" description="SNK Neo-Geo cartridges">
+    <software name="parent">
+        <description>Canonical Parent</description>
+        <year>1999</year>
+        <publisher>Parent Corp</publisher>
+        <part name="cart" interface="neo_cart"/>
+    </software>
+    <software name="clone" cloneof="parent">
+        <description>Canonical Parent (Korean release)</description>
+        <year>2001</year>
+        <publisher>Clone Corp</publisher>
+        <part name="cart" interface="neo_cart"/>
+    </software>
+</softwarelist>
+)xml"
+    );
+    write_file(root / "roms/clone.neo", "");
+
+    const ScanResult result = scan_roms(make_config(root));
+    REQUIRE(result.success);
+    CHECK(result.rom_file_count == 1);
+    CHECK(result.game_count == 1);
+    CHECK(result.parent_games == 0);
+    CHECK(result.variant_count == 1);
+
+    std::ifstream in(root / "database/games.json");
+    const std::string text(std::istreambuf_iterator<char>(in), {});
+    CHECK(text.find("\"name\": \"Canonical Parent\"") !=
+          std::string::npos);
+    CHECK(text.find("\"manufacturer\": \"Parent Corp\"") !=
+          std::string::npos);
+    CHECK(text.find("\"short\": \"parent\"") != std::string::npos);
+    CHECK(text.find("\"main_rom\": null") != std::string::npos);
+    CHECK(text.find("\"file\": \"clone.neo\"") != std::string::npos);
+    CHECK(text.find("\"mame\": \"clone\"") != std::string::npos);
+    CHECK(text.find("\"main\": false") != std::string::npos);
+
+    in.close();
+    fs::remove_all(root);
+}
+
 TEST_CASE("db scanner detects homebrew", "[db][scanner]") {
 
     fs::path root =
@@ -1187,6 +1236,11 @@ TEST_CASE("db scanner loads dedicated Neo Geo metadata catalogs", "[db][metadata
     });
 
     REQUIRE(result.success);
+    CHECK(result.total_ms >= 0);
+    CHECK(result.metadata_and_indexes_ms + result.file_discovery_ms +
+              result.cartridge_verification_ms + result.cd_verification_ms +
+              result.database_build_write_ms + result.statistics_ms <=
+          result.total_ms);
     REQUIRE(progress.find("Neo Geo cartridge software entries: 8") != std::string::npos);
     REQUIRE(progress.find("Neo Geo CD software entries: 3") != std::string::npos);
     REQUIRE(progress.find("History entries (Neo Geo): 4") != std::string::npos);
@@ -1194,7 +1248,9 @@ TEST_CASE("db scanner loads dedicated Neo Geo metadata catalogs", "[db][metadata
     REQUIRE((progress.find("Scan timing (ms)") != std::string::npos &&
              progress.find("MVS/AES verification") != std::string::npos &&
              progress.find("Neo Geo CD verification") != std::string::npos &&
-             progress.find("Total") != std::string::npos));
+             progress.find("Total                    : " +
+                           std::to_string(result.total_ms)) !=
+                 std::string::npos));
 
     fs::remove_all(root);
 }

@@ -1,18 +1,18 @@
-// Modal progress dialog for RescanWorker. Shows live status, an indeterminate
-// progress bar, and a read-only summary or error when scanning finishes.
+// Custom modal progress and compact structured result dialog for ROM rescans.
 #pragma once
 
+#include "game/rescan_worker.hpp"
+
 #include <QDialog>
-#include <QStringList>
 
 class QLabel;
 class QProgressBar;
-class QTextEdit;
 class QPushButton;
+class QTextEdit;
+class QVBoxLayout;
+class QWidget;
 
 namespace goliath {
-
-class RescanWorker;
 
 class RescanDialog : public QDialog {
     Q_OBJECT
@@ -21,19 +21,22 @@ public:
 
 private slots:
     void onOutput(QString line);
-    void onCompleted();
+    void onCompleted(goliath::RescanReport report);
     void onError(QString msg);
 
 private:
-    RescanWorker* m_worker;
+    void populateReport(const RescanReport& report);
+
     QLabel* m_statusLabel;
     QProgressBar* m_progress;
-    QTextEdit* m_summaryText;
+    QWidget* m_reportContainer;
+    QVBoxLayout* m_reportLayout;
+    QTextEdit* m_errorText;
+    QPushButton* m_changesButton;
+    QWidget* m_changesDetails;
+    QPushButton* m_technicalButton;
+    QWidget* m_technicalDetails;
     QPushButton* m_closeBtn;
-
-    QStringList m_outputLines;
-    bool m_summaryStarted = false;
-    QStringList m_summaryLines;
 };
 
 } // namespace goliath

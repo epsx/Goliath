@@ -9,6 +9,23 @@
 
 namespace goliath {
 
+LibraryMediaCounts libraryMediaCounts(
+        const std::vector<Game>& games, std::string_view system) {
+    LibraryMediaCounts counts;
+    for (const Game& game : games) {
+        if (game.system != system) continue;
+        ++counts.groups;
+        counts.media += game.roms.size();
+        for (const Rom& rom : game.roms) {
+            if (rom.main)
+                ++counts.parents;
+            else
+                ++counts.variants;
+        }
+    }
+    return counts;
+}
+
 LibraryCatalogIdPresentation libraryCatalogIdPresentation(
     const Game& game, const Rom* rom) {
     if (game.source == "redump") {
@@ -38,6 +55,15 @@ LibraryVerificationPresentation libraryVerificationPresentation(
         return {
             "Unidentified", "",
             "No matching MAME software-list entry was identified.",
+            VerificationTone::Neutral, false,
+        };
+    }
+
+    if (game.system == "neogeo" && !rom && !game.main_rom.has_value()) {
+        return {
+            "Parent ROM missing", "",
+            "The canonical parent .neo file is not present. Select one of "
+            "the listed variants to view its content verification.",
             VerificationTone::Neutral, false,
         };
     }
