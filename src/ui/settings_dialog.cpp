@@ -35,8 +35,10 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QScrollBar>
 #include <QSpinBox>
 #include <QTabWidget>
+#include <QTimer>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -52,6 +54,13 @@ namespace goliath {
 namespace {
 
 constexpr int kDefaultAxisDeadzone = 5;
+
+void restore_scroll_position_later(QScrollArea* scroll, int position) {
+    if (!scroll) return;
+    QTimer::singleShot(0, scroll, [scroll, position]() {
+        scroll->verticalScrollBar()->setValue(position);
+    });
+}
 
 const std::vector<std::pair<int, QString>>& inputDeviceOptions() {
     static const std::vector<std::pair<int, QString>> opts = {
@@ -418,6 +427,7 @@ void SettingsDialog::buildInputTab(QWidget* inputWidget) {
         pageLayout->contentsMargins().right(), 0);
 
     auto* pageScroll = new QScrollArea();
+    m_inputScroll = pageScroll;
     pageScroll->setObjectName("input_tab_scroll");
     pageScroll->setWidgetResizable(true);
     pageLayout->addWidget(pageScroll);
@@ -797,6 +807,10 @@ void SettingsDialog::resetOneInputMapping(
 }
 
 void SettingsDialog::updateInputMappingPresentation() {
+    const int scrollPosition = m_inputScroll
+        ? m_inputScroll->verticalScrollBar()->value()
+        : 0;
+
     std::vector<InputBindingAssignment> assignments;
     assignments.reserve(m_inputEntries.size());
     for (const InputRow& row : m_inputEntries) {
@@ -869,6 +883,8 @@ void SettingsDialog::updateInputMappingPresentation() {
         setButtonDisplayText(row.button, shown);
         row.button->setToolTip(tooltip);
     }
+
+    restore_scroll_position_later(m_inputScroll, scrollPosition);
 }
 
 void SettingsDialog::loadInputConfig() {
@@ -1013,6 +1029,11 @@ void SettingsDialog::startListening(QPushButton* btn, const QString& section, co
         "Click this control again to cancel.");
     btn->setStyleSheet("background-color: #3daee9; color: white;");
 
+    const int scrollPosition = m_inputScroll
+        ? m_inputScroll->verticalScrollBar()->value()
+        : 0;
+    restore_scroll_position_later(m_inputScroll, scrollPosition);
+
     // Redirect ALL keyboard events to this dialog while listening - otherwise
     // arrow keys/Tab are consumed by Qt focus navigation on the focused
     // button and never reach keyPressEvent().
@@ -1054,6 +1075,10 @@ void SettingsDialog::stopJoystickListener() {
 }
 
 void SettingsDialog::cancelListening() {
+    const bool restoreScroll = m_listeningBtn != nullptr;
+    const int scrollPosition = m_inputScroll
+        ? m_inputScroll->verticalScrollBar()->value()
+        : 0;
     stopJoystickListener();
 
     if (m_listeningBtn) {
@@ -1068,6 +1093,8 @@ void SettingsDialog::cancelListening() {
     m_listeningDisplay.clear();
     m_listeningTooltip.clear();
     if (QWidget::keyboardGrabber() == this) releaseKeyboard();
+    if (restoreScroll)
+        restore_scroll_position_later(m_inputScroll, scrollPosition);
 }
 
 void SettingsDialog::applyMapping(const QString& code, const QString& displayNameIn) {

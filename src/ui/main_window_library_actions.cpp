@@ -137,10 +137,11 @@ void MainWindow::openGameSettings() {
         else
             m_gameProfiles.remove(game.system, *media);
 
-        QMessageBox::critical(
+        showThemedMessageDialog(
             this, "Per-game Settings",
             QString("Could not save the per-game profile.\n\n%1")
-                .arg(QString::fromStdString(error)));
+                .arg(QString::fromStdString(error)),
+            ThemedMessageTone::Critical);
         return;
     }
 

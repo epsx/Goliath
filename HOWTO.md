@@ -882,10 +882,16 @@ hotkey processing when testing a conflicting binding.
 7. A warning symbol marks mappings that share one physical input. Its tooltip
    identifies the other action and whether that action is inherited or custom.
    Conflicts remain saveable because shared mappings can be intentional.
-8. Choose **Save Profile**. A gear appears beside the row.
-9. Use **Reset to Global** to remove every setting and input mapping for that
+8. Use **Export...** to save the overrides currently shown as a portable
+   `*.goliath-game-settings.json` file. The export contains no ROM, CUE, CHD,
+   or local folder path.
+9. Use **Import...** to load a transfer file for the same system family. Review
+   the custom before/after summary, choose **Apply to Editor**, inspect the
+   tabs, and then press **Save Profile**. Import never saves automatically.
+10. Choose **Save Profile**. A gear appears beside the row.
+11. Use **Reset to Global** to remove every setting and input mapping for that
    media.
-10. To inspect the generated INIs, right-click a row with a gear and choose
+12. To inspect the generated INIs, right-click a row with a gear and choose
    **Open per-game config folder**. Goliath refreshes that exact media's
    runtime configuration before opening `config/p/<hash>/jollygood/`.
 
@@ -919,6 +925,10 @@ bindings, and individual exact-media input mappings. Important constraints are:
 
 The profile database is `config/game_profiles.json`. It is independent from
 scanner-generated `database/games.json`, so rescans do not remove profiles.
+Portable game-settings files use a versioned, allowlisted schema and are
+limited to 1 MiB. Cartridge and CD profiles cannot be imported into each
+other, unknown fields and unsafe input bindings fail closed, and the selected
+library row always remains the import target because media paths are omitted.
 On every profiled launch, Goliath refreshes a generated configuration below
 `config/p/<hash>/jollygood/`, points only that child JGRF process at it, and
 continues to share the normal `data/` tree for BIOS, saves, states, and cheats.
@@ -1468,6 +1478,11 @@ API and shader in a Benchmark result.
 Map at least one keyboard key and one controller input for an exact media item;
 confirm a right-click return to inheritance and test the V-Liner/Irritating
 Maze mapping panels without changing the core input type.
+Export an MVS/AES profile, import it into another cartridge game, review the
+summary, and confirm nothing changes until **Save Profile**. Repeat with a CD
+profile, cancel one preview, and confirm that a cartridge-to-CD import is
+rejected. Inspect an exported file and confirm it contains no media or local
+folder path.
 Open the generated config folder for a parent and a variant or for a CUE and a
 CHD, and confirm that each selection resolves to its own directory. Confirm
 that the global files under `config/jollygood/` remain unchanged.

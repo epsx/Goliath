@@ -16,7 +16,9 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QScrollBar>
 #include <QThread>
+#include <QTimer>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -32,6 +34,13 @@ struct MappingProfileOption {
     int value;
     const char* label;
 };
+
+void restore_scroll_position_later(QScrollArea* scroll, int position) {
+    if (!scroll) return;
+    QTimer::singleShot(0, scroll, [scroll, position]() {
+        scroll->verticalScrollBar()->setValue(position);
+    });
+}
 
 const std::vector<MappingProfileOption>& cartridge_mapping_profiles() {
     static const std::vector<MappingProfileOption> options = {
@@ -243,6 +252,7 @@ GameInputMappingWidget::GameInputMappingWidget(
     layout->addWidget(portNote);
 
     auto* scroll = new QScrollArea();
+    m_scroll = scroll;
     scroll->setWidgetResizable(true);
     m_container = new QWidget();
     m_containerLayout = new QVBoxLayout(m_container);
@@ -270,6 +280,13 @@ GameInputMappingWidget::~GameInputMappingWidget() {
 
 GameInputOverrides GameInputMappingWidget::overrides() const {
     return m_overrides;
+}
+
+void GameInputMappingWidget::setOverrides(GameInputOverrides overrides) {
+    cancelListening();
+    if (m_overrides == overrides) return;
+    m_overrides = std::move(overrides);
+    rebuild();
 }
 
 int GameInputMappingWidget::initialMappingProfile() const {
@@ -350,9 +367,16 @@ void GameInputMappingWidget::updateButtonDisplay(
 void GameInputMappingWidget::rebuild() {
     if (!m_containerLayout || !m_mappingProfileCombo) return;
 
+    const int scrollPosition = m_scroll
+        ? m_scroll->verticalScrollBar()->value()
+        : 0;
+
     QLayoutItem* child = nullptr;
     while ((child = m_containerLayout->takeAt(0)) != nullptr) {
-        if (child->widget()) child->widget()->deleteLater();
+        if (QWidget* widget = child->widget()) {
+            widget->hide();
+            widget->deleteLater();
+        }
         delete child;
     }
 
@@ -484,6 +508,7 @@ void GameInputMappingWidget::rebuild() {
     }
 
     m_containerLayout->addStretch();
+    restore_scroll_position_later(m_scroll, scrollPosition);
 }
 
 void GameInputMappingWidget::refreshJoystickList() {
@@ -541,6 +566,10 @@ void GameInputMappingWidget::startListening(
         "Press a keyboard key or use the selected controller. "
         "Click this control again to cancel.");
     button->setStyleSheet("background-color: #3daee9; color: white;");
+    const int scrollPosition = m_scroll
+        ? m_scroll->verticalScrollBar()->value()
+        : 0;
+    restore_scroll_position_later(m_scroll, scrollPosition);
     grabKeyboard();
 
     if (!m_joystickCombo || !m_joystickCombo->isEnabled() ||
@@ -583,6 +612,10 @@ void GameInputMappingWidget::stopJoystickListener() {
 }
 
 void GameInputMappingWidget::cancelListening() {
+    const bool restoreScroll = m_listeningButton != nullptr;
+    const int scrollPosition = m_scroll
+        ? m_scroll->verticalScrollBar()->value()
+        : 0;
     stopJoystickListener();
 
     if (m_listeningButton) {
@@ -597,6 +630,8 @@ void GameInputMappingWidget::cancelListening() {
     m_listeningDisplay.clear();
     m_listeningTooltip.clear();
     if (QWidget::keyboardGrabber() == this) releaseKeyboard();
+    if (restoreScroll)
+        restore_scroll_position_later(m_scroll, scrollPosition);
 }
 
 void GameInputMappingWidget::applyMapping(

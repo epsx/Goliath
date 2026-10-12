@@ -26,13 +26,19 @@ using goliath::GameLaunchProfile;
 using goliath::GameProfileGlobalSettings;
 using goliath::GameProfileSummary;
 using goliath::GameProfileStore;
+using goliath::GameProfileTransferSummary;
 using goliath::IniDocument;
+using goliath::deserialize_game_profile_transfer;
 using goliath::effective_cartridge_system;
 using goliath::game_profile_supports_four_player;
 using goliath::game_profile_uses_mvs_hardware;
 using goliath::make_game_profile_key;
 using goliath::materialize_game_profile_runtime;
+using goliath::load_game_profile_transfer;
+using goliath::save_game_profile_transfer;
+using goliath::serialize_game_profile_transfer;
 using goliath::summarize_game_profile;
+using goliath::summarize_game_profile_transfer;
 using goliath::normalize_game_profile_media;
 using goliath::inspect_direct_path;
 
@@ -300,6 +306,135 @@ TEST_CASE("per-game profiles recover after a blocked save destination",
         recovered.find("neogeo", "kof98.neo");
     REQUIRE(loaded != nullptr);
     CHECK(loaded->shader == std::optional<int>(4));
+
+    fs::remove_all(root);
+}
+
+TEST_CASE("per-game settings transfer is portable and round-trips overrides",
+          "[profiles][transfer]") {
+    GameLaunchProfile source;
+    source.cartridge_system = 2;
+    source.universe_hardware = 1;
+    source.region = 3;
+    source.free_play = true;
+    source.video_api = 3;
+    source.shader = 5;
+    source.jgrf_video = {{"fullscreen", 1}, {"scale", 6}};
+    source.geolith_video = {{"palette", 1}};
+    source.input_device = 1;
+    source.controller_port = 2;
+    source.input_overrides["neogeojs1"]["A"] = "j2b9";
+    source.input_overrides["neogeosystem"]["Coin1"] = "35";
+
+    const std::string document =
+        serialize_game_profile_transfer("neogeo", source);
+    REQUIRE_FALSE(document.empty());
+    CHECK(document.find("goliath-game-settings") != std::string::npos);
+    CHECK(document.find("kof98.neo") == std::string::npos);
+    CHECK(document.find("media") == std::string::npos);
+
+    GameLaunchProfile imported;
+    std::string error;
+    REQUIRE(deserialize_game_profile_transfer(
+        document, "neogeo", &imported, &error));
+    CHECK(error.empty());
+    CHECK(imported.cartridge_system == std::optional<int>(2));
+    CHECK(imported.universe_hardware == std::optional<int>(1));
+    CHECK(imported.region == std::optional<int>(3));
+    CHECK(imported.free_play == std::optional<bool>(true));
+    CHECK(imported.video_api == std::optional<int>(3));
+    CHECK(imported.shader == std::optional<int>(5));
+    CHECK(imported.jgrf_video == source.jgrf_video);
+    CHECK(imported.geolith_video == source.geolith_video);
+    CHECK(imported.input_device == std::optional<int>(1));
+    CHECK(imported.controller_port == std::optional<int>(2));
+    CHECK(imported.input_overrides == source.input_overrides);
+
+    const GameProfileTransferSummary summary =
+        summarize_game_profile_transfer(imported);
+    CHECK(summary.system_overrides == 4);
+    CHECK(summary.video_overrides == 5);
+    CHECK(summary.input_overrides == 4);
+    CHECK(summary.total() == 13);
+}
+
+TEST_CASE("per-game settings transfer rejects incompatible or unsafe files",
+          "[profiles][transfer][validation]") {
+    GameLaunchProfile destination;
+    destination.shader = 4;
+    const GameLaunchProfile sentinel = destination;
+    std::string error;
+
+    SECTION("wrong target system") {
+        const std::string document = serialize_game_profile_transfer(
+            "neogeocd", GameLaunchProfile{});
+        CHECK_FALSE(deserialize_game_profile_transfer(
+            document, "neogeo", &destination, &error));
+        CHECK(error.find("cannot be imported") != std::string::npos);
+    }
+
+    SECTION("unknown root field") {
+        const std::string document = R"json({
+          "format":"goliath-game-settings","version":1,"system":"neogeo",
+          "overrides":{},"media":"private/kof98.neo"
+        })json";
+        CHECK_FALSE(deserialize_game_profile_transfer(
+            document, "neogeo", &destination, &error));
+        CHECK_FALSE(error.empty());
+    }
+
+    SECTION("invalid video value") {
+        const std::string document = R"json({
+          "format":"goliath-game-settings","version":1,"system":"neogeo",
+          "overrides":{"jgrf_video":{"scale":999}}
+        })json";
+        CHECK_FALSE(deserialize_game_profile_transfer(
+            document, "neogeo", &destination, &error));
+        CHECK(error.find("scale") != std::string::npos);
+    }
+
+    SECTION("unsafe input binding") {
+        const std::string document = R"json({
+          "format":"goliath-game-settings","version":1,"system":"neogeo",
+          "overrides":{"input_overrides":{"neogeojs1":{"A":"j0b32"}}}
+        })json";
+        CHECK_FALSE(deserialize_game_profile_transfer(
+            document, "neogeo", &destination, &error));
+        CHECK(error.find("neogeojs1/A") != std::string::npos);
+    }
+
+    CHECK(destination.shader == sentinel.shader);
+}
+
+TEST_CASE("per-game settings transfer uses bounded atomic files",
+          "[profiles][transfer][persistence]") {
+    const fs::path root = make_profile_test_root("transfer");
+    const fs::path path = root / "exports" / "kof98.goliath-game-settings.json";
+
+    GameLaunchProfile source;
+    source.cartridge_system = 1;
+    source.region = 1;
+    source.shader = 0;
+
+    std::string error;
+    REQUIRE(save_game_profile_transfer(
+        path, "neogeo", source, &error));
+    CHECK(error.empty());
+    REQUIRE(fs::is_regular_file(path));
+
+    GameLaunchProfile imported;
+    REQUIRE(load_game_profile_transfer(
+        path, "neogeo", &imported, &error));
+    CHECK(error.empty());
+    CHECK(imported.cartridge_system == std::optional<int>(1));
+    CHECK(imported.region == std::optional<int>(1));
+    CHECK(imported.shader == std::optional<int>(0));
+
+    const fs::path oversized = root / "oversized.json";
+    write_text(oversized, std::string((1024U * 1024U) + 1U, 'x'));
+    CHECK_FALSE(load_game_profile_transfer(
+        oversized, "neogeo", &imported, &error));
+    CHECK(error.find("unexpectedly large") != std::string::npos);
 
     fs::remove_all(root);
 }

@@ -508,6 +508,13 @@ path. This keeps cartridge parents and variants separate and also distinguishes
 CUE from CHD copies of the same title. Records live in
 `config/game_profiles.json`, outside scanner-generated `games.json`.
 
+The same module owns the versioned single-profile transfer format. Transfer
+documents contain only an allowlisted system family and override object; they
+never contain the source media identity or any local path. Loading is bounded
+to 1 MiB and rejects unsupported versions, unknown fields, invalid video/input
+values, and cartridge/CD mismatches before changing the destination profile.
+Saving uses `QSaveFile` for atomic replacement.
+
 For a profiled launch, `game_profile_runtime` copies the current upstream INIs
 into `config/p/<64-bit-hash>/jollygood/`, overlays only the requested fields,
 and returns that short directory as the child process's `XDG_CONFIG_HOME`.
@@ -746,7 +753,10 @@ non-blocking warning whose tooltip lists every affected action and source.
 **Reset to Global** removes the whole record. The dialog dynamically disables
 MVS-only settings, validates four-player mode, and explains the connection-
 order limitation of JGRF controller ports. Active profiles receive a gear
-marker in the library.
+marker in the library. **Export...** serializes the values currently shown,
+while **Import...** presents a themed current/imported summary and only loads
+the confirmed values into the editor; persistence still requires **Save
+Profile**.
 
 The library context menu selects the clicked row before opening, and its
 Benchmark action calls the same `benchmarkSelected` slot as the Tools menu.
@@ -963,7 +973,7 @@ tests/
 | `test_game_integrity.cpp` | Live CRC-32, CUE/track SHA-1, CHD combined SHA-1, missing/unsafe files, limited references, and cancellation. |
 | `test_library_rescan_comparison.cpp` | Exact-media added/removed/updated/unchanged classification, ordering independence, and first-scan behavior. |
 | `test_game_playtime.cpp` | Exact-media accumulation, formatting, launch/loader validation, atomic persistence, failures, and overflow saturation. |
-| `test_game_profiles.cpp` | Exact-media keys, authoritative video schema, validated video/input JSON, isolated layered INIs/defaults, constraints, controller retargeting, and path limits. |
+| `test_game_profiles.cpp` | Exact-media keys, authoritative video schema, validated video/input JSON, bounded path-free transfer files, system compatibility, isolated layered INIs/defaults, constraints, controller retargeting, and path limits. |
 | `test_game_system.cpp` | System/source/identity compatibility and legacy defaults. |
 | `test_ini_document.cpp` | Load, edit, remove, preservation, and save round trips. |
 | `test_input_maps.cpp` | Input normalization, profiles, bounded bindings, analog definitions, and JGRF hotkeys. |

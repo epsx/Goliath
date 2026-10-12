@@ -13,7 +13,10 @@
 #include <exception>
 #include <fstream>
 #include <iomanip>
+#include <iterator>
+#include <set>
 #include <sstream>
+#include <string_view>
 #include <utility>
 
 namespace fs = std::filesystem;
@@ -24,6 +27,9 @@ namespace goliath {
 namespace {
 
 constexpr int kProfileSchemaVersion = 1;
+constexpr int kTransferSchemaVersion = 1;
+constexpr std::string_view kTransferFormat = "goliath-game-settings";
+constexpr std::uintmax_t kMaximumTransferBytes = 1024U * 1024U;
 
 std::optional<int> optional_int_in_range(const json& object,
                                          const char* key,
@@ -171,6 +177,159 @@ json profile_to_json(const GameLaunchProfile& profile) {
     return object;
 }
 
+bool fail_transfer(std::string* error, std::string message) {
+    if (error) *error = std::move(message);
+    return false;
+}
+
+bool validate_optional_integer(const json& object,
+                               const char* key,
+                               int minimum,
+                               int maximum,
+                               std::string* error) {
+    if (!object.contains(key)) return true;
+    const json& value = object.at(key);
+    if (!value.is_number_integer()) {
+        return fail_transfer(
+            error, std::string("Override '") + key + "' must be an integer.");
+    }
+    const int parsed = value.get<int>();
+    if (parsed < minimum || parsed > maximum) {
+        return fail_transfer(
+            error, std::string("Override '") + key + "' is outside its "
+                   "supported range.");
+    }
+    return true;
+}
+
+bool validate_optional_boolean(const json& object,
+                               const char* key,
+                               std::string* error) {
+    if (!object.contains(key)) return true;
+    if (!object.at(key).is_boolean()) {
+        return fail_transfer(
+            error, std::string("Override '") + key + "' must be true or false.");
+    }
+    return true;
+}
+
+bool validate_video_transfer_values(
+        const json& object,
+        const char* key,
+        const std::vector<VideoSettingSpec>& specs,
+        std::string* error) {
+    if (!object.contains(key)) return true;
+    const json& values = object.at(key);
+    if (!values.is_object()) {
+        return fail_transfer(
+            error, std::string("Override group '") + key + "' must be an object.");
+    }
+
+    for (const auto& [name, value] : values.items()) {
+        const VideoSettingSpec* spec = find_video_setting(specs, name);
+        if (!spec) {
+            return fail_transfer(
+                error, "Unknown video override in transfer file: " + name);
+        }
+        if (!value.is_number_integer() ||
+            !is_valid_video_setting_value(*spec, value.get<int>())) {
+            return fail_transfer(
+                error, "Invalid value for video override: " + name);
+        }
+    }
+    return true;
+}
+
+bool validate_input_transfer_values(const json& object,
+                                    std::string* error) {
+    if (!object.contains("input_overrides")) return true;
+    const json& sections = object.at("input_overrides");
+    if (!sections.is_object()) {
+        return fail_transfer(
+            error, "Override group 'input_overrides' must be an object.");
+    }
+
+    const auto& definitions = input_defs();
+    for (const auto& [section, keys] : sections.items()) {
+        if (!definitions.contains(section) || !keys.is_object()) {
+            return fail_transfer(
+                error, "Unknown or malformed input section: " + section);
+        }
+
+        std::set<std::string> canonicalKeys;
+        for (const auto& [key, value] : keys.items()) {
+            if (!value.is_string()) {
+                return fail_transfer(
+                    error, "Input override values must be strings.");
+            }
+            const std::string canonical = canonical_input_key(section, key);
+            const auto normalized = normalize_input_binding_for_definition(
+                section, canonical, value.get<std::string>());
+            if (canonical.empty() || !normalized.has_value()) {
+                return fail_transfer(
+                    error, "Invalid input override: " + section + "/" + key);
+            }
+            if (!canonicalKeys.insert(canonical).second) {
+                return fail_transfer(
+                    error, "Duplicate input override: " + section + "/" +
+                               canonical);
+            }
+        }
+    }
+    return true;
+}
+
+bool validate_transfer_overrides(const json& object,
+                                 const std::string& system,
+                                 std::string* error) {
+    static const std::set<std::string> allowed = {
+        "cartridge_system", "cd_system", "universe_hardware", "region",
+        "input_device", "free_play", "setting_mode", "video_api",
+        "shader", "jgrf_video", "geolith_video", "controller_port",
+        "input_overrides",
+    };
+    for (const auto& [key, value] : object.items()) {
+        (void)value;
+        if (!allowed.contains(key)) {
+            return fail_transfer(
+                error, "Unknown per-game override in transfer file: " + key);
+        }
+    }
+
+    if (system == "neogeo" && object.contains("cd_system")) {
+        return fail_transfer(
+            error, "A Neo Geo cartridge transfer cannot contain CD settings.");
+    }
+    if (system == "neogeocd" &&
+        (object.contains("cartridge_system") ||
+         object.contains("universe_hardware") ||
+         object.contains("free_play") ||
+         object.contains("setting_mode"))) {
+        return fail_transfer(
+            error, "A Neo Geo CD transfer contains cartridge-only settings.");
+    }
+
+    const int maximumInputDevice = system == "neogeocd" ? 1 : 3;
+    return validate_optional_integer(
+               object, "cartridge_system", 0, 2, error) &&
+           validate_optional_integer(object, "cd_system", 0, 3, error) &&
+           validate_optional_integer(
+               object, "universe_hardware", 0, 1, error) &&
+           validate_optional_integer(object, "region", 0, 3, error) &&
+           validate_optional_integer(
+               object, "input_device", 0, maximumInputDevice, error) &&
+           validate_optional_boolean(object, "free_play", error) &&
+           validate_optional_boolean(object, "setting_mode", error) &&
+           validate_optional_integer(object, "video_api", 0, 3, error) &&
+           validate_optional_integer(object, "shader", 0, 6, error) &&
+           validate_optional_integer(object, "controller_port", 0, 9, error) &&
+           validate_video_transfer_values(
+               object, "jgrf_video", jgrf_video_setting_specs(), error) &&
+           validate_video_transfer_values(
+               object, "geolith_video", geolith_video_setting_specs(), error) &&
+           validate_input_transfer_values(object, error);
+}
+
 } // namespace
 
 bool GameLaunchProfile::empty() const {
@@ -187,6 +346,187 @@ bool GameLaunchProfile::empty() const {
            geolith_video.empty() &&
            !controller_port.has_value() &&
            input_overrides.empty();
+}
+
+std::size_t GameProfileTransferSummary::total() const {
+    return system_overrides + video_overrides + input_overrides;
+}
+
+GameProfileTransferSummary summarize_game_profile_transfer(
+        const GameLaunchProfile& profile) {
+    GameProfileTransferSummary summary;
+    summary.system_overrides += profile.cartridge_system.has_value() ? 1U : 0U;
+    summary.system_overrides += profile.cd_system.has_value() ? 1U : 0U;
+    summary.system_overrides += profile.universe_hardware.has_value() ? 1U : 0U;
+    summary.system_overrides += profile.region.has_value() ? 1U : 0U;
+    summary.system_overrides += profile.free_play.has_value() ? 1U : 0U;
+    summary.system_overrides += profile.setting_mode.has_value() ? 1U : 0U;
+
+    summary.video_overrides += profile.video_api.has_value() ? 1U : 0U;
+    summary.video_overrides += profile.shader.has_value() ? 1U : 0U;
+    summary.video_overrides += profile.jgrf_video.size();
+    summary.video_overrides += profile.geolith_video.size();
+
+    summary.input_overrides += profile.input_device.has_value() ? 1U : 0U;
+    summary.input_overrides += profile.controller_port.has_value() ? 1U : 0U;
+    for (const auto& [section, keys] : profile.input_overrides) {
+        (void)section;
+        summary.input_overrides += keys.size();
+    }
+    return summary;
+}
+
+std::string serialize_game_profile_transfer(
+        const std::string& system,
+        const GameLaunchProfile& profile) {
+    if (system != "neogeo" && system != "neogeocd") return {};
+
+    const json overrides = profile_to_json(profile);
+    if (!validate_transfer_overrides(overrides, system, nullptr)) return {};
+
+    json root = {
+        {"format", std::string(kTransferFormat)},
+        {"version", kTransferSchemaVersion},
+        {"system", system},
+        {"overrides", overrides},
+    };
+    return root.dump(2) + '\n';
+}
+
+bool deserialize_game_profile_transfer(
+        std::string_view document,
+        const std::string& expected_system,
+        GameLaunchProfile* profile,
+        std::string* error) {
+    if (error) error->clear();
+    if (!profile) {
+        return fail_transfer(error, "No destination profile was provided.");
+    }
+    if (expected_system != "neogeo" && expected_system != "neogeocd") {
+        return fail_transfer(error, "The selected game has an unsupported system.");
+    }
+    if (document.size() > kMaximumTransferBytes) {
+        return fail_transfer(error, "The game-settings file is unexpectedly large.");
+    }
+
+    try {
+        const json root = json::parse(document.begin(), document.end());
+        if (!root.is_object() || root.size() != 4U ||
+            !root.contains("format") || !root.at("format").is_string() ||
+            root.at("format").get<std::string>() != kTransferFormat ||
+            !root.contains("version") ||
+            !root.at("version").is_number_integer() ||
+            root.at("version").get<int>() != kTransferSchemaVersion ||
+            !root.contains("system") || !root.at("system").is_string() ||
+            !root.contains("overrides") ||
+            !root.at("overrides").is_object()) {
+            return fail_transfer(
+                error, "Unsupported or malformed Goliath game-settings file.");
+        }
+
+        const std::string sourceSystem = root.at("system").get<std::string>();
+        if (sourceSystem != "neogeo" && sourceSystem != "neogeocd") {
+            return fail_transfer(error, "The transfer file has an unknown system.");
+        }
+        if (sourceSystem != expected_system) {
+            return fail_transfer(
+                error,
+                expected_system == "neogeo"
+                    ? "Neo Geo CD settings cannot be imported into a cartridge game."
+                    : "Neo Geo cartridge settings cannot be imported into a CD game.");
+        }
+
+        const json& overrides = root.at("overrides");
+        if (!validate_transfer_overrides(overrides, sourceSystem, error))
+            return false;
+
+        GameLaunchProfile parsed = profile_from_json(overrides);
+        *profile = std::move(parsed);
+        return true;
+    } catch (const std::exception& ex) {
+        return fail_transfer(
+            error, std::string("Could not parse game-settings file: ") + ex.what());
+    }
+}
+
+bool save_game_profile_transfer(const fs::path& path,
+                                const std::string& system,
+                                const GameLaunchProfile& profile,
+                                std::string* error) {
+    if (error) error->clear();
+    const std::string serialized =
+        serialize_game_profile_transfer(system, profile);
+    GameLaunchProfile validated;
+    if (serialized.empty() ||
+        !deserialize_game_profile_transfer(
+            serialized, system, &validated, error)) {
+        if (error && error->empty())
+            *error = "The game profile cannot be exported.";
+        return false;
+    }
+
+    std::error_code ec;
+    if (!path.parent_path().empty()) {
+        fs::create_directories(path.parent_path(), ec);
+        if (ec) {
+            return fail_transfer(
+                error, "Could not create export directory: " + ec.message());
+        }
+    }
+
+    const QByteArray bytes = QByteArray::fromStdString(serialized);
+    QSaveFile output(path_to_qstring(path));
+    output.setDirectWriteFallback(false);
+    if (!output.open(QIODevice::WriteOnly)) {
+        return fail_transfer(
+            error, "Could not open game-settings file for writing: " +
+                       output.errorString().toStdString());
+    }
+    if (output.write(bytes) != bytes.size()) {
+        const std::string message =
+            "Could not write game-settings file: " +
+            output.errorString().toStdString();
+        output.cancelWriting();
+        return fail_transfer(error, message);
+    }
+    if (!output.commit()) {
+        return fail_transfer(
+            error, "Could not replace game-settings file: " +
+                       output.errorString().toStdString());
+    }
+    return true;
+}
+
+bool load_game_profile_transfer(const fs::path& path,
+                                const std::string& expected_system,
+                                GameLaunchProfile* profile,
+                                std::string* error) {
+    if (error) error->clear();
+
+    std::error_code ec;
+    if (!fs::is_regular_file(path, ec) || ec) {
+        return fail_transfer(error, "The selected game-settings path is not a file.");
+    }
+    const std::uintmax_t size = fs::file_size(path, ec);
+    if (ec) {
+        return fail_transfer(error, "Could not inspect the game-settings file.");
+    }
+    if (size > kMaximumTransferBytes) {
+        return fail_transfer(error, "The game-settings file is unexpectedly large.");
+    }
+
+    std::ifstream input(path, std::ios::binary);
+    if (!input) {
+        return fail_transfer(error, "Could not open the game-settings file.");
+    }
+    const std::string document{
+        std::istreambuf_iterator<char>(input),
+        std::istreambuf_iterator<char>()};
+    if (!input.good() && !input.eof()) {
+        return fail_transfer(error, "Could not read the game-settings file.");
+    }
+    return deserialize_game_profile_transfer(
+        document, expected_system, profile, error);
 }
 
 std::string normalize_game_profile_media(std::string media) {

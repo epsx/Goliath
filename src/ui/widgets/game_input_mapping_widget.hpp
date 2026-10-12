@@ -19,6 +19,7 @@ class QCheckBox;
 class QEvent;
 class QKeyEvent;
 class QPushButton;
+class QScrollArea;
 class QVBoxLayout;
 
 namespace goliath {
@@ -35,6 +36,7 @@ public:
     ~GameInputMappingWidget() override;
 
     GameInputOverrides overrides() const;
+    void setOverrides(GameInputOverrides overrides);
     void cancelListening();
     void clearAllOverrides();
 
@@ -73,6 +75,7 @@ private:
     QComboBox* m_mappingProfileCombo = nullptr;
     QCheckBox* m_overridesOnlyCheck = nullptr;
     QComboBox* m_joystickCombo = nullptr;
+    QScrollArea* m_scroll = nullptr;
     QVBoxLayout* m_containerLayout = nullptr;
     QWidget* m_container = nullptr;
     std::vector<DetectedJoystick> m_detectedJoysticks;

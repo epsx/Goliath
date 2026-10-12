@@ -44,7 +44,11 @@ private:
     void updateConstraints();
     void resetToGlobal();
     void validateAndAccept();
+    void applyProfileToEditor(const GameLaunchProfile& profile);
+    void importProfile();
+    void exportProfile();
 
+    QString m_displayName;
     std::string m_system;
     std::string m_media;
     AppPaths m_paths;
@@ -66,6 +70,7 @@ private:
     QLabel* m_crteaNote = nullptr;
     QGroupBox* m_crteaGroup = nullptr;
     QLabel* m_constraintNote = nullptr;
+    QLabel* m_transferNote = nullptr;
     QProcess* m_capabilityProcess = nullptr;
     bool m_vulkanProbeComplete = false;
     bool m_vulkanProbeSucceeded = false;

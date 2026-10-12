@@ -9,8 +9,11 @@
 #include "ui/widgets/title_bar.hpp"
 
 #include <QComboBox>
+#include <QFileDialog>
+#include <QFileInfo>
 #include <QFormLayout>
 #include <QFont>
+#include <QFrame>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -18,7 +21,9 @@
 #include <QProcess>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QStandardPaths>
 #include <QStandardItemModel>
+#include <QStringList>
 #include <QTabWidget>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -141,6 +146,209 @@ int global_geolith_video_value(const GameProfileGlobalSettings& global,
     return video_setting_value(global.geolith_video, spec);
 }
 
+QString transfer_video_value(const VideoSettingSpec& spec, int value) {
+    if (spec.kind == VideoSettingKind::Boolean)
+        return value == 0 ? "Off" : "On";
+    if (spec.kind == VideoSettingKind::Choice) {
+        for (const VideoSettingOption& option : spec.options) {
+            if (option.value == value) return QString::fromUtf8(option.label);
+        }
+    }
+    return QString::number(value);
+}
+
+QString profile_transfer_details(const GameLaunchProfile& profile) {
+    QStringList system;
+    if (profile.cartridge_system) {
+        system.push_back(
+            "Cartridge System = " +
+            value_name(*profile.cartridge_system, cartridge_system_options()));
+    }
+    if (profile.cd_system) {
+        system.push_back(
+            "CD System = " + value_name(*profile.cd_system, cd_system_options()));
+    }
+    if (profile.universe_hardware) {
+        system.push_back(
+            "Universe BIOS Hardware = " +
+            value_name(*profile.universe_hardware,
+                       universe_hardware_options()));
+    }
+    if (profile.region) {
+        system.push_back(
+            "Region = " + value_name(*profile.region, region_options()));
+    }
+    if (profile.free_play)
+        system.push_back(*profile.free_play ? "Free Play = On" : "Free Play = Off");
+    if (profile.setting_mode) {
+        system.push_back(
+            *profile.setting_mode ? "Setting Mode = On" : "Setting Mode = Off");
+    }
+
+    QStringList video;
+    if (profile.video_api) {
+        if (const VideoSettingSpec* spec = find_video_setting(
+                jgrf_video_setting_specs(), "api")) {
+            video.push_back(
+                "Video API = " + transfer_video_value(*spec, *profile.video_api));
+        }
+    }
+    if (profile.shader) {
+        if (const VideoSettingSpec* spec = find_video_setting(
+                jgrf_video_setting_specs(), "shader")) {
+            video.push_back(
+                "Shader = " + transfer_video_value(*spec, *profile.shader));
+        }
+    }
+    for (const auto& [key, value] : profile.jgrf_video) {
+        const VideoSettingSpec* spec = find_video_setting(
+            jgrf_video_setting_specs(), key);
+        video.push_back(
+            spec ? QString("%1 = %2")
+                       .arg(QString::fromUtf8(spec->label),
+                            transfer_video_value(*spec, value))
+                 : QString::fromStdString(key));
+    }
+    for (const auto& [key, value] : profile.geolith_video) {
+        const VideoSettingSpec* spec = find_video_setting(
+            geolith_video_setting_specs(), key);
+        video.push_back(
+            spec ? QString("%1 = %2")
+                       .arg(QString::fromUtf8(spec->label),
+                            transfer_video_value(*spec, value))
+                 : QString::fromStdString(key));
+    }
+
+    QStringList input;
+    if (profile.input_device) {
+        static const std::vector<Option> inputOptions = {
+            {0, "Auto"}, {1, "Neo Geo Joysticks"},
+            {2, "Mahjong"}, {3, "4-Player"},
+        };
+        input.push_back(
+            "Emulated Input = " +
+            value_name(*profile.input_device, inputOptions));
+    }
+    if (profile.controller_port) {
+        input.push_back(
+            QString("Player 1 Controller = Port %1 (j%2)")
+                .arg(*profile.controller_port + 1)
+                .arg(*profile.controller_port));
+    }
+    std::size_t mappingCount = 0;
+    for (const auto& [section, keys] : profile.input_overrides) {
+        (void)section;
+        mappingCount += keys.size();
+    }
+    if (mappingCount > 0U) {
+        input.push_back(QString("%1 exact-media mapping%2")
+                            .arg(static_cast<qulonglong>(mappingCount))
+                            .arg(mappingCount == 1U ? "" : "s"));
+    }
+
+    QStringList lines;
+    lines.push_back(system.isEmpty()
+                        ? "System / BIOS: Global"
+                        : "System / BIOS: " + system.join(", "));
+    lines.push_back(video.isEmpty()
+                        ? "Video: Global"
+                        : "Video: " + video.join(", "));
+    lines.push_back(input.isEmpty()
+                        ? "Input: Global"
+                        : "Input: " + input.join(", "));
+    return lines.join('\n');
+}
+
+QString transfer_file_name(const std::string& media) {
+    QString base = QFileInfo(QString::fromStdString(media)).completeBaseName();
+    for (qsizetype index = 0; index < base.size(); ++index) {
+        const QChar ch = base.at(index);
+        if (!ch.isLetterOrNumber() && ch != '-' && ch != '_')
+            base[index] = '_';
+    }
+    if (base.isEmpty()) base = "game-settings";
+    return base + ".goliath-game-settings.json";
+}
+
+bool confirm_profile_import(QWidget* parent,
+                            const QString& displayName,
+                            const GameLaunchProfile& current,
+                            const GameLaunchProfile& imported) {
+    QDialog dialog(parent);
+    dialog.setModal(true);
+    dialog.setMinimumSize(620, 430);
+    dialog.resize(720, 500);
+
+    QVBoxLayout* layout = nullptr;
+    setupFramelessDialog(
+        &dialog, "Import Per-game Settings", &layout, true, false);
+
+    auto* heading = new QLabel(
+        QString("Import settings into %1?").arg(displayName), &dialog);
+    heading->setTextFormat(Qt::PlainText);
+    QFont headingFont = heading->font();
+    headingFont.setBold(true);
+    heading->setFont(headingFont);
+    heading->setWordWrap(true);
+    layout->addWidget(heading);
+
+    auto* scroll = new QScrollArea(&dialog);
+    scroll->setWidgetResizable(true);
+    auto* cardContainer = new QWidget(scroll);
+    auto* cardsLayout = new QVBoxLayout(cardContainer);
+    cardsLayout->setContentsMargins(0, 0, 0, 0);
+    cardsLayout->setSpacing(10);
+
+    auto addCard = [cardContainer, cardsLayout](const QString& title,
+                                               const QString& details) {
+        auto* card = new QFrame(cardContainer);
+        card->setObjectName("about_information_card");
+        auto* cardLayout = new QVBoxLayout(card);
+        cardLayout->setContentsMargins(18, 14, 18, 14);
+        cardLayout->setSpacing(6);
+        auto* cardTitle = new QLabel(title, card);
+        QFont font = cardTitle->font();
+        font.setBold(true);
+        cardTitle->setFont(font);
+        cardLayout->addWidget(cardTitle);
+        auto* body = new QLabel(details, card);
+        body->setObjectName("about_body");
+        body->setTextFormat(Qt::PlainText);
+        body->setWordWrap(true);
+        body->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        cardLayout->addWidget(body);
+        cardsLayout->addWidget(card);
+    };
+
+    addCard("Current editor", profile_transfer_details(current));
+    addCard("Imported file", profile_transfer_details(imported));
+    cardsLayout->addStretch();
+    scroll->setWidget(cardContainer);
+    layout->addWidget(scroll, 1);
+
+    auto* note = new QLabel(
+        "Import replaces every value currently shown in this editor. Nothing "
+        "is written to disk until you press Save Profile.", &dialog);
+    note->setObjectName("themed_note");
+    note->setWordWrap(true);
+    layout->addWidget(note);
+
+    auto* buttons = new QHBoxLayout();
+    buttons->addStretch();
+    auto* cancelButton = new QPushButton("Cancel", &dialog);
+    auto* applyButton = new QPushButton("Apply to Editor", &dialog);
+    applyButton->setDefault(true);
+    buttons->addWidget(cancelButton);
+    buttons->addWidget(applyButton);
+    layout->addLayout(buttons);
+
+    QObject::connect(cancelButton, &QPushButton::clicked,
+                     &dialog, &QDialog::reject);
+    QObject::connect(applyButton, &QPushButton::clicked,
+                     &dialog, &QDialog::accept);
+    return dialog.exec() == QDialog::Accepted;
+}
+
 } // namespace
 
 GameProfileDialog::GameProfileDialog(QString displayName,
@@ -151,17 +359,17 @@ GameProfileDialog::GameProfileDialog(QString displayName,
                                      const GameLaunchProfile* existing,
                                      QWidget* parent)
     : QDialog(parent),
+      m_displayName(std::move(displayName)),
       m_system(std::move(system)),
       m_media(std::move(media)),
       m_paths(std::move(paths)),
       m_global(global) {
-    if (existing) m_initialVideoApi = existing->video_api;
     resize(820, 780);
 
     QVBoxLayout* layout = nullptr;
     setupFramelessDialog(this, "Per-game Settings", &layout, true, false);
 
-    auto* heading = new QLabel(displayName);
+    auto* heading = new QLabel(m_displayName);
     heading->setTextFormat(Qt::PlainText);
     QFont headingFont = heading->font();
     headingFont.setBold(true);
@@ -177,6 +385,12 @@ GameProfileDialog::GameProfileDialog(QString displayName,
         "Profiles are keyed by system and relative media path. Parent ROMs, "
         "variants, CUE files and CHD files can therefore use different settings.");
     layout->addWidget(mediaLabel);
+
+    m_transferNote = new QLabel();
+    m_transferNote->setObjectName("themed_note");
+    m_transferNote->setWordWrap(true);
+    m_transferNote->hide();
+    layout->addWidget(m_transferNote);
 
     auto* tabs = new QTabWidget();
     auto* generalTab = new QWidget(tabs);
@@ -332,20 +546,32 @@ GameProfileDialog::GameProfileDialog(QString displayName,
     layout->addWidget(tabs, 1);
 
     auto* buttons = new QHBoxLayout();
+    auto* importButton = new QPushButton("Import...");
+    importButton->setToolTip(
+        "Load a portable Goliath per-game settings file into this editor.");
+    auto* exportButton = new QPushButton("Export...");
+    exportButton->setToolTip(
+        "Export the overrides currently shown without including ROM paths.");
     auto* saveButton = new QPushButton("Save Profile");
     auto* resetButton = new QPushButton("Reset All to Global...");
     resetButton->setToolTip(
         "Clear every override for this game and return it to the global "
         "Settings configuration.");
     auto* cancelButton = new QPushButton("Cancel");
+    buttons->addWidget(importButton);
+    buttons->addWidget(exportButton);
+    buttons->addStretch();
     buttons->addWidget(saveButton);
     buttons->addWidget(resetButton);
-    buttons->addStretch();
     buttons->addWidget(cancelButton);
     layout->addLayout(buttons);
 
     connect(saveButton, &QPushButton::clicked, this,
             [this]() { validateAndAccept(); });
+    connect(importButton, &QPushButton::clicked, this,
+            [this]() { importProfile(); });
+    connect(exportButton, &QPushButton::clicked, this,
+            [this]() { exportProfile(); });
     connect(resetButton, &QPushButton::clicked, this,
             [this]() { resetToGlobal(); });
     connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
@@ -388,34 +614,7 @@ GameProfileDialog::GameProfileDialog(QString displayName,
                 [this]() { updateVideoControls(); });
     }
 
-    if (existing) {
-        select_optional(m_cartridgeSystem, existing->cartridge_system);
-        select_optional(m_cdSystem, existing->cd_system);
-        select_optional(m_universeHardware, existing->universe_hardware);
-        select_optional(m_region, existing->region);
-        VideoSettingValues frontendVideo = existing->jgrf_video;
-        if (existing->video_api.has_value() && *existing->video_api != 3)
-            frontendVideo["api"] = *existing->video_api;
-        if (existing->shader.has_value())
-            frontendVideo["shader"] = *existing->shader;
-        m_jgrfVideoFields.setOverrides(frontendVideo);
-        m_geolithVideoFields.setOverrides(existing->geolith_video);
-        select_optional(m_inputDevice, existing->input_device);
-        select_optional(m_freePlay, existing->free_play);
-        select_optional(m_settingMode, existing->setting_mode);
-
-        if (existing->controller_port.has_value()) {
-            int index = m_controllerPort->findData(*existing->controller_port);
-            if (index < 0) {
-                m_controllerPort->addItem(
-                    QString("Port %1 (currently unavailable)")
-                        .arg(*existing->controller_port + 1),
-                    *existing->controller_port);
-                index = m_controllerPort->count() - 1;
-            }
-            m_controllerPort->setCurrentIndex(index);
-        }
-    }
+    if (existing) applyProfileToEditor(*existing);
 
     updateConstraints();
     updateVideoControls();
@@ -460,6 +659,137 @@ GameLaunchProfile GameProfileDialog::profile() const {
         result.setting_mode = optional_bool(m_settingMode);
     }
     return result;
+}
+
+void GameProfileDialog::applyProfileToEditor(
+        const GameLaunchProfile& imported) {
+    if (m_inputMapping) m_inputMapping->cancelListening();
+
+    select_optional(m_cartridgeSystem, imported.cartridge_system);
+    select_optional(m_cdSystem, imported.cd_system);
+    select_optional(m_universeHardware, imported.universe_hardware);
+    select_optional(m_region, imported.region);
+    select_optional(m_inputDevice, imported.input_device);
+    select_optional(m_freePlay, imported.free_play);
+    select_optional(m_settingMode, imported.setting_mode);
+
+    m_initialVideoApi = imported.video_api;
+    if (m_vulkanProbeComplete) {
+        applyVulkanCapability(m_vulkanProbeSucceeded, m_vulkanAvailable);
+    }
+    VideoSettingValues frontendVideo = imported.jgrf_video;
+    if (imported.video_api.has_value() &&
+        (*imported.video_api != 3 || m_videoApi->findData(3) >= 0)) {
+        frontendVideo["api"] = *imported.video_api;
+    }
+    if (imported.shader.has_value())
+        frontendVideo["shader"] = *imported.shader;
+    m_jgrfVideoFields.setOverrides(frontendVideo);
+    m_geolithVideoFields.setOverrides(imported.geolith_video);
+
+    m_controllerPort->setCurrentIndex(0);
+    if (imported.controller_port.has_value()) {
+        int index = m_controllerPort->findData(*imported.controller_port);
+        if (index < 0) {
+            m_controllerPort->addItem(
+                QString("Port %1 (currently unavailable)")
+                    .arg(*imported.controller_port + 1),
+                *imported.controller_port);
+            index = m_controllerPort->count() - 1;
+        }
+        m_controllerPort->setCurrentIndex(index);
+    }
+    if (m_inputMapping)
+        m_inputMapping->setOverrides(imported.input_overrides);
+
+    updateConstraints();
+    updateVideoApiNote();
+    updateVideoControls();
+}
+
+void GameProfileDialog::importProfile() {
+    if (m_inputMapping) m_inputMapping->cancelListening();
+
+    const QString selected = QFileDialog::getOpenFileName(
+        this, "Import Per-game Settings",
+        QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation),
+        "Goliath Game Settings (*.goliath-game-settings.json);;"
+        "JSON Files (*.json);;All Files (*)");
+    if (selected.isEmpty()) return;
+
+    GameLaunchProfile imported;
+    std::string error;
+    if (!load_game_profile_transfer(
+            qstring_to_path(selected), m_system, &imported, &error)) {
+        showThemedMessageDialog(
+            this, "Import Per-game Settings",
+            QString("The selected file could not be imported.\n\n%1")
+                .arg(QString::fromStdString(error)),
+            ThemedMessageTone::Critical);
+        return;
+    }
+
+    if (!confirm_profile_import(this, m_displayName, profile(), imported))
+        return;
+
+    applyProfileToEditor(imported);
+    m_transferNote->setText(
+        "Imported settings are loaded in the editor. Review the tabs, then "
+        "press Save Profile to apply them to this game.");
+    m_transferNote->show();
+}
+
+void GameProfileDialog::exportProfile() {
+    if (m_inputMapping) m_inputMapping->cancelListening();
+    const GameLaunchProfile current = profile();
+    if (current.empty()) {
+        showThemedMessageDialog(
+            this, "Export Per-game Settings",
+            "This editor currently contains no per-game overrides. Every "
+            "setting inherits the global configuration, so there is nothing "
+            "to export.",
+            ThemedMessageTone::Information);
+        return;
+    }
+
+    QString directory =
+        QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    if (!directory.isEmpty() && !directory.endsWith('/') &&
+        !directory.endsWith('\\')) {
+        directory += '/';
+    }
+    QString selected = QFileDialog::getSaveFileName(
+        this, "Export Per-game Settings",
+        directory + transfer_file_name(m_media),
+        "Goliath Game Settings (*.goliath-game-settings.json);;"
+        "JSON Files (*.json)");
+    if (selected.isEmpty()) return;
+    if (!selected.endsWith(
+            ".goliath-game-settings.json", Qt::CaseInsensitive)) {
+        selected += ".goliath-game-settings.json";
+    }
+
+    std::string error;
+    if (!save_game_profile_transfer(
+            qstring_to_path(selected), m_system, current, &error)) {
+        showThemedMessageDialog(
+            this, "Export Per-game Settings",
+            QString("The settings could not be exported.\n\n%1")
+                .arg(QString::fromStdString(error)),
+            ThemedMessageTone::Critical);
+        return;
+    }
+
+    const GameProfileTransferSummary summary =
+        summarize_game_profile_transfer(current);
+    showThemedMessageDialog(
+        this, "Per-game Settings Exported",
+        QString("Saved %1 portable override%2.\n\n%3\n\n"
+                "The export contains no ROM, CUE, CHD, or local folder path.")
+            .arg(static_cast<qulonglong>(summary.total()))
+            .arg(summary.total() == 1U ? "" : "s")
+            .arg(selected),
+        ThemedMessageTone::Information);
 }
 
 void GameProfileDialog::probeJollygoodVideoCapabilities() {
@@ -703,19 +1033,21 @@ void GameProfileDialog::resetToGlobal() {
 void GameProfileDialog::validateAndAccept() {
     if (m_inputMapping) m_inputMapping->cancelListening();
     if (!m_vulkanProbeComplete) {
-        QMessageBox::information(
+        showThemedMessageDialog(
             this, "Per-game Settings",
-            "Please wait for the JGRF video capability check to finish.");
+            "Please wait for the JGRF video capability check to finish.",
+            ThemedMessageTone::Information);
         return;
     }
 
     GameLaunchProfile current = profile();
     if (current.video_api == std::optional<int>(3) && !m_vulkanAvailable) {
-        QMessageBox::warning(
+        showThemedMessageDialog(
             this, "Per-game Settings",
             "The configured JGRF executable does not advertise Vulkan support.\n\n"
             "Select Inherit global or an OpenGL API before saving. Cancel keeps "
-            "the existing profile unchanged.");
+            "the existing profile unchanged.",
+            ThemedMessageTone::Warning);
         return;
     }
     // Reject an explicitly requested invalid 4-player override. An inherited
@@ -723,10 +1055,11 @@ void GameProfileDialog::validateAndAccept() {
     // this profile changes the system/region to an incompatible combination.
     if (current.input_device == std::optional<int>(3) &&
         !game_profile_supports_four_player(m_system, current, m_global)) {
-        QMessageBox::warning(
+        showThemedMessageDialog(
             this, "Per-game Settings",
             "Geolith 4-Player mode requires direct MVS mode and JP or AS region.\n\n"
-            "Change the System/Region fields or select another input device.");
+            "Change the System/Region fields or select another input device.",
+            ThemedMessageTone::Warning);
         return;
     }
     accept();

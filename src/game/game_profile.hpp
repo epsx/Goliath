@@ -9,6 +9,7 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <string_view>
 
 #include "game/video_settings.hpp"
 
@@ -57,6 +58,45 @@ struct GameProfileRecord {
     std::string media;
     GameLaunchProfile profile;
 };
+
+// Portable, path-free transfer summary for one exact-media profile. Transfer
+// documents intentionally omit the source ROM/CUE/CHD path: importing always
+// targets the game whose editor is currently open.
+struct GameProfileTransferSummary {
+    std::size_t system_overrides = 0;
+    std::size_t video_overrides = 0;
+    std::size_t input_overrides = 0;
+
+    std::size_t total() const;
+};
+
+GameProfileTransferSummary summarize_game_profile_transfer(
+    const GameLaunchProfile& profile);
+
+std::string serialize_game_profile_transfer(
+    const std::string& system,
+    const GameLaunchProfile& profile);
+
+// Parses a versioned transfer document for the selected system. Invalid,
+// unsafe, cross-system or unsupported content fails closed and never mutates
+// the output profile.
+bool deserialize_game_profile_transfer(
+    std::string_view document,
+    const std::string& expected_system,
+    GameLaunchProfile* profile,
+    std::string* error = nullptr);
+
+bool save_game_profile_transfer(
+    const std::filesystem::path& path,
+    const std::string& system,
+    const GameLaunchProfile& profile,
+    std::string* error = nullptr);
+
+bool load_game_profile_transfer(
+    const std::filesystem::path& path,
+    const std::string& expected_system,
+    GameLaunchProfile* profile,
+    std::string* error = nullptr);
 
 std::string normalize_game_profile_media(std::string media);
 std::string make_game_profile_key(const std::string& system,

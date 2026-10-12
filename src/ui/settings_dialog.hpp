@@ -31,6 +31,7 @@ class QTabWidget;
 class QSpinBox;
 class QKeySequenceEdit;
 class QLabel;
+class QScrollArea;
 
 namespace goliath {
 
@@ -121,6 +122,7 @@ private:
     InfoTab* m_infoTab = nullptr;
     QVBoxLayout* m_inputLayout = nullptr;
     QWidget* m_inputContainer = nullptr;
+    QScrollArea* m_inputScroll = nullptr;
     QComboBox* m_inputDeviceCombo = nullptr;
     QSpinBox* m_axisDeadzoneSpin = nullptr;
     QLabel* m_inputConflictSummary = nullptr;
