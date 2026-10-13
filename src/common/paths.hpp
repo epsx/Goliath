@@ -34,6 +34,11 @@ struct AppPaths {
     std::filesystem::path geolith_ini;             // .../geolith.ini
     std::filesystem::path input_config;            // .../geolith_input.ini
 
+    // Named, reusable snapshots created by Settings -> Input. Kept separate
+    // from the JGRF INI so profiles can be managed without changing the
+    // active mapping.
+    std::filesystem::path controller_profiles_json; // <config>/controller_profiles.json
+
     // Goliath-owned per-game profile state. These stay outside games.json so
     // rescans cannot remove them. Runtime folders use short hashes because
     // JGRF 2.0.1 has a fixed 128-byte configuration-path buffer.

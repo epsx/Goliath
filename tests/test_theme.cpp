@@ -373,14 +373,22 @@ TEST_CASE("generated scrollbars omit directional line buttons",
 TEST_CASE("input panels retain their theme-aware outer cards", "[theme]") {
     for (const Theme& theme : all_themes()) {
         INFO("theme=" << theme.key);
-        const std::string expected_rule =
+        const std::string expected_panel =
             "QWidget#input_panel {\n"
             "    background-color: " + theme.bg_secondary + ";\n"
             "    border: 1px solid " + theme.border + ";\n"
             "    border-radius: 16px;\n"
             "}";
-        CHECK(generate_theme_style(theme).find(expected_rule) !=
-              std::string::npos);
+        const std::string expected_toggle =
+            "QPushButton#input_section_toggle {\n"
+            "    color: " + theme.text_secondary + ";\n"
+            "    background-color: " + theme.bg_tertiary + ";";
+        const std::string stylesheet = generate_theme_style(theme);
+        CHECK(stylesheet.find(expected_panel) != std::string::npos);
+        CHECK(stylesheet.find(expected_toggle) != std::string::npos);
+        CHECK(stylesheet.find(
+                  "QPushButton#input_section_toggle:checked {\n"
+                  "    color: " + theme.accent + ";") != std::string::npos);
     }
 }
 
@@ -421,7 +429,10 @@ TEST_CASE("rescan and BIOS summaries use semantic colors across every palette",
             "QFrame#rescan_change_card,\n"
             "QFrame#bios_summary_card,\n"
             "QFrame#bios_metric_card,\n"
-            "QFrame#bios_archive_row {\n"
+            "QFrame#bios_archive_row,\n"
+            "QFrame#controller_profile_editor,\n"
+            "QFrame#controller_profile_card,\n"
+            "QFrame#controller_profile_empty {\n"
             "    background-color: " + theme.bg_secondary + ";\n"
             "    border: 1px solid " + theme.border + ";\n"
             "    border-radius: 12px;\n"
@@ -470,6 +481,19 @@ TEST_CASE("rescan and BIOS summaries use semantic colors across every palette",
         CHECK(stylesheet.find(expected_bios_optional) != std::string::npos);
         CHECK(stylesheet.find(expected_bios_hover) != std::string::npos);
         CHECK(stylesheet.find(expected_bios_transparency) !=
+              std::string::npos);
+        CHECK(stylesheet.find(
+                  "QFrame#controller_profile_card[profileCompatible=\"true\"] {\n"
+                  "    border-left: 3px solid " + theme.accent + ";\n"
+                  "}") != std::string::npos);
+        CHECK(stylesheet.find(
+                  "QLabel#controller_profile_status[profileStatus=\"success\"] {\n"
+                  "    border-color: " + theme.success + ";\n"
+                  "}") != std::string::npos);
+        CHECK(stylesheet.find(
+                  "QPushButton#controller_profile_delete_confirm {\n"
+                  "    border-color: " + theme.danger + ";\n"
+                  "    color: " + theme.danger + ";") !=
               std::string::npos);
     }
 }

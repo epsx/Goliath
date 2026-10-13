@@ -53,6 +53,7 @@ private:
     void stopJoystickListener();
     void applyMapping(const QString& value,
                       const QString& displayName = {});
+    void loadControllerProfile();
     void resetCurrentProfile();
     void resetOneMapping(const std::string& section,
                          const std::string& key);

@@ -38,6 +38,7 @@ AppPaths compute_app_paths(const Config& config) {
     p.jollygood_settings_ini = jollygoodConfigDir / "settings.ini";
     p.geolith_ini = jollygoodConfigDir / "geolith.ini";
     p.input_config = jollygoodConfigDir / "geolith_input.ini";
+    p.controller_profiles_json = p.config_dir / "controller_profiles.json";
     p.game_profiles_json = p.config_dir / "game_profiles.json";
     p.profile_runtime_dir = p.config_dir / "p";
     p.game_playtime_json = p.config_dir / "game_playtime.json";

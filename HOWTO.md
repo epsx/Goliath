@@ -287,6 +287,7 @@ Goliath/
 ├── metadata/                external scanner input
 ├── database/                generated games.json and hash_cache.json
 ├── config/
+│   ├── controller_profiles.json  reusable controller mappings
 │   ├── game_profiles.json   Goliath per-game overrides
 │   ├── game_playtime.json   Goliath exact-media playtime statistics
 │   ├── jollygood/
@@ -854,6 +855,21 @@ button. Closing the dialog does not imply that an unsaved tab was written.
 6. Save the input configuration. Changing tabs, profiles, or controllers also
    cancels an unfinished capture safely.
 
+The mapping panels keep most of the tab height. **Advanced Input Settings**
+and **Mapping Help** are collapsed by default; expand either only when the
+deadzone controls or the full capture/hotkey/conflict guidance is needed.
+
+Use **Controller Profiles...** to preserve the complete mapping currently
+shown in the editor under a reusable name. Each saved profile appears as its
+own card. **Apply** loads a compatible card into the editor without writing the
+active INI; review the controls and press **Save Input Config** to commit it.
+**Update** replaces a card from the current editor, while rename and deletion
+stay inline in the same custom dialog. Profiles for other input layouts remain
+visible for management, but cannot be applied or updated until their matching
+**Input Device** is selected. Storage is atomic in
+`config/controller_profiles.json`; unknown or unsafe bindings are discarded
+when a profile is loaded.
+
 Profiles cover Neo Geo Joysticks, Mahjong, 4-Player, V-Liner, Irritating Maze,
 and their System controls. Controller labels use **Port 1 (`j0`)**, **Port 2
 (`j1`)**, and so on: the visible port is one-based, while the value in
@@ -873,25 +889,31 @@ hotkey processing when testing a conflicting binding.
    to Global** to clear only this tab without affecting General or mappings.
 5. On **Input Mapping**, choose the controls to edit. The mapping-profile
    selector does not change **General -> Emulated Input**. Click a control and
-   press a keyboard key or move the selected controller input.
+   press a keyboard key or move the selected controller input. The full
+   inheritance and capture explanation is available from the collapsed
+   **Mapping Help** control so the visual panels retain the available height.
 6. A bullet marks an exact-media mapping. Right-click it and choose **Inherit
    global mapping** to clear only that control, or use **Reset shown mappings
    to Global** for the displayed mapping profile. A curved arrow marks an
    inherited value. Enable **Overrides only** for a compact list containing
    only exact-media mappings.
-7. A warning symbol marks mappings that share one physical input. Its tooltip
+7. Use **Load from Profile...** to select a compatible controller-profile
+   card. Assigned controls replace the displayed per-game mapping set in the
+   editor; empty profile controls inherit globally. The global input file is
+   never changed, and the game profile is not written until **Save Profile**.
+8. A warning symbol marks mappings that share one physical input. Its tooltip
    identifies the other action and whether that action is inherited or custom.
    Conflicts remain saveable because shared mappings can be intentional.
-8. Use **Export...** to save the overrides currently shown as a portable
+9. Use **Export...** to save the overrides currently shown as a portable
    `*.goliath-game-settings.json` file. The export contains no ROM, CUE, CHD,
    or local folder path.
-9. Use **Import...** to load a transfer file for the same system family. Review
+10. Use **Import...** to load a transfer file for the same system family. Review
    the custom before/after summary, choose **Apply to Editor**, inspect the
    tabs, and then press **Save Profile**. Import never saves automatically.
-10. Choose **Save Profile**. A gear appears beside the row.
-11. Use **Reset to Global** to remove every setting and input mapping for that
+11. Choose **Save Profile**. A gear appears beside the row.
+12. Use **Reset to Global** to remove every setting and input mapping for that
    media.
-12. To inspect the generated INIs, right-click a row with a gear and choose
+13. To inspect the generated INIs, right-click a row with a gear and choose
    **Open per-game config folder**. Goliath refreshes that exact media's
    runtime configuration before opening `config/p/<hash>/jollygood/`.
 

@@ -187,6 +187,7 @@ src/
 ├── ini/
 │   └── ini_document.hpp/.cpp
 ├── input/
+│   ├── controller_profiles.hpp/.cpp
 │   ├── input_maps.hpp/.cpp
 │   ├── joystick_listener.hpp/.cpp
 │   └── sdl_joystick.hpp/.cpp
@@ -233,6 +234,7 @@ src/
     ├── audio_export_dialog.hpp/.cpp
     ├── benchmark_dialog.hpp/.cpp
     ├── bios_verification_dialog.hpp/.cpp
+    ├── controller_profiles_dialog.hpp/.cpp
     ├── command_dialog.hpp/.cpp
     ├── game_profile_dialog.hpp/.cpp
     ├── lithogen_dialog.hpp/.cpp
@@ -537,6 +539,13 @@ input mappings are validated and layered afterward, so an explicit captured
 composer seeds the isolated copy from built-in defaults before adding custom
 mappings.
 
+The per-game input editor can open `controller_profiles_dialog` in a read-only
+selection mode. It filters cards to the displayed mapping layout, replaces
+that layout's current exact-media mappings with the selected profile's
+validated assigned bindings, and leaves global input plus unrelated per-game
+mapping layouts untouched. Empty snapshot entries return to global inheritance,
+and the outer dialog still owns the final **Save Profile** action.
+
 Frontend advanced video values are stored as validated `jgrf_video` entries
 and overlaid in the isolated `[video]` section. Geolith aspect, palette, and
 overscan values use validated `geolith_video` entries and isolated `[geolith]`.
@@ -609,6 +618,7 @@ keys, comments, ordering, or key case. This is separate from Goliath's simpler
 
 | Module | Responsibility |
 | --- | --- |
+| `controller_profiles` | Versioned atomic storage, layout scoping, canonical complete snapshots, and CRUD validation for reusable controller mappings. |
 | `input_maps` | Canonical keys/defaults, SDL names, normalization, bounded JGRF binding validation, and hotkeys. |
 | `sdl_joystick` | Shared SDL3 initialization and connection-order device enumeration. |
 | `joystick_listener` | One-shot button, axis, or hat capture on a worker thread. |
@@ -835,6 +845,20 @@ controller in parallel. A single cancellation path restores the waiting
 control and stops polling when the user changes context, saves, resets, or
 closes the dialog.
 
+Both the global and exact-media input editors use the shared compact disclosure
+helper from `input_panel_widgets`. Auxiliary guidance and advanced JGRF input
+settings start collapsed, preserving vertical space for the visual controller
+panels without rebuilding them or disturbing an active capture.
+
+`controller_profiles_dialog` is opened from the Input action row. It renders
+one themed card per named snapshot and keeps create, rename, update, and
+two-step delete actions inside the same frameless window. Applying a compatible
+profile only updates the current editor widgets; `SettingsDialog` remains the
+single owner of persistence to `geolith_input.ini` through **Save Input
+Config**. Incompatible layout cards remain visible but have Apply/Update
+disabled. The per-game editor reuses the dialog in selection-only mode, where
+only compatible cards and their **Load** action are exposed.
+
 ### Settings tabs
 
 | Module | Responsibility |
@@ -925,6 +949,7 @@ tests/
 ├── test_capture_hotkeys.cpp
 ├── test_command_dat.cpp
 ├── test_command_notation.cpp
+├── test_controller_profiles.cpp
 ├── test_db_scanner.cpp
 ├── test_gallery_frame.cpp
 ├── test_game_model.cpp
@@ -965,6 +990,7 @@ tests/
 | `test_capture_hotkeys.cpp` | Capture-shortcut parsing, normalization, and collision detection. |
 | `test_command_dat.cpp` | BOM/CRLF/DOS-EOF parsing, aliases, sentinel handling, missing/malformed files, and variant-to-parent lookup order. |
 | `test_command_notation.cpp` | Direction/button markers, legacy labels, move categories, select/follow-up semantics, and verbatim unknown-marker fallback. |
+| `test_controller_profiles.cpp` | Layout scoping, complete snapshots, binding validation, unique naming, compatible CRUD operations, atomic persistence, and malformed storage. |
 | `test_bios_verify.cpp` | BIOS catalog, structured archive/member states and counters, missing paths/archives/members, invalid ZIPs, and optional CD sets. |
 | `test_db_scanner.cpp` | Grouping, metadata, CD verification, cache, path safety, and statistics. |
 | `test_gallery_frame.cpp` | Still/GIF scaling and gallery-frame presentation geometry. |
@@ -1048,6 +1074,7 @@ The source tree and runtime tree have different ownership:
 | --- | --- | --- |
 | Application config | `goliath.ini` | Goliath `Config` |
 | Newer-release alert | `goliath_update_alert.json` | `update_alert` |
+| Controller profiles | `config/controller_profiles.json` | `ControllerProfileStore` |
 | Per-game profiles | `config/game_profiles.json` | `GameProfileStore` |
 | Per-game playtime | `config/game_playtime.json` | `GamePlaytimeStore` |
 | Personal library state | `config/game_library_state.json` | `GameLibraryStateStore` |

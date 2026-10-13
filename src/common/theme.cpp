@@ -884,10 +884,89 @@ QFrame#rescan_summary_card,
 QFrame#rescan_change_card,
 QFrame#bios_summary_card,
 QFrame#bios_metric_card,
-QFrame#bios_archive_row {
+QFrame#bios_archive_row,
+QFrame#controller_profile_editor,
+QFrame#controller_profile_card,
+QFrame#controller_profile_empty {
     background-color: @bg_secondary@;
     border: 1px solid @border@;
     border-radius: 12px;
+}
+
+QFrame#controller_profile_card[profileCompatible="true"] {
+    border-left: 3px solid @accent@;
+}
+
+QScrollArea#controller_profiles_scroll,
+QScrollArea#controller_profiles_scroll QWidget#qt_scrollarea_viewport,
+QWidget#controller_profiles_scroll_contents {
+    background-color: transparent;
+    border: none;
+}
+
+QLabel#controller_profiles_heading,
+QLabel#controller_profile_name {
+    color: @text_primary@;
+    font-weight: 600;
+}
+
+QLabel#controller_profiles_heading {
+    color: @accent@;
+    font-size: 12px;
+}
+
+QLabel#controller_profile_device,
+QLabel#controller_profile_secondary {
+    color: @text_secondary@;
+}
+
+QLabel#controller_profile_device[profileCompatible="true"] {
+    color: @accent@;
+    font-weight: 600;
+}
+
+QLabel#controller_profile_status {
+    color: @text_primary@;
+    background-color: @bg_tertiary@;
+    border: 1px solid @border@;
+    border-radius: 6px;
+    padding: 7px;
+}
+
+QLabel#controller_profile_status[profileStatus="success"] {
+    border-color: @success@;
+}
+
+QLabel#controller_profile_status[profileStatus="warning"],
+QLabel#controller_profile_status[profileStatus="error"] {
+    border-color: @danger@;
+}
+
+QPushButton#controller_profile_primary,
+QPushButton#controller_profile_apply {
+    background-color: @accent@;
+    border-color: @accent@;
+    color: @on_accent@;
+    font-weight: 600;
+}
+
+QPushButton#controller_profile_primary:hover,
+QPushButton#controller_profile_apply:hover {
+    background-color: @accent_hover@;
+    border-color: @accent_hover@;
+    color: @on_accent_hover@;
+}
+
+QPushButton#controller_profile_apply:disabled {
+    background-color: @bg_tertiary@;
+    border-color: @border@;
+    color: @text_secondary@;
+}
+
+QPushButton#controller_profile_delete_confirm {
+    border-color: @danger@;
+    color: @danger@;
+    font-weight: 600;
 }
 
 QFrame#bios_archive_row:hover,
@@ -1089,6 +1168,19 @@ QLabel#warning_note {
 
 QLabel#warning_note {
     border-color: @danger@;
+}
+
+QPushButton#input_section_toggle {
+    color: @text_secondary@;
+    background-color: @bg_tertiary@;
+    padding: 4px 10px;
+    text-align: left;
+}
+
+QPushButton#input_section_toggle:hover,
+QPushButton#input_section_toggle:checked {
+    color: @accent@;
+    border-color: @accent@;
 }
 
 QWidget#input_panel {

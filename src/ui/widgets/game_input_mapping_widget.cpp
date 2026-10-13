@@ -1,8 +1,10 @@
 #include "ui/widgets/game_input_mapping_widget.hpp"
 
 #include "ini/ini_document.hpp"
+#include "input/controller_profiles.hpp"
 #include "input/input_maps.hpp"
 #include "input/joystick_listener.hpp"
+#include "ui/controller_profiles_dialog.hpp"
 #include "ui/widgets/input_panel_widgets.hpp"
 
 #include <QAction>
@@ -187,10 +189,11 @@ GameInputMappingWidget::GameInputMappingWidget(
         "Click a waiting control again to cancel; right-click a custom "
         "mapping to restore inheritance. A curved arrow marks inherited "
         "values, a bullet marks custom overrides, and a warning marks "
-        "duplicate physical inputs. Conflicts remain saveable.");
+        "duplicate physical inputs. Conflicts remain saveable. The General-"
+        "tab Player 1 Controller retargets inherited bindings only; an "
+        "explicit joystick mapping here retains the captured jN port.");
     note->setWordWrap(true);
     note->setObjectName("themed_note");
-    layout->addWidget(note);
 
     auto* profileRow = new QHBoxLayout();
     profileRow->addWidget(new QLabel("Mapping profile:"));
@@ -222,8 +225,11 @@ GameInputMappingWidget::GameInputMappingWidget(
                 rebuild();
             });
     profileRow->addWidget(m_overridesOnlyCheck);
+    profileRow->addWidget(createInputSectionToggle(
+        "Mapping Help", note, this));
     profileRow->addStretch();
     layout->addLayout(profileRow);
+    layout->addWidget(note);
 
     auto* controllerRow = new QHBoxLayout();
     controllerRow->addWidget(new QLabel("Capture from:"));
@@ -245,12 +251,6 @@ GameInputMappingWidget::GameInputMappingWidget(
     controllerRow->addStretch();
     layout->addLayout(controllerRow);
 
-    auto* portNote = new QLabel(
-        "The General-tab Player 1 Controller retargets inherited bindings "
-        "only. An explicit joystick mapping here retains the captured jN port.");
-    portNote->setWordWrap(true);
-    layout->addWidget(portNote);
-
     auto* scroll = new QScrollArea();
     m_scroll = scroll;
     scroll->setWidgetResizable(true);
@@ -268,7 +268,18 @@ GameInputMappingWidget::GameInputMappingWidget(
         "profiles remain unchanged.");
     connect(resetButton, &QPushButton::clicked,
             this, &GameInputMappingWidget::resetCurrentProfile);
-    layout->addWidget(resetButton, 0, Qt::AlignLeft);
+    auto* mappingActions = new QHBoxLayout();
+    mappingActions->addWidget(resetButton);
+
+    auto* loadProfileButton = new QPushButton("Load from Profile...");
+    loadProfileButton->setToolTip(
+        "Load a compatible saved controller profile into this per-game "
+        "editor. The global input configuration is not changed.");
+    connect(loadProfileButton, &QPushButton::clicked,
+            this, &GameInputMappingWidget::loadControllerProfile);
+    mappingActions->addWidget(loadProfileButton);
+    mappingActions->addStretch();
+    layout->addLayout(mappingActions);
 
     refreshJoystickList();
     rebuild();
@@ -700,6 +711,28 @@ void GameInputMappingWidget::resetCurrentProfile() {
     for (const QString& section : sections_for_mapping_profile(profile))
         m_overrides.erase(section.toStdString());
     rebuild();
+}
+
+void GameInputMappingWidget::loadControllerProfile() {
+    cancelListening();
+    const int profile = m_mappingProfileCombo->currentData().toInt();
+    ControllerProfilesDialog dialog(
+        m_paths.controller_profiles_json,
+        profile,
+        {},
+        [this, profile](const ControllerProfileBindings& bindings) {
+            for (const QString& section : sections_for_mapping_profile(profile))
+                m_overrides.erase(section.toStdString());
+            for (const auto& [section, keys] :
+                 controller_profile_assigned_bindings(profile, bindings)) {
+                for (const auto& [key, value] : keys)
+                    m_overrides[section][key] = value;
+            }
+            rebuild();
+        },
+        this,
+        ControllerProfilesDialog::Mode::LoadOnly);
+    dialog.exec();
 }
 
 void GameInputMappingWidget::clearAllOverrides() {

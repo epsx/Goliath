@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "common/paths.hpp"
+#include "input/controller_profiles.hpp"
 #include "input/sdl_joystick.hpp"
 
 class QCloseEvent;
@@ -90,6 +91,9 @@ private:
     void loadInputConfig();
     void createDefaultInputConfig(int device = -1);
     void updateInputMappingPresentation();
+    ControllerProfileBindings currentControllerProfileBindings() const;
+    void applyControllerProfile(const ControllerProfileBindings& bindings);
+    void openControllerProfiles();
     void resetOneInputMapping(const QString& section, const QString& key);
     void configureInputButton(QPushButton* button,
                               const QString& section,

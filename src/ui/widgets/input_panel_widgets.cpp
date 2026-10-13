@@ -39,6 +39,29 @@ void InputPanelWidget::paintEvent(QPaintEvent*) {
     style()->drawPrimitive(QStyle::PE_Widget, &option, &painter, this);
 }
 
+QPushButton* createInputSectionToggle(const QString& title,
+                                      QWidget* content,
+                                      QWidget* parent) {
+    auto* toggle = new QPushButton(parent);
+    toggle->setObjectName("input_section_toggle");
+    toggle->setCheckable(true);
+    toggle->setChecked(false);
+    toggle->setText(QString::fromUtf8("\xE2\x80\xBA ") + title);
+    toggle->setToolTip("Click to show " + title.toLower() + ".");
+    if (content) content->hide();
+    QObject::connect(toggle, &QPushButton::toggled,
+                     toggle, [toggle, content, title](bool expanded) {
+        toggle->setText(
+            QString::fromUtf8(expanded ? "\xE2\x8C\x84 " : "\xE2\x80\xBA ") +
+            title);
+        toggle->setToolTip(
+            QString("Click to %1 %2.")
+                .arg(expanded ? "hide" : "show", title.toLower()));
+        if (content) content->setVisible(expanded);
+    });
+    return toggle;
+}
+
 // ============================== ControllerInputWidget ======================
 
 const QStringList ControllerInputWidget::KEYS = {"Up", "Down", "Left", "Right", "Select",

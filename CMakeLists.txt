@@ -186,6 +186,7 @@ add_library(goliath-core STATIC
     src/audio/audio_devices.cpp
     src/ini/ini_document.cpp
     src/input/input_maps.cpp
+    src/input/controller_profiles.cpp
     src/input/joystick_listener.cpp
     src/input/sdl_joystick.cpp
     src/game/jollygood_benchmark.cpp
@@ -292,6 +293,7 @@ add_executable(goliath-qt
     src/ui/tabs/misc_tab.cpp
     src/ui/tabs/info_tab.cpp
     src/ui/settings_dialog.cpp
+    src/ui/controller_profiles_dialog.cpp
     src/ui/audio_export_dialog.cpp
     src/ui/benchmark_dialog.cpp
     src/ui/game_profile_dialog.cpp
@@ -446,6 +448,7 @@ if(BUILD_TESTS)
         tests/test_ini_document.cpp
         tests/test_bios_verify.cpp
         tests/test_input_maps.cpp
+        tests/test_controller_profiles.cpp
         tests/test_capture_hotkeys.cpp
         tests/test_audio.cpp
         tests/test_audio_export.cpp

@@ -121,4 +121,11 @@ QString buttonDisplayText(QPushButton* btn);
 // or an empty stylesheet for a plain QPushButton).
 void resetButtonStyle(QPushButton* btn);
 
+// Creates a compact, initially collapsed disclosure button for auxiliary
+// input settings or help text. Toggling visibility does not rebuild mapping
+// panels, so capture state and scroll position remain stable.
+QPushButton* createInputSectionToggle(const QString& title,
+                                      QWidget* content,
+                                      QWidget* parent = nullptr);
+
 } // namespace goliath

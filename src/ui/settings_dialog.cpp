@@ -1,6 +1,7 @@
 #include "ui/settings_dialog.hpp"
 #include "ui/application_shortcuts.hpp"
 #include "ui/capture_hotkeys.hpp"
+#include "ui/controller_profiles_dialog.hpp"
 
 #include "common/goliath_common.hpp"
 #include "common/qt_path.hpp"
@@ -481,7 +482,6 @@ void SettingsDialog::buildInputTab(QWidget* inputWidget) {
     connect(saveJgrfInputBtn, &QPushButton::clicked,
             this, &SettingsDialog::saveJgrfInputSettings);
     jgrfInputForm->addRow("", saveJgrfInputBtn);
-    layout->addWidget(jgrfInputGroup);
     loadJgrfInputSettings();
 
     auto* hotkeyNote = new QLabel(QString::fromUtf8(
@@ -497,6 +497,16 @@ void SettingsDialog::buildInputTab(QWidget* inputWidget) {
         "mapping to its built-in default."));
     hotkeyNote->setWordWrap(true);
     hotkeyNote->setObjectName("themed_note");
+
+    auto* auxiliaryRow = new QHBoxLayout();
+    auxiliaryRow->setSpacing(8);
+    auxiliaryRow->addWidget(createInputSectionToggle(
+        "Advanced Input Settings", jgrfInputGroup, content));
+    auxiliaryRow->addWidget(createInputSectionToggle(
+        "Mapping Help", hotkeyNote, content));
+    auxiliaryRow->addStretch();
+    layout->addLayout(auxiliaryRow);
+    layout->addWidget(jgrfInputGroup);
     layout->addWidget(hotkeyNote);
 
     m_inputConflictSummary = new QLabel();
@@ -518,6 +528,15 @@ void SettingsDialog::buildInputTab(QWidget* inputWidget) {
     auto* resetBtn = new QPushButton("Reset to Defaults");
     connect(resetBtn, &QPushButton::clicked, this, &SettingsDialog::resetInputConfig);
     inputBtnRow->addWidget(resetBtn);
+
+    auto* profilesBtn = new QPushButton("Controller Profiles...");
+    profilesBtn->setObjectName("controller_profiles_button");
+    profilesBtn->setToolTip(
+        "Save, apply, rename, update, or delete reusable controller mappings.");
+    connect(profilesBtn, &QPushButton::clicked,
+            this, &SettingsDialog::openControllerProfiles);
+    inputBtnRow->addWidget(profilesBtn);
+    inputBtnRow->addStretch();
     // Keep actions visible while the controller mapping list scrolls.
     pageLayout->addLayout(inputBtnRow);
 
@@ -662,23 +681,9 @@ int SettingsDialog::currentInputProfile() const {
 QStringList SettingsDialog::targetInputSections(int device) const {
     if (device < 0) device = currentInputProfile();
 
-    QStringList sections = {"neogeosystem"};
-    switch (device) {
-        case 2:
-            sections << "neogeomahjong";
-            break;
-        case 3:
-            sections << "neogeojs1" << "neogeojs2" << "neogeojs3" << "neogeojs4";
-            break;
-        case 4:
-            sections << "neogeovliner";
-            break;
-        case 5:
-            sections << "neogeoirrmaze";
-            break;
-        default:
-            sections << "neogeojs1" << "neogeojs2";
-            break;
+    QStringList sections;
+    for (const std::string& section : controller_profile_sections(device)) {
+        sections << QString::fromStdString(section);
     }
     return sections;
 }
@@ -885,6 +890,47 @@ void SettingsDialog::updateInputMappingPresentation() {
     }
 
     restore_scroll_position_later(m_inputScroll, scrollPosition);
+}
+
+ControllerProfileBindings
+SettingsDialog::currentControllerProfileBindings() const {
+    ControllerProfileBindings bindings;
+    for (const InputRow& row : m_inputEntries) {
+        bindings[row.section.toStdString()][row.key.toStdString()] =
+            row.button->property("input_value").toString().toStdString();
+    }
+    return sanitize_controller_profile_bindings(
+        currentInputProfile(), bindings);
+}
+
+void SettingsDialog::applyControllerProfile(
+        const ControllerProfileBindings& bindings) {
+    cancelListening();
+    const ControllerProfileBindings sanitized =
+        sanitize_controller_profile_bindings(currentInputProfile(), bindings);
+    for (const InputRow& row : m_inputEntries) {
+        std::string value;
+        const auto section = sanitized.find(row.section.toStdString());
+        if (section != sanitized.end()) {
+            const auto key = section->second.find(row.key.toStdString());
+            if (key != section->second.end()) value = key->second;
+        }
+        row.button->setProperty("input_value", QString::fromStdString(value));
+    }
+    updateInputMappingPresentation();
+}
+
+void SettingsDialog::openControllerProfiles() {
+    cancelListening();
+    ControllerProfilesDialog dialog(
+        m_paths.controller_profiles_json,
+        currentInputProfile(),
+        currentControllerProfileBindings(),
+        [this](const ControllerProfileBindings& bindings) {
+            applyControllerProfile(bindings);
+        },
+        this);
+    dialog.exec();
 }
 
 void SettingsDialog::loadInputConfig() {
