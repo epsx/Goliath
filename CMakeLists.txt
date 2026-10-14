@@ -171,6 +171,7 @@ add_library(goliath-core STATIC
     src/common/qt_path.cpp
     src/common/debug_logger.cpp
     src/common/log_file.cpp
+    src/common/notification_store.cpp
     src/common/window_geometry.cpp
     src/common/sha1.cpp
     src/update/update_alert.cpp
@@ -264,6 +265,7 @@ add_executable(goliath-qt
     src/ui/main_window_data.cpp
     src/ui/main_window_runtime.cpp
     src/ui/main_window_updates.cpp
+    src/ui/main_window_notifications.cpp
     src/ui/game_screenshot.cpp
     src/ui/game_gallery.cpp
     src/ui/library_item_delegate.cpp
@@ -298,6 +300,7 @@ add_executable(goliath-qt
     src/ui/benchmark_dialog.cpp
     src/ui/game_profile_dialog.cpp
     src/ui/logging_dialog.cpp
+    src/ui/notification_center_dialog.cpp
     src/ui/lithogen_dialog.cpp
     src/ui/save_data_dialog.cpp
     src/game/detached_process_tracker.cpp
@@ -472,6 +475,7 @@ if(BUILD_TESTS)
         tests/test_library_view_logic.cpp
         tests/test_gallery_frame.cpp
         tests/test_log_file.cpp
+        tests/test_notification_store.cpp
         tests/test_diagnostic_report.cpp
         tests/test_save_data_manager.cpp
         tests/test_theme.cpp

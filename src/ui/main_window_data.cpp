@@ -6,8 +6,10 @@
 #include "ui/rescan_dialog.hpp"
 
 #include <QAction>
+#include <QDateTime>
 #include <QMessageBox>
 #include <QString>
+#include <QStringList>
 
 #include <string>
 #include <utility>
@@ -92,8 +94,65 @@ void MainWindow::rescanRoms() {
     }
 }
 
-void MainWindow::onRescanFinished() {
+void MainWindow::onRescanFinished(const RescanReport& report) {
     const QString preferredRom = selectedRomFile();
+
+    const std::size_t added = report.comparison.added.size();
+    const std::size_t removed = report.comparison.removed.size();
+    const std::size_t updated = report.comparison.updated.size();
+    const std::size_t verificationIssues =
+        report.scan.neo_geolith_crc32_mismatch_files +
+        report.scan.cd_mame_chd_mismatch_games +
+        report.scan.cd_unknown_games;
+    if (added + removed + updated + verificationIssues != 0) {
+        const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+        QString message = QString(
+            "Added: %1 · Removed: %2 · Updated: %3")
+            .arg(static_cast<qulonglong>(added))
+            .arg(static_cast<qulonglong>(removed))
+            .arg(static_cast<qulonglong>(updated));
+        if (verificationIssues != 0) {
+            message += QString(" · Verification issues: %1")
+                .arg(static_cast<qulonglong>(verificationIssues));
+        }
+        QString hoverDetails;
+        if (!report.verification_issues.empty()) {
+            QStringList issueLines;
+            issueLines << "Verification issues:";
+            for (const LibraryVerificationIssue& issue :
+                 report.verification_issues) {
+                QString line = QString::fromUtf8("• ") +
+                    QString::fromStdString(issue.display);
+                if (!issue.media.empty()) {
+                    line += QString(" — %1")
+                        .arg(QString::fromStdString(issue.media));
+                }
+                line += QString(": %1")
+                    .arg(QString::fromStdString(issue.problem));
+                issueLines << line;
+            }
+            if (verificationIssues > report.verification_issues.size()) {
+                issueLines << QString::fromUtf8("…and %1 more")
+                    .arg(static_cast<qulonglong>(
+                        verificationIssues -
+                        report.verification_issues.size()));
+            }
+            hoverDetails = issueLines.join('\n');
+        }
+        addNotification({
+            QString("library:rescan:%1").arg(nowMs).toStdString(),
+            NotificationCategory::Library,
+            verificationIssues == 0
+                ? NotificationSeverity::Information
+                : NotificationSeverity::Warning,
+            "Library rescan completed",
+            message.toStdString(),
+            nowMs / 1000,
+            false,
+            NotificationAction::None,
+            hoverDetails.toStdString(),
+        });
+    }
 
     if (m_rescanWorker) {
         m_rescanWorker->wait(); // Ensure the thread has finished before deleting it.
@@ -118,6 +177,16 @@ void MainWindow::onRescanError(QString msg) {
         m_rescanWorker = nullptr;
     }
     m_rescanAction->setEnabled(true);
+    addNotification({
+        "library:rescan-error",
+        NotificationCategory::Library,
+        NotificationSeverity::Error,
+        "Library rescan failed",
+        msg.left(1000).toStdString(),
+        QDateTime::currentSecsSinceEpoch(),
+        false,
+        NotificationAction::RescanLibrary,
+    });
     QMessageBox::critical(this, "Rescan Error", msg);
 }
 

@@ -33,6 +33,7 @@
 #include "game/game_playtime.hpp"
 #include "game/game_profile.hpp"
 #include "common/goliath_common.hpp"
+#include "common/notification_store.hpp"
 #include "common/paths.hpp"
 #include "ui/library_view_logic.hpp"
 #include "ui/command_dialog.hpp"
@@ -65,6 +66,7 @@ namespace goliath {
 
 class LibraryTileDelegate;
 struct JollygoodLaunchPreparation;
+struct RescanReport;
 
 class TitleBar;
 class RescanWorker;
@@ -124,9 +126,10 @@ private slots:
 
     void openSettings();
     void rescanRoms();
-    void onRescanFinished();
+    void onRescanFinished(const RescanReport& report);
     void onRescanError(QString msg);
     void verifyBios();
+    void openNotificationCenter();
 
 private:
     void buildUi();
@@ -185,6 +188,12 @@ private:
     void reloadCachedUpdateAlert();
     void updateAvailableIndicator();
     void openAvailableUpdate();
+    void loadNotifications();
+    void saveNotifications();
+    void addNotification(AppNotification notification);
+    void removeNotification(const std::string& id);
+    void updateNotificationsButton();
+    void performNotificationAction(NotificationAction action);
     void loadGameProfiles();
     void loadGamePlaytime();
     void loadGameLibraryState();
@@ -249,8 +258,10 @@ private:
     GameProfileStore m_gameProfiles;
     GamePlaytimeStore m_gamePlaytime;
     GameLibraryStateStore m_gameLibraryState;
+    NotificationStore m_notifications;
     bool m_gamePlaytimePersistenceAvailable = true;
     bool m_gameLibraryStatePersistenceAvailable = true;
+    bool m_notificationPersistenceAvailable = true;
     bool m_automaticUpdateCheckPending = false;
     std::optional<PublishedRelease> m_availableUpdate;
     // Diagnostics toggle for this Goliath session only. It is intentionally
@@ -294,6 +305,7 @@ private:
     QComboBox* m_themeCombo = nullptr;
     QPushButton* m_filtersButton = nullptr;
     QPushButton* m_updateAvailableButton = nullptr;
+    QPushButton* m_notificationsButton = nullptr;
     QActionGroup* m_sortGroup = nullptr;
     QActionGroup* m_libraryDisplayGroup = nullptr;
     QActionGroup* m_ratingFilterGroup = nullptr;

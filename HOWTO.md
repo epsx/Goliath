@@ -309,6 +309,7 @@ On first start, Goliath creates these files next to `goliath-qt.exe` as needed:
 
 ```text
 goliath.ini
+goliath_notifications.json bounded notification history
 goliath-qt-debug.log
 jollygood.log                created/appended when JGRF is launched
 ```
@@ -1038,6 +1039,26 @@ only trusted HTTPS destinations. It never downloads or installs releases.
 When a newer release is found, a compact indicator appears below **About** and
 persists across restarts. Selecting it opens the release details; installing
 that version makes the cached indicator expire on the next launch.
+
+### Review notifications that need attention
+
+Select **Alerts** in the main toolbar to open the notification center. The
+button includes an unread count only when something may need attention.
+Goliath records newer releases, library rescans with changes or verification
+issues, rescan failures, launch/configuration blockers, missing BIOS material,
+and game-integrity problems. Routine successful launches, unchanged rescans,
+and passed integrity checks do not create notifications.
+
+When a rescan reports verification issues, hover its compact summary to see
+the first three affected game/media names and the exact problem type. A final
+line reports how many additional problems were omitted from the preview.
+
+Each card can be marked read or dismissed. Relevant cards can also open the
+update details, Settings, a library rescan, BIOS verification, or Diagnostics
+and Logs. **Mark all read** retains the history; **Clear history** removes it.
+The newest 50 entries are stored atomically in `goliath_notifications.json`
+beside `goliath.ini`. Repeated identical conditions reuse one card and preserve
+its read state until the underlying message changes.
 
 ### Run a selected-game performance benchmark
 

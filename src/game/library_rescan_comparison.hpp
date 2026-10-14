@@ -24,10 +24,22 @@ struct LibraryRescanComparison {
     std::vector<LibraryRescanChange> updated;
 };
 
+struct LibraryVerificationIssue {
+    std::string display;
+    std::string media;
+    std::string problem;
+};
+
 // Ordering changes alone are ignored. An entry is updated when its exact
 // system/media identity remains present but scanner-owned metadata changes.
 LibraryRescanComparison compare_library_snapshots(
     const std::vector<Game>& previous,
     const std::vector<Game>& current);
+
+// Returns at most maximum_entries concrete verification problems from the
+// current snapshot. The order follows the scanner output so notification
+// previews are stable and immediately recognizable in the library.
+std::vector<LibraryVerificationIssue> collect_library_verification_issues(
+    const std::vector<Game>& current, std::size_t maximum_entries);
 
 } // namespace goliath

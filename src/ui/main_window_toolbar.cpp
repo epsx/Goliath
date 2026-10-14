@@ -363,6 +363,15 @@ void MainWindow::buildToolbar(QVBoxLayout* mainLayout) {
     connect(settingsBtn, &QPushButton::clicked, this, &MainWindow::openSettings);
     toolbar->addWidget(settingsBtn);
 
+    m_notificationsButton = new EngravedActionButton(
+        "Alerts", EngravedActionButton::Glyph::Alerts);
+    m_notificationsButton->setObjectName("alerts_btn");
+    m_notificationsButton->setCursor(Qt::PointingHandCursor);
+    connect(m_notificationsButton, &QPushButton::clicked,
+            this, &MainWindow::openNotificationCenter);
+    toolbar->addWidget(m_notificationsButton);
+    updateNotificationsButton();
+
     auto* aboutBtn = new EngravedActionButton(
         "About", EngravedActionButton::Glyph::About, toolbarFrame);
     aboutBtn->setObjectName("about_btn");

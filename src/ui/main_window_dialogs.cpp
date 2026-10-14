@@ -11,6 +11,7 @@
 #include "ui/widgets/title_bar.hpp"
 
 #include <QKeySequence>
+#include <QDateTime>
 #include <QScrollBar>
 #include <QStringList>
 #include <QTimer>
@@ -27,6 +28,17 @@ namespace goliath {
 void MainWindow::verifyBios() {
     auto resultOpt = verify_bios(m_paths.bios_dir);
     if (!resultOpt.has_value()) {
+        addNotification({
+            "configuration:bios",
+            NotificationCategory::Configuration,
+            NotificationSeverity::Warning,
+            "BIOS folder not found",
+            QString("Configured folder: %1")
+                .arg(path_to_qstring(m_paths.bios_dir)).toStdString(),
+            QDateTime::currentSecsSinceEpoch(),
+            false,
+            NotificationAction::OpenSettings,
+        });
         showThemedMessageDialog(
             this, "Verify BIOS",
             QString("BIOS folder not found:\n%1")
@@ -35,6 +47,24 @@ void MainWindow::verifyBios() {
         return;
     }
 
+    if (resultOpt->problems == 0) {
+        removeNotification("configuration:bios");
+    } else {
+        addNotification({
+            "configuration:bios",
+            NotificationCategory::Configuration,
+            NotificationSeverity::Warning,
+            "BIOS verification found problems",
+            QString("%1 required BIOS problem%2 found. Open Verify BIOS for "
+                    "the complete per-archive report.")
+                .arg(resultOpt->problems)
+                .arg(resultOpt->problems == 1 ? "" : "s")
+                .toStdString(),
+            QDateTime::currentSecsSinceEpoch(),
+            false,
+            NotificationAction::VerifyBios,
+        });
+    }
     BiosVerificationDialog dialog(*resultOpt, m_paths.bios_dir, this);
     dialog.exec();
 }
@@ -43,6 +73,17 @@ void MainWindow::warnIfBiosMissing() {
     std::error_code ec;
 
     if (!fs::is_directory(m_paths.bios_dir, ec)) {
+        addNotification({
+            "configuration:bios",
+            NotificationCategory::Configuration,
+            NotificationSeverity::Warning,
+            "BIOS folder not found",
+            QString("Configured folder: %1")
+                .arg(path_to_qstring(m_paths.bios_dir)).toStdString(),
+            QDateTime::currentSecsSinceEpoch(),
+            false,
+            NotificationAction::OpenSettings,
+        });
         showThemedMessageDialog(this, "BIOS folder not found",
             QString("The configured BIOS folder does not exist:\n%1\n\n"
                     "Set it in Settings > Path, or run Tools > Verify BIOS.")
@@ -61,6 +102,19 @@ void MainWindow::warnIfBiosMissing() {
     }
 
     if (!missing.isEmpty()) {
+        addNotification({
+            "configuration:bios",
+            NotificationCategory::Configuration,
+            NotificationSeverity::Warning,
+            "BIOS archives are missing",
+            QString("%1 archive%2 missing. Run Verify BIOS for details.")
+                .arg(missing.size())
+                .arg(missing.size() == 1 ? " is" : "s are")
+                .toStdString(),
+            QDateTime::currentSecsSinceEpoch(),
+            false,
+            NotificationAction::VerifyBios,
+        });
         showThemedMessageDialog(this, "Missing BIOS files",
             QString("The following BIOS archives are missing from:\n%1\n\n%2\n\n"
                     "Games may fail to launch. Run Tools > Verify BIOS for details.")
@@ -69,6 +123,7 @@ void MainWindow::warnIfBiosMissing() {
             ThemedMessageTone::Warning);
         return;
     }
+    removeNotification("configuration:bios");
 }
 
 void MainWindow::openSettings() {

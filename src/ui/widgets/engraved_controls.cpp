@@ -344,7 +344,7 @@ void EngravedActionButton::drawGlyph(
         funnel.lineTo(centre.x() - 1.5, centre.y() + 1.0);
         funnel.closeSubpath();
         painter.drawPath(funnel);
-    } else {
+    } else if (m_glyph == Glyph::Random) {
         const QRectF die = bounds.adjusted(1.8, 1.8, -1.8, -1.8);
         painter.drawRoundedRect(die, 2.2, 2.2);
         painter.setBrush(color);
@@ -354,6 +354,21 @@ void EngravedActionButton::drawGlyph(
         painter.drawEllipse(QPointF(die.right() - 2.6,
                                     die.bottom() - 2.6), 0.9, 0.9);
         painter.setBrush(Qt::NoBrush);
+    } else {
+        QPainterPath bell;
+        bell.moveTo(centre.x(), bounds.top() + 1.5);
+        bell.cubicTo(bounds.left() + 3.0, bounds.top() + 2.0,
+                     bounds.left() + 3.0, centre.y() + 1.0,
+                     bounds.left() + 2.0, bounds.bottom() - 3.2);
+        bell.lineTo(bounds.right() - 2.0, bounds.bottom() - 3.2);
+        bell.cubicTo(bounds.right() - 3.0, centre.y() + 1.0,
+                     bounds.right() - 3.0, bounds.top() + 2.0,
+                     centre.x(), bounds.top() + 1.5);
+        painter.drawPath(bell);
+        painter.drawLine(QPointF(bounds.left() + 1.3, bounds.bottom() - 3.0),
+                         QPointF(bounds.right() - 1.3, bounds.bottom() - 3.0));
+        painter.drawArc(QRectF(centre.x() - 1.8, bounds.bottom() - 4.0,
+                               3.6, 3.6), 180 * 16, 180 * 16);
     }
 }
 

@@ -201,6 +201,7 @@ TEST_CASE("primary toolbar actions use borderless theme feedback",
         INFO("theme=" << theme.key);
         const std::string stylesheet = generate_theme_style(theme);
         CHECK(stylesheet.find("QPushButton#tools_btn") != std::string::npos);
+        CHECK(stylesheet.find("QPushButton#alerts_btn") != std::string::npos);
         CHECK(stylesheet.find("QPushButton#settings_btn") != std::string::npos);
         CHECK(stylesheet.find("QPushButton#about_btn") != std::string::npos);
         CHECK(stylesheet.find("QPushButton#filters_btn") != std::string::npos);
@@ -242,6 +243,22 @@ TEST_CASE("primary toolbar actions use borderless theme feedback",
         CHECK(stylesheet.find("    image: none;\n"
                               "    width: 0px;\n"
                               "    height: 0px;\n") != std::string::npos);
+    }
+}
+
+TEST_CASE("notification center uses theme-aware actionable cards",
+          "[theme][notifications]") {
+    for (const Theme& theme : all_themes()) {
+        INFO("theme=" << theme.key);
+        const std::string stylesheet = generate_theme_style(theme);
+        CHECK(stylesheet.find("QFrame#notification_card") !=
+              std::string::npos);
+        CHECK(stylesheet.find("notificationSeverity=\"error\"") !=
+              std::string::npos);
+        CHECK(stylesheet.find("QLabel#notification_new_badge") !=
+              std::string::npos);
+        CHECK(stylesheet.find("QPushButton#notification_primary_action") !=
+              std::string::npos);
     }
 }
 

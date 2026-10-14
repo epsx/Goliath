@@ -30,6 +30,7 @@ MainWindow::MainWindow(Config config, QWidget* parent)
     loadGameProfiles();
     loadGamePlaytime();
     loadGameLibraryState();
+    loadNotifications();
 
     DebugLogger::logInfo(
         QString("base_dir: %1").arg(path_to_qstring(m_paths.base_dir)));

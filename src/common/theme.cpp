@@ -713,6 +713,7 @@ QWidget#toolbar_actions {
 }
 
 QPushButton#tools_btn,
+QPushButton#alerts_btn,
 QPushButton#settings_btn,
 QPushButton#about_btn,
 QPushButton#filters_btn,
@@ -723,6 +724,7 @@ QPushButton#favorite_btn {
 }
 
 QPushButton#tools_btn:hover,
+QPushButton#alerts_btn:hover,
 QPushButton#settings_btn:hover,
 QPushButton#about_btn:hover,
 QPushButton#filters_btn:hover,
@@ -733,6 +735,7 @@ QPushButton#favorite_btn:hover {
 }
 
 QPushButton#tools_btn:pressed,
+QPushButton#alerts_btn:pressed,
 QPushButton#settings_btn:pressed,
 QPushButton#about_btn:pressed,
 QPushButton#filters_btn:pressed,
@@ -743,6 +746,10 @@ QPushButton#favorite_btn:pressed {
 }
 
 QPushButton#favorite_btn:checked {
+    color: @accent@;
+}
+
+QPushButton#alerts_btn[hasUnread="true"] {
     color: @accent@;
 }
 
@@ -891,6 +898,74 @@ QFrame#controller_profile_empty {
     background-color: @bg_secondary@;
     border: 1px solid @border@;
     border-radius: 12px;
+}
+
+QFrame#notification_card,
+QFrame#notification_empty {
+    background-color: @bg_secondary@;
+    border: 1px solid @border@;
+    border-radius: 12px;
+}
+
+QFrame#notification_card[notificationUnread="true"] {
+    border-left: 3px solid @accent@;
+}
+
+QFrame#notification_card[notificationSeverity="warning"],
+QFrame#notification_card[notificationSeverity="error"] {
+    border-left: 3px solid @danger@;
+}
+
+QScrollArea#notification_scroll,
+QScrollArea#notification_scroll QWidget#qt_scrollarea_viewport,
+QWidget#notification_scroll_contents {
+    background-color: transparent;
+    border: none;
+}
+
+QLabel#notification_heading,
+QLabel#notification_title {
+    color: @text_primary@;
+    font-weight: 600;
+}
+
+QLabel#notification_heading {
+    color: @accent@;
+    font-size: 14px;
+}
+
+QLabel#notification_summary,
+QLabel#notification_message,
+QLabel#notification_time {
+    color: @text_secondary@;
+}
+
+QLabel#notification_category {
+    color: @accent@;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+QLabel#notification_new_badge {
+    color: @on_accent@;
+    background-color: @accent@;
+    border-radius: 5px;
+    padding: 1px 5px;
+    font-size: 9px;
+    font-weight: 700;
+}
+
+QPushButton#notification_primary_action {
+    background-color: @accent@;
+    border-color: @accent@;
+    color: @on_accent@;
+    font-weight: 600;
+}
+
+QPushButton#notification_primary_action:hover {
+    background-color: @accent_hover@;
+    border-color: @accent_hover@;
+    color: @on_accent_hover@;
 }
 
 QFrame#controller_profile_card[profileCompatible="true"] {

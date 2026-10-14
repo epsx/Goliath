@@ -36,6 +36,8 @@ void RescanWorker::run() {
         report.scan = std::move(result);
         report.comparison = compare_library_snapshots(
             m_previousGames, currentGames);
+        report.verification_issues =
+            collect_library_verification_issues(currentGames, 3);
         emit completed(std::move(report));
     } else {
         emit error(QString::fromStdString(result.error_message));

@@ -162,4 +162,46 @@ LibraryRescanComparison compare_library_snapshots(
     return result;
 }
 
+std::vector<LibraryVerificationIssue> collect_library_verification_issues(
+        const std::vector<Game>& current, std::size_t maximum_entries) {
+    std::vector<LibraryVerificationIssue> issues;
+    issues.reserve(std::min(maximum_entries, current.size()));
+
+    const auto add_issue = [&](const Game& game, const std::string& media,
+                               std::string problem) {
+        if (issues.size() >= maximum_entries) return;
+        issues.push_back({
+            game.display.empty() ? game.name : game.display,
+            media,
+            std::move(problem),
+        });
+    };
+
+    for (const Game& game : current) {
+        if (issues.size() >= maximum_entries) break;
+
+        if (game.system == "neogeocd") {
+            const std::string media = game.main_rom.value_or(
+                game.roms.empty() ? std::string() : game.roms.front().file);
+            if (!game.identified) {
+                add_issue(game, media, "Unknown Neo Geo CD image");
+            } else if (game.verification ==
+                       std::optional<std::string>("mame-chd-mismatch")) {
+                add_issue(game, media, "CHD SHA-1 mismatch");
+            }
+            continue;
+        }
+
+        for (const Rom& rom : game.roms) {
+            if (rom.verification !=
+                std::optional<std::string>("geolith-crc32-mismatch")) {
+                continue;
+            }
+            add_issue(game, rom.file, "CRC-32 mismatch");
+            if (issues.size() >= maximum_entries) break;
+        }
+    }
+    return issues;
+}
+
 } // namespace goliath

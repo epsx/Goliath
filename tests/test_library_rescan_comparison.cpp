@@ -145,3 +145,42 @@ TEST_CASE("first rescan reports every discovered game as added",
     CHECK(result.removed.empty());
     CHECK(result.updated.empty());
 }
+
+TEST_CASE("rescan verification preview identifies exact media and problem",
+          "[rescan][verification]") {
+    auto cartridge = make_game("Bad Cartridge", "bad.neo");
+    cartridge.roms.front().verification = "geolith-crc32-mismatch";
+
+    auto chd = make_game("Bad CHD", "bad.chd", "neogeocd");
+    chd.verification = "mame-chd-mismatch";
+
+    auto unknown = make_game("Mystery Disc", "mystery.cue", "neogeocd");
+    unknown.identified = false;
+    unknown.verification.reset();
+
+    const auto issues = goliath::collect_library_verification_issues(
+        {cartridge, chd, unknown}, 3);
+    REQUIRE(issues.size() == 3);
+    CHECK(issues[0].display == "Bad Cartridge");
+    CHECK(issues[0].media == "bad.neo");
+    CHECK(issues[0].problem == "CRC-32 mismatch");
+    CHECK(issues[1].display == "Bad CHD");
+    CHECK(issues[1].media == "bad.chd");
+    CHECK(issues[1].problem == "CHD SHA-1 mismatch");
+    CHECK(issues[2].display == "Mystery Disc");
+    CHECK(issues[2].media == "mystery.cue");
+    CHECK(issues[2].problem == "Unknown Neo Geo CD image");
+}
+
+TEST_CASE("rescan verification preview is capped without hiding total data",
+          "[rescan][verification]") {
+    auto first = make_game("First", "first.neo");
+    first.roms.front().verification = "geolith-crc32-mismatch";
+    auto second = make_game("Second", "second.neo");
+    second.roms.front().verification = "geolith-crc32-mismatch";
+
+    const auto issues = goliath::collect_library_verification_issues(
+        {first, second}, 1);
+    REQUIRE(issues.size() == 1);
+    CHECK(issues.front().media == "first.neo");
+}

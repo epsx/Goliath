@@ -78,6 +78,7 @@ void MainWindow::updateAvailableIndicator() {
     if (!m_updateAvailableButton) return;
     if (!m_availableUpdate) {
         m_updateAvailableButton->hide();
+        removeNotification("update:available");
         return;
     }
 
@@ -96,6 +97,19 @@ void MainWindow::updateAvailableIndicator() {
             .arg(fullText,
                  QString::fromStdString(m_availableUpdate->name)));
     m_updateAvailableButton->show();
+
+    addNotification({
+        "update:available",
+        NotificationCategory::Update,
+        NotificationSeverity::Information,
+        QString("Goliath %1 is available").arg(versionText).toStdString(),
+        QString("%1 — open the release details when you are ready to update.")
+            .arg(QString::fromStdString(m_availableUpdate->name))
+            .toStdString(),
+        QDateTime::currentSecsSinceEpoch(),
+        false,
+        NotificationAction::OpenUpdate,
+    });
 }
 
 void MainWindow::openAvailableUpdate() {

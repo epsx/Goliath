@@ -149,6 +149,7 @@ src/
 │   ├── filesystem_safety.hpp/.cpp
 │   ├── goliath_common.hpp/.cpp
 │   ├── log_file.hpp/.cpp
+│   ├── notification_store.hpp/.cpp
 │   ├── paths.hpp/.cpp
 │   ├── qt_path.hpp/.cpp
 │   ├── sha1.hpp/.cpp
@@ -209,6 +210,7 @@ src/
     ├── main_window_events.cpp
     ├── main_window_runtime.cpp
     ├── main_window_updates.cpp
+    ├── main_window_notifications.cpp
     ├── main_window_library_actions.cpp
     ├── main_window_library_controls.cpp
     ├── main_window_library_details.cpp
@@ -238,6 +240,7 @@ src/
     ├── command_dialog.hpp/.cpp
     ├── game_profile_dialog.hpp/.cpp
     ├── lithogen_dialog.hpp/.cpp
+    ├── notification_center_dialog.hpp/.cpp
     ├── logging_dialog.hpp/.cpp
     ├── rescan_dialog.hpp/.cpp
     ├── save_data_dialog.hpp/.cpp
@@ -652,7 +655,7 @@ exists.
 | `main_window.cpp` | Constructor orchestration and initial persisted-state loading. |
 | `main_window_ui.cpp` | Thin shell construction, status bar, and keyboard shortcuts. |
 | `main_window_theme.cpp` | Theme application plus generated branch/spin assets and elevated-surface colors. |
-| `main_window_toolbar.cpp` | Theme selector, Filters, Random, Tools, Settings, About, and update indicator construction. |
+| `main_window_toolbar.cpp` | Theme selector, Filters, Random, Tools, Settings, Alerts, About, and update indicator construction. |
 | `main_window_details_ui.cpp` | Details header, metadata/playtime card, gallery, Description, and details pane. |
 | `main_window_library_ui.cpp` | System selector, List/Grid pages, Search, splitter workspace, and lightweight non-opaque splitter resizing. |
 | `main_window_data.cpp` | Game/profile/playtime/personal-state loading and rescan-result adoption. |
@@ -661,6 +664,7 @@ exists.
 | `main_window_events.cpp` | Window events, geometry persistence, Classic View thresholds, and close lifecycle. |
 | `main_window_runtime.cpp` | Detached launch observation, session finalization, and runtime companion handling. |
 | `main_window_updates.cpp` | Scheduled/manual update orchestration and toolbar indicator state. |
+| `main_window_notifications.cpp` | Persistent notification loading, unread badge state, dialog routing, and follow-up actions. |
 | `main_window_library_actions.cpp` | Launch, integrity verification, benchmark, export, capture, folders, and save-data actions. |
 | `main_window_library_controls.cpp` | Sort/filter/search/favorite/rating control behavior. |
 | `main_window_library_details.cpp` | Selection-to-details and gallery presentation updates. |
@@ -674,7 +678,7 @@ returns. Interactive splitter movement uses a lightweight guide and applies
 the expensive card/media resize only when the handle is released.
 
 The top toolbar keeps library controls and Random on the left, then a stretch
-followed by Tools, Settings, and About on the right. The title-bar close button
+followed by Tools, Settings, Alerts, and About on the right. The title-bar close button
 retains the existing `closeEvent` lifecycle; there is no duplicate Exit button.
 
 Library state deliberately preserves selection across applicable view rebuilds,
@@ -748,6 +752,22 @@ The indicator is hidden when no newer release exists. When visible, it sits
 below About without changing toolbar height, uses a compact label on narrow
 windows, and opens the same themed release-details dialog as a manual check.
 Installing that release causes the cached alert to expire on the next launch.
+
+### Notification center
+
+`common/notification_store` owns the schema-validated, atomically saved and
+newest-first history. It deduplicates stable event identities, preserves read
+state for an unchanged payload, reopens a changed condition as unread, and
+keeps at most 50 entries. `notification_center_dialog` presents themed cards
+without owning persistence, while `main_window_notifications` commits user
+changes and routes explicit follow-up actions after the modal dialog closes.
+Compact hover details are persisted independently from the card summary so a
+rescan warning can name at most three affected media items without expanding
+the card; older stores without this optional field remain valid.
+
+Update availability, meaningful rescan results/errors, launch blockers and
+startup failures, missing BIOS material, and integrity problems are producers.
+Successful routine operations intentionally remain silent.
 
 `game_profile_dialog` edits the profile for the exact selected media. Its
 **General** tab owns system/input launch settings, its generated **Video** tab
@@ -964,6 +984,7 @@ tests/
 ├── test_library_details_presentation.cpp
 ├── test_library_view_logic.cpp
 ├── test_log_file.cpp
+├── test_notification_store.cpp
 ├── test_project_legal.cpp
 ├── test_release_feed.cpp
 ├── test_save_data_manager.cpp
@@ -1008,6 +1029,7 @@ tests/
 | `test_library_details_presentation.cpp` | Metadata, profile, verification, and Last Started/Ended/Session formatting. |
 | `test_library_view_logic.cpp` | Display modes, filtering, sorting, selection, per-system viewport restoration, badges, and responsive tiles. |
 | `test_log_file.cpp` | Missing-log idempotence, regular-file truncation, and unsafe-target refusal. |
+| `test_notification_store.cpp` | Atomic round trips, enum validation, stable-payload deduplication, unread transitions, bounded pruning, malformed input, dismissal, and clearing. |
 | `test_project_legal.cpp` | Required legal files, notice coverage, and packaging expectations. |
 | `test_release_feed.cpp` | Bounded release JSON parsing, semantic version ordering, and published-release selection. |
 | `test_save_data_manager.cpp` | JGRF basename/layout parity, bounded inventory, snapshot/restore, protective deletion, exact-media isolation, and malicious/foreign ZIP rejection. |
@@ -1074,6 +1096,7 @@ The source tree and runtime tree have different ownership:
 | --- | --- | --- |
 | Application config | `goliath.ini` | Goliath `Config` |
 | Newer-release alert | `goliath_update_alert.json` | `update_alert` |
+| Notification history | `goliath_notifications.json` | `NotificationStore` |
 | Controller profiles | `config/controller_profiles.json` | `ControllerProfileStore` |
 | Per-game profiles | `config/game_profiles.json` | `GameProfileStore` |
 | Per-game playtime | `config/game_playtime.json` | `GamePlaytimeStore` |

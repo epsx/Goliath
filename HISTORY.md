@@ -17,6 +17,20 @@ visible-only Random smoke tests.
 
 ---
 
+## 2026-10-13 — Unified notification center
+
+- Added a compact **Alerts** toolbar entry and themed notification center for
+  update, library, configuration, launch, BIOS, and integrity events that may
+  need attention.
+- Added bounded atomic persistence, stable-event deduplication, unread state,
+  dismissal, history clearing, and direct follow-up actions without adding
+  routine-success noise.
+- Added compact hover previews for the first three exact rescan verification
+  problems and placed the toolbar actions in Tools, Settings, Alerts, About
+  order.
+- Covered the independent store lifecycle and notification theme surfaces with
+  regression tests, and documented the runtime file and UI behavior.
+
 ## 2026-10-09 — Main-window decomposition and update indicator milestone
 
 - Replaced the modal automatic-update interruption with a compact persistent

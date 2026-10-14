@@ -19,6 +19,7 @@
 #include "ui/widgets/title_bar.hpp"
 
 #include <QDesktopServices>
+#include <QDateTime>
 #include <QDialog>
 #include <QElapsedTimer>
 #include <QEventLoop>
@@ -379,6 +380,16 @@ void MainWindow::verifySelectedGameIntegrity() {
         DebugLogger::logError(
             QString("game integrity verification failed: %1")
                 .arg(QString::fromStdString(*failure)));
+        addNotification({
+            "integrity:failure",
+            NotificationCategory::Integrity,
+            NotificationSeverity::Error,
+            "Game integrity check failed",
+            QString::fromStdString(*failure).left(1000).toStdString(),
+            QDateTime::currentSecsSinceEpoch(),
+            false,
+            NotificationAction::OpenLogs,
+        });
         showThemedMessageDialog(
             this, "Game Integrity Check Failed",
             QString("The integrity check could not be completed.\n\n%1")
@@ -394,6 +405,21 @@ void MainWindow::verifySelectedGameIntegrity() {
             .arg(mediaPath)
             .arg(static_cast<qulonglong>(result->matched_files))
             .arg(static_cast<qulonglong>(result->problem_files)));
+
+    if (result->status == GameIntegrityStatus::ProblemsFound) {
+        addNotification({
+            "integrity:problem",
+            NotificationCategory::Integrity,
+            NotificationSeverity::Warning,
+            "Game integrity problems found",
+            QString("%1\nMedia: %2")
+                .arg(QString::fromStdString(result->detail), mediaPath)
+                .left(1000).toStdString(),
+            QDateTime::currentSecsSinceEpoch(),
+            false,
+            NotificationAction::None,
+        });
+    }
 
     if (result->hashes.empty()) {
         showThemedMessageDialog(

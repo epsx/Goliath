@@ -11,6 +11,7 @@
 #include "ui/widgets/title_bar.hpp"
 
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QFile>
 #include <QString>
 #include <QStringList>
@@ -33,6 +34,21 @@ namespace {
 
 constexpr qint64 kLaunchLogExcerptBytes = 32 * 1024;
 constexpr std::size_t kLaunchLogExcerptLines = 10;
+
+NotificationAction launch_notification_action(
+        LaunchPreparationStatus status) {
+    switch (status) {
+    case LaunchPreparationStatus::MediaMissing:
+        return NotificationAction::RescanLibrary;
+    case LaunchPreparationStatus::ExecutableNotFound:
+    case LaunchPreparationStatus::CapabilityProbeFailed:
+    case LaunchPreparationStatus::ChdUnsupported:
+    case LaunchPreparationStatus::ProfileConfigurationFailed:
+        return NotificationAction::OpenSettings;
+    default:
+        return NotificationAction::None;
+    }
+}
 
 std::uintmax_t launch_log_offset(const fs::path& path) {
     QFile file;
@@ -221,6 +237,16 @@ bool MainWindow::trackGameProcess(qint64 pid,
             QString("could not observe detached JGRF process: %1")
                 .arg(failure));
         if (!m_closeRequested && isVisible()) {
+            addNotification({
+                "launch:observer",
+                NotificationCategory::Configuration,
+                NotificationSeverity::Warning,
+                "Game launch status is unavailable",
+                failure.left(1000).toStdString(),
+                QDateTime::currentSecsSinceEpoch(),
+                false,
+                NotificationAction::OpenLogs,
+            });
             showThemedMessageDialog(
                 this, "JGRF Launch Status Unavailable", failure,
                 ThemedMessageTone::Warning);
@@ -377,6 +403,16 @@ void MainWindow::pollTrackedGameProcesses() {
     // event loop may deliver another timer tick; no failure may be reported
     // twice merely because its first message is still open.
     for (const QString& failure : startupFailures) {
+        addNotification({
+            "launch:startup",
+            NotificationCategory::Configuration,
+            NotificationSeverity::Error,
+            "Game stopped during startup",
+            failure.left(1000).toStdString(),
+            QDateTime::currentSecsSinceEpoch(),
+            false,
+            NotificationAction::OpenLogs,
+        });
         showThemedMessageDialog(
             this, "Game Stopped During Startup", failure,
             ThemedMessageTone::Warning);
@@ -471,6 +507,19 @@ void MainWindow::launchMedia(const QString& media, const std::string& system,
         DebugLogger::logError(
             QString("launch preflight blocked %1: %2")
                 .arg(media, failure));
+        addNotification({
+            QString("launch:preflight:%1")
+                .arg(static_cast<int>(preparation.status)).toStdString(),
+            NotificationCategory::Configuration,
+            NotificationSeverity::Warning,
+            waveOutputPath.has_value()
+                ? "Audio export cannot start"
+                : "Game cannot start",
+            failure.left(1000).toStdString(),
+            QDateTime::currentSecsSinceEpoch(),
+            false,
+            launch_notification_action(preparation.status),
+        });
         showThemedMessageDialog(
             this,
             waveOutputPath.has_value()
@@ -522,6 +571,17 @@ void MainWindow::launchMedia(const QString& media, const std::string& system,
         DebugLogger::logError(
             QString("failed to launch jollygood for %1 media: %2: %3")
                 .arg(QString::fromStdString(system), media, launchError));
+        addNotification({
+            "launch:process",
+            NotificationCategory::Configuration,
+            NotificationSeverity::Error,
+            "JGRF process could not start",
+            QString("%1\nMedia: %2")
+                .arg(launchError, media).left(1000).toStdString(),
+            QDateTime::currentSecsSinceEpoch(),
+            false,
+            NotificationAction::OpenLogs,
+        });
         showThemedMessageDialog(
             this,
             "JGRF Launch Failed",

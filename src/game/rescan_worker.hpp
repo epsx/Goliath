@@ -20,6 +20,7 @@ namespace goliath {
 struct RescanReport {
     ScanResult scan;
     LibraryRescanComparison comparison;
+    std::vector<LibraryVerificationIssue> verification_issues;
 };
 
 class RescanWorker : public QThread {
