@@ -7,7 +7,7 @@ Historical test counts are retained as checkpoint evidence. The current
 publication candidate passes:
 
 ```text
-All tests passed (3966 assertions in 265 test cases)
+All tests passed (4770 assertions in 323 test cases)
 ```
 
 The preceding `1360/99` Feature 9 baseline passed its per-game mapping,
@@ -16,6 +16,41 @@ baseline passed manual MVS/AES, Neo Geo CD CUE, Neo Geo CD CHD, Settings, and
 visible-only Random smoke tests.
 
 ---
+
+## 2026-10-14 — Goliath 0.41.0 preview candidate
+
+- Consolidated the post-0.40.1 implementation across 163 changed files into a
+  feature and architecture release rather than a maintenance-only update.
+- Added a persistent, themed **Alerts** center for update, rescan,
+  configuration, launch, BIOS, and integrity problems, with unread state,
+  deduplication, direct follow-up actions, and compact hover previews for the
+  first three exact verification failures.
+- Added on-demand exact-media integrity verification from the library context
+  menu and a compact before/after rescan comparison for added, removed,
+  updated, unchanged, and verification-problem results.
+- Added explicit launch-block and startup-failure explanations, plus a
+  privacy-redacted diagnostic report that can be exported without freezing the
+  interface.
+- Rebuilt BIOS verification around compact capability cards and detailed
+  per-archive checks, including required and optional Neo Geo CD capabilities.
+- Improved input editing with conflict and override visibility, reusable
+  controller profiles, per-game profile loading, and a more stable compact
+  mapping layout.
+- Added portable import/export for per-game settings while preserving exact
+  media identity, validation, global inheritance, and an explicit review
+  before saving.
+- Restructured the frontend into focused main-window, library, details,
+  control, state, action, interaction, dialog, runtime, data, theme, and update
+  translation units. Extracted reusable builders, presentation helpers,
+  stable item roles, and shared widgets to make future UI work easier to test
+  and maintain without changing established behavior.
+- Hardened Unicode filesystem boundaries and native path handling, grouped
+  multi-file configuration updates into recoverable transactions, made save
+  failures truthful to the UI, and expanded strict-warning and sanitizer
+  validation with warning-clean index/count types.
+- Refreshed Windows runtime dependency pins after the MSYS2 package updates;
+  the release candidate passes the complete Windows suite at 4770 assertions
+  in 323 test cases and the Windows/Linux GitHub Actions build matrix.
 
 ## 2026-10-13 — Unified notification center
 

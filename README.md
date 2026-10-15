@@ -55,15 +55,24 @@ Linux support is maintained where practical.
   experimental 5-, 7-, or 10-second GIF recording on Windows, X11, and
   portal-enabled Wayland desktops.
 - Per-game BIOS, video, input, and core settings without changing global
-  configuration.
-- BIOS verification and safe JGRF BIOS preparation.
+  configuration, with portable import/export and reusable controller mapping
+  profiles.
+- Input conflict/override visibility and reusable controller profiles for
+  applying complete mappings globally or to one exact game.
+- Compact BIOS capability verification with detailed per-archive checks and
+  safe JGRF BIOS preparation.
+- Exact launch-block explanations, on-demand game-integrity verification, and
+  a before/after library rescan summary.
 - Save-data backup, validation, restore, deletion, and folder access.
 - Exact-media playtime, session count, Last Started/Ended, and Last Session
   tracking, including background observation after the main window is closed.
 - Manual and opt-in daily/weekly update checks with trusted release parsing,
   themed changelog presentation, and a discreet persistent toolbar indicator.
+- A persistent themed notification center for update, rescan, configuration,
+  launch, BIOS, and integrity problems, including direct follow-up actions.
 - Selected-game performance benchmark and one-shot WAV export.
-- Frontend and JGRF diagnostics with guarded log controls.
+- Frontend and JGRF diagnostics with guarded log controls and an exportable,
+  privacy-redacted report.
 - SDL3 controller mapping and asynchronous audio-device discovery.
 - Thirteen contrast-checked light and dark themes, including AMOLED Black.
 
