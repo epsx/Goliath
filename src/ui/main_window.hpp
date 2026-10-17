@@ -1,10 +1,10 @@
 // main_window.hpp — the main application window: custom title bar, themed
-// toolbar, game library (tree, search, exact-media personal filters, Favorites,
-// sort, show-variants), the details/snapshot panel, theme switching, launching
-// or benchmarking a ROM via
-// jollygood, an optional PID-bound command.dat companion, exact-media playtime
-// observation, safe save-data management, one-shot WAV audio export, Settings,
-// About, ROM rescan, and BIOS verification.
+// toolbar, game library (tree, search, exact-media personal and Genre filters,
+// Favorites, sort, show-variants), the details/snapshot panel, theme switching,
+// launching or benchmarking a ROM via jollygood, an optional PID-bound
+// command.dat companion, exact-media playtime observation, safe save-data
+// management, one-shot WAV audio export, Settings, About, ROM rescan, and BIOS
+// verification.
 
 #pragma once
 
@@ -56,6 +56,7 @@ class QTextEdit;
 class QPushButton;
 class QAction;
 class QActionGroup;
+class QMenu;
 class QTimer;
 class QMovie;
 class QKeySequence;
@@ -158,6 +159,8 @@ private:
     void setAllGroupsExpanded(bool expanded);
     void setRatingFilter(LibraryRatingFilter filter);
     void setPlaytimeFilter(LibraryPlaytimeFilter filter);
+    void setGenreFilter(const std::string& genre);
+    void rebuildGenreFilterMenu();
     void clearLibraryFilters();
     void updateFiltersButton();
     void setLibraryDisplayMode(LibraryDisplayMode mode, bool persist = true);
@@ -296,6 +299,7 @@ private:
     bool m_favoritesOnly = false;
     LibraryRatingFilter m_ratingFilter = LibraryRatingFilter::Any;
     LibraryPlaytimeFilter m_playtimeFilter = LibraryPlaytimeFilter::Any;
+    std::string m_genreFilter;
     LibraryDisplayMode m_libraryDisplayMode = LibraryDisplayMode::List;
     bool m_rebuildingLibraryView = false;
     std::string m_librarySystem = "neogeo";
@@ -310,6 +314,7 @@ private:
     QActionGroup* m_libraryDisplayGroup = nullptr;
     QActionGroup* m_ratingFilterGroup = nullptr;
     QActionGroup* m_playtimeFilterGroup = nullptr;
+    QMenu* m_genreFilterMenu = nullptr;
     QAction* m_clearFiltersAction = nullptr;
     QAction* m_rescanAction = nullptr;
     QAction* m_screenshotAction = nullptr;

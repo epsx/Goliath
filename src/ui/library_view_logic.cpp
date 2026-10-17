@@ -3,11 +3,40 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <map>
 #include <optional>
 #include <unordered_map>
 #include <utility>
 
 namespace goliath {
+
+namespace {
+
+std::string trimAsciiWhitespace(std::string_view value) {
+    std::size_t first = 0;
+    while (first < value.size() &&
+           std::isspace(static_cast<unsigned char>(value[first]))) {
+        ++first;
+    }
+
+    std::size_t last = value.size();
+    while (last > first &&
+           std::isspace(static_cast<unsigned char>(value[last - 1]))) {
+        --last;
+    }
+    return std::string(value.substr(first, last - first));
+}
+
+std::string lowercaseAscii(std::string_view value) {
+    std::string lowered(value);
+    std::transform(lowered.begin(), lowered.end(), lowered.begin(),
+                   [](unsigned char ch) {
+                       return static_cast<char>(std::tolower(ch));
+                   });
+    return lowered;
+}
+
+} // namespace
 
 LibraryMediaCounts libraryMediaCounts(
         const std::vector<Game>& games, std::string_view system) {
@@ -24,6 +53,40 @@ LibraryMediaCounts libraryMediaCounts(
         }
     }
     return counts;
+}
+
+std::string libraryGenreFilterValue(std::string_view genre) {
+    return trimAsciiWhitespace(genre);
+}
+
+bool libraryGenreFilterAllows(
+        std::string_view genreFilter,
+        const std::optional<std::string>& gameGenre) {
+    const std::string requested = libraryGenreFilterValue(genreFilter);
+    if (requested.empty()) return true;
+    if (!gameGenre.has_value()) return false;
+
+    const std::string candidate = libraryGenreFilterValue(*gameGenre);
+    return !candidate.empty() &&
+           lowercaseAscii(candidate) == lowercaseAscii(requested);
+}
+
+std::vector<std::string> libraryAvailableGenres(
+        const std::vector<Game>& games, std::string_view system) {
+    std::map<std::string, std::string> genresByFoldedName;
+    for (const Game& game : games) {
+        if (game.system != system || !game.genre.has_value()) continue;
+
+        const std::string display = libraryGenreFilterValue(*game.genre);
+        if (display.empty()) continue;
+        genresByFoldedName.try_emplace(lowercaseAscii(display), display);
+    }
+
+    std::vector<std::string> genres;
+    genres.reserve(genresByFoldedName.size());
+    for (const auto& entry : genresByFoldedName)
+        genres.push_back(entry.second);
+    return genres;
 }
 
 LibraryCatalogIdPresentation libraryCatalogIdPresentation(

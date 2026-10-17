@@ -179,14 +179,19 @@ The **Sort** selector can order the library by name, year, Rating, or Playtime.
 Unrated and unplayed entries remain last in either direction. A parent group is
 ranked by the best exact-media value it contains, while its variants use their
 own values. The compact **Filters** menu supports Rated, Unrated, minimum-star,
-Played, and Not played views; Rating and Playtime choices can be combined and
-cleared together. The existing persistent **Show variants** view toggle also
-lives in this menu but is not changed by clearing Rating/Playtime filters.
-Matching variants remain visible through their parent
-container; groups opened only to reveal such a match return to the user's
+Played, Not played, and the system's currently available Genre values. Genre
+comes from the scanned metadata, is matched case-insensitively, and can be
+combined with Rating and Playtime; all three filter dimensions can be cleared
+together. The Genre selector shows at most ten rows and scrolls when more
+values are available. The existing persistent **Show variants** view toggle
+also lives in this menu but is not changed by clearing active filters.
+Variants matching the exact-media Rating/Playtime filters remain visible
+through their parent container; groups opened only to reveal such a match return to the user's
 previous expansion state when the filter changes or is cleared. Random chooses
-only exact media matching Search, Favorites, and the active personal filters.
-Sort and filter choices persist across restarts.
+only exact media matching Search, Favorites, and every active filter. Sort and
+filter choices persist across restarts. If a saved Genre is not available for
+the current system, the menu identifies it as unavailable until it is cleared
+or that Genre becomes available again.
 The Theme, Sort, and Settings combo popup containers use the active palette
 throughout, including their outer Windows frames.
 

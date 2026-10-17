@@ -215,9 +215,12 @@ void MainWindow::buildToolbarFilters(QHBoxLayout* toolbar) {
                     action->data().toInt()));
             });
 
+    m_genreFilterMenu = filtersMenu->addMenu("Genre");
+    rebuildGenreFilterMenu();
+
     filtersMenu->addSeparator();
     m_clearFiltersAction = filtersMenu->addAction(
-        "Clear rating/playtime filters", this,
+        "Clear active filters", this,
         &MainWindow::clearLibraryFilters);
 #if defined(GOLIATH_X11_CAPTURE)
     // Qt's native menu indicator sits at the lower edge of styled buttons

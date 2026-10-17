@@ -4,16 +4,35 @@ This document records the major implementation, validation, refactoring, and
 repository-cleanup milestones of `goliath-qt-cpp`. Entries are newest first.
 
 Historical test counts are retained as checkpoint evidence. The current
-publication candidate passes:
+Patch 42A candidate passes:
 
 ```text
-All tests passed (4770 assertions in 323 test cases)
+All tests passed (4779 assertions in 325 test cases)
 ```
 
 The preceding `1360/99` Feature 9 baseline passed its per-game mapping,
 isolation, and global-configuration regression checks. The `1239/88` runtime
 baseline passed manual MVS/AES, Neo Geo CD CUE, Neo Geo CD CHD, Settings, and
 visible-only Random smoke tests.
+
+---
+
+## 2026-10-16 — Patch 42A: library Genre filter (candidate)
+
+- Added a persistent, system-specific **Genre** submenu to the existing compact
+  Filters control, populated dynamically from the validated game model after
+  startup, system changes, and successful rescans.
+- Trimmed blank metadata, deduplicated and sorted available values
+  case-insensitively, and retained a saved unavailable Genre visibly instead of
+  silently discarding the user's preference. The selector is capped at ten
+  visible rows and scrolls for larger Genre sets.
+- Composed Genre with Search, Favorites, Rating, Playtime, every display mode, and
+  restrictive Random selection while preserving the independent Show variants
+  setting and existing parent/variant selection rules.
+- Added focused Genre normalization, matching, missing-value, system-isolation,
+  sorting, and deduplication regressions. The complete Windows UCRT64 suite
+  passes at 4779 assertions in 325 test cases, and the strict warnings-as-errors
+  build is clean.
 
 ---
 

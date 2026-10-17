@@ -666,7 +666,7 @@ exists.
 | `main_window_updates.cpp` | Scheduled/manual update orchestration and toolbar indicator state. |
 | `main_window_notifications.cpp` | Persistent notification loading, unread badge state, dialog routing, and follow-up actions. |
 | `main_window_library_actions.cpp` | Launch, integrity verification, benchmark, export, capture, folders, and save-data actions. |
-| `main_window_library_controls.cpp` | Sort/filter/search/favorite/rating control behavior. |
+| `main_window_library_controls.cpp` | Sort/filter/search/favorite/rating control behavior and the dynamic system-specific Genre menu. |
 | `main_window_library_details.cpp` | Selection-to-details and gallery presentation updates. |
 | `main_window_library_interaction.cpp` | Double-click, context-menu, selection, and expansion interactions. |
 | `main_window_library_state.cpp` | Tree population, per-system selection/viewport state, and status summaries. |
@@ -700,15 +700,19 @@ Favorite preserves its rating and clearing a rating preserves its Favorite.
 Rating and Playtime sorts keep missing values last in both directions, rank a
 parent group by its best exact-media value, sort variants by their own values,
 and use the display name as a stable tie-break. The compact Filters menu
-combines Rating and Playtime predicates and persists both choices in
-`goliath.ini`. The persisted Show variants action is hosted in the same menu
-but remains independent from the Rating/Playtime clear operation. Exact
+combines Rating, Playtime, and a case-insensitive game-level Genre predicate
+and persists all three choices in `goliath.ini`. Its Genre actions are rebuilt
+from the validated current-system model after startup, system changes, and
+rescans; its scrollable selector is capped at ten visible rows, missing metadata
+is omitted, and a persisted unavailable value remains visible until cleared.
+The persisted Show variants action is hosted in the same menu but remains
+independent from the active-filter clear operation. Exact
 matching variants remain visible through their parent
 container even when normal variants are hidden; container-only parents are not
 eligible selections. Parent expansion performed only to expose an exact filter
 match is tagged as temporary and excluded from the user expansion state carried
 across rebuilds. Random selects visible parents normally and exact media matching
-Search, Favorites, and all active personal filters in a restrictive view. The
+Search, Favorites, and all active filters in a restrictive view. The
 details panel presents Playtime, Sessions, Last Started, Last Ended, and Last
 Session separately without duplicating their values in hover tooltips.
 The search line edit uses Qt's native trailing clear action;

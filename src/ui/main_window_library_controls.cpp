@@ -8,16 +8,22 @@
 #include <QAbstractItemView>
 #include <QAction>
 #include <QActionGroup>
+#include <QFontMetrics>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QListWidgetItem>
+#include <QMenu>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QScrollBar>
 #include <QStringList>
+#include <QStyle>
+#include <QTimer>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
+#include <QWidgetAction>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -45,7 +51,8 @@ void MainWindow::selectFirstSortedResult() {
     const bool filtered =
         (m_searchEntry && !m_searchEntry->text().trimmed().isEmpty()) ||
         m_favoritesOnly ||
-        libraryPersonalFiltersActive(m_ratingFilter, m_playtimeFilter);
+        libraryPersonalFiltersActive(m_ratingFilter, m_playtimeFilter) ||
+        !m_genreFilter.empty();
     if (m_libraryDisplayMode != LibraryDisplayMode::List && m_iconView) {
         if (m_iconView->count() > 0) {
             QListWidgetItem* first = m_iconView->item(0);
@@ -157,15 +164,116 @@ void MainWindow::setPlaytimeFilter(LibraryPlaytimeFilter filter) {
     refreshLibraryView(true);
 }
 
+void MainWindow::setGenreFilter(const std::string& genre) {
+    const std::string normalized = libraryGenreFilterValue(genre);
+    if (m_genreFilter == normalized) return;
+
+    m_genreFilter = normalized;
+    m_config.set("UI", "genre_filter", m_genreFilter);
+    save_config(m_config);
+    updateFiltersButton();
+    refreshLibraryView(true);
+    QTimer::singleShot(0, this, [this]() { rebuildGenreFilterMenu(); });
+}
+
+void MainWindow::rebuildGenreFilterMenu() {
+    if (!m_genreFilterMenu) return;
+
+    m_genreFilterMenu->clear();
+    const std::vector<std::string> genres =
+        libraryAvailableGenres(m_games, m_librarySystem);
+
+    auto* list = new QListWidget(m_genreFilterMenu);
+    list->setObjectName("genre_filter_list");
+    list->setSelectionMode(QAbstractItemView::SingleSelection);
+    list->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+    list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    list->setUniformItemSizes(true);
+    list->setFocusPolicy(Qt::StrongFocus);
+
+    QListWidgetItem* selectedItem = nullptr;
+    int widestLabel = 0;
+    const auto addGenreItem = [&](const QString& label,
+                                  const QString& value,
+                                  bool selected,
+                                  bool enabled = true) {
+        const QString display = selected ? QString::fromUtf8("✓  ") + label
+                                         : QString("    ") + label;
+        auto* item = new QListWidgetItem(display, list);
+        item->setData(Qt::UserRole, value);
+        if (!enabled) item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
+        widestLabel = std::max(widestLabel,
+                               list->fontMetrics().horizontalAdvance(display));
+        if (selected) selectedItem = item;
+    };
+
+    addGenreItem("Any genre", QString(), m_genreFilter.empty());
+
+    bool selectedAvailable = m_genreFilter.empty();
+    for (const std::string& genre : genres) {
+        const bool selected = !m_genreFilter.empty() &&
+            libraryGenreFilterAllows(m_genreFilter, genre);
+        selectedAvailable |= selected;
+        const QString value = QString::fromStdString(genre);
+        addGenreItem(value, value, selected);
+    }
+
+    if (!selectedAvailable) {
+        const QString value = QString::fromStdString(m_genreFilter);
+        addGenreItem(value + " (not available for this system)", value,
+                     true, false);
+    }
+
+    constexpr int kMaximumVisibleRows = 10;
+    const bool needsVerticalScrollBar = list->count() > kMaximumVisibleRows;
+    list->setVerticalScrollBarPolicy(needsVerticalScrollBar
+        ? Qt::ScrollBarAsNeeded
+        : Qt::ScrollBarAlwaysOff);
+    const int visibleRows = std::min(kMaximumVisibleRows, list->count());
+    int rowHeight = list->sizeHintForRow(0);
+    if (rowHeight <= 0) rowHeight = list->fontMetrics().height() + 12;
+    list->setFixedHeight(rowHeight * visibleRows + 2 * list->frameWidth());
+    const int scrollWidth = needsVerticalScrollBar
+        ? list->style()->pixelMetric(QStyle::PM_ScrollBarExtent)
+        : 0;
+    list->setMinimumWidth(std::clamp(widestLabel + scrollWidth + 28,
+                                     220, 460));
+
+    if (selectedItem) {
+        list->setCurrentItem(selectedItem);
+        list->scrollToItem(selectedItem, QAbstractItemView::PositionAtCenter);
+    }
+
+    auto* selectorAction = new QWidgetAction(m_genreFilterMenu);
+    selectorAction->setDefaultWidget(list);
+    m_genreFilterMenu->addAction(selectorAction);
+
+    const auto chooseGenre = [this](QListWidgetItem* item) {
+        if (!item || !(item->flags() & Qt::ItemIsEnabled)) return;
+        const std::string genre =
+            item->data(Qt::UserRole).toString().toStdString();
+        QMenu* filtersMenu = qobject_cast<QMenu*>(
+            m_genreFilterMenu->parentWidget());
+        m_genreFilterMenu->close();
+        if (filtersMenu) filtersMenu->close();
+        setGenreFilter(genre);
+    };
+    connect(list, &QListWidget::itemClicked, this, chooseGenre);
+    connect(list, &QListWidget::itemActivated, this, chooseGenre);
+}
+
 void MainWindow::clearLibraryFilters() {
-    if (!libraryPersonalFiltersActive(m_ratingFilter, m_playtimeFilter)) {
+    if (!libraryPersonalFiltersActive(m_ratingFilter, m_playtimeFilter) &&
+        m_genreFilter.empty()) {
         return;
     }
 
     m_ratingFilter = LibraryRatingFilter::Any;
     m_playtimeFilter = LibraryPlaytimeFilter::Any;
+    m_genreFilter.clear();
     m_config.set("UI", "rating_filter", "any");
     m_config.set("UI", "playtime_filter", "any");
+    m_config.set("UI", "genre_filter", "");
     save_config(m_config);
 
     if (m_ratingFilterGroup) {
@@ -186,9 +294,9 @@ void MainWindow::clearLibraryFilters() {
             }
         }
     }
-
     updateFiltersButton();
     refreshLibraryView(true);
+    QTimer::singleShot(0, this, [this]() { rebuildGenreFilterMenu(); });
 }
 
 void MainWindow::updateFiltersButton() {
@@ -217,6 +325,10 @@ void MainWindow::updateFiltersButton() {
         descriptions << "Playtime: Not played"; break;
     case LibraryPlaytimeFilter::Any: break;
     }
+    if (!m_genreFilter.empty()) {
+        descriptions << QString("Genre: %1")
+                            .arg(QString::fromStdString(m_genreFilter));
+    }
 
     const int activeCount = static_cast<int>(descriptions.size());
     m_filtersButton->setText(activeCount == 0
@@ -227,7 +339,7 @@ void MainWindow::updateFiltersButton() {
 #endif
     m_filtersButton->setToolTip(activeCount == 0
         ? "Choose the library view, sort, show variants, or filter by rating "
-          "or playtime"
+          "or playtime, or by genre"
         : QString("Choose the view, sort, and filter the library\n%1")
               .arg(descriptions.join("\n")));
     if (m_clearFiltersAction) {

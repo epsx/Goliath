@@ -651,6 +651,22 @@ executable is required.
 Rescan after changing media, scanner-relevant metadata, or any path used by the
 scanner.
 
+### Filter the library by Genre
+
+Open **Filters -> Genre** and select one of the Genre values available for the
+current MVS/AES or Neo Geo CD library. The list is rebuilt from the validated
+game model after startup, system changes, and successful rescans. Values are
+sorted and deduplicated case-insensitively; blank or missing metadata does not
+create a misleading Genre entry. The selector displays at most ten rows at a
+time; scroll inside it to reach the remaining values.
+
+Genre can be combined with Search, Favorites only, Rating, and Playtime. Use
+**Clear active filters** to return Rating, Playtime, and Genre to their default
+unfiltered state without changing **Show variants**. The selected Genre is
+stored in `goliath.ini`. If that value is absent for the current system, the
+menu shows it as unavailable rather than silently discarding the preference.
+Rescan after adding or changing `genre.ini`, `catver.ini`, or `catlist.ini`.
+
 ### Optional command.dat companion
 
 Goliath does not distribute or download `command.dat`. If you have a copy you

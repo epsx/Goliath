@@ -511,6 +511,7 @@ void MainWindow::launchRandomGame() {
 
     const bool restrictiveView = m_favoritesOnly ||
         libraryPersonalFiltersActive(m_ratingFilter, m_playtimeFilter) ||
+        !m_genreFilter.empty() ||
         (m_searchEntry && !m_searchEntry->text().trimmed().isEmpty());
 
     for (int i = 0; i < m_tree->topLevelItemCount(); ++i) {

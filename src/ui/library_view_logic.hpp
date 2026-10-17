@@ -247,6 +247,18 @@ constexpr bool libraryPersonalFiltersActive(
            playtimeFilter != LibraryPlaytimeFilter::Any;
 }
 
+// Genre values come from optional external metadata. Keep the displayed value
+// intact apart from surrounding ASCII whitespace, compare it without ASCII
+// case distinctions, and treat an empty filter as the unfiltered state.
+std::string libraryGenreFilterValue(std::string_view genre);
+
+bool libraryGenreFilterAllows(
+    std::string_view genreFilter,
+    const std::optional<std::string>& gameGenre);
+
+std::vector<std::string> libraryAvailableGenres(
+    const std::vector<Game>& games, std::string_view system);
+
 constexpr bool librarySystemChangeRequired(
         std::string_view currentSystem,
         std::string_view requestedSystem) noexcept {

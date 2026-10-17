@@ -699,6 +699,27 @@ QMenu::separator {
     margin: 4px 10px;
 }
 
+QListWidget#genre_filter_list {
+    background-color: @bg_secondary@;
+    color: @text_primary@;
+    border: none;
+    outline: none;
+}
+
+QListWidget#genre_filter_list::item {
+    padding: 6px 10px;
+    border: none;
+}
+
+QListWidget#genre_filter_list::item:selected {
+    background-color: @accent@;
+    color: @on_accent@;
+}
+
+QListWidget#genre_filter_list::item:disabled {
+    color: @text_secondary@;
+}
+
 /* Modern Toolbar */
 QFrame#toolbar_frame {
     background-color: @bg_secondary@;

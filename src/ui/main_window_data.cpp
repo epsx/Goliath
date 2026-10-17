@@ -25,6 +25,7 @@ void MainWindow::refreshResolvedPaths() {
 
 void MainWindow::loadGames() {
     m_games = load_games(m_paths.json_file);
+    rebuildGenreFilterMenu();
 }
 
 void MainWindow::loadGameProfiles() {

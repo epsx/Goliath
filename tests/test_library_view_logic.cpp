@@ -22,6 +22,9 @@ using goliath::libraryDisplayModeLabel;
 using goliath::libraryResponsiveGridCellWidth;
 using goliath::libraryTileMetrics;
 using goliath::libraryExpansionShouldBePreserved;
+using goliath::libraryAvailableGenres;
+using goliath::libraryGenreFilterAllows;
+using goliath::libraryGenreFilterValue;
 using goliath::libraryGameListTitles;
 using goliath::libraryListVisibleRowUsesAlternateBackground;
 using goliath::libraryMediaCounts;
@@ -315,6 +318,40 @@ TEST_CASE("personal filter activity reflects either active dimension",
         LibraryRatingFilter::Rated, LibraryPlaytimeFilter::Any));
     CHECK(libraryPersonalFiltersActive(
         LibraryRatingFilter::Any, LibraryPlaytimeFilter::NotPlayed));
+}
+
+TEST_CASE("genre filters trim labels and compare case-insensitively",
+          "[library-view][filters][genre]") {
+    CHECK(libraryGenreFilterValue("  Platform / Shooter  ") ==
+          "Platform / Shooter");
+    CHECK(libraryGenreFilterAllows("platform / shooter",
+                                   std::string("Platform / Shooter")));
+    CHECK(libraryGenreFilterAllows("", std::nullopt));
+    CHECK_FALSE(libraryGenreFilterAllows("Puzzle", std::nullopt));
+    CHECK_FALSE(libraryGenreFilterAllows("Puzzle", std::string("  ")));
+    CHECK_FALSE(libraryGenreFilterAllows("Puzzle", std::string("Shooter")));
+}
+
+TEST_CASE("available genres are system-specific sorted and deduplicated",
+          "[library-view][filters][genre]") {
+    std::vector<goliath::Game> games(6);
+    games[0].system = "neogeo";
+    games[0].genre = "Shooter";
+    games[1].system = "neogeo";
+    games[1].genre = "  Puzzle  ";
+    games[2].system = "neogeo";
+    games[2].genre = "shooter";
+    games[3].system = "neogeocd";
+    games[3].genre = "Adventure";
+    games[4].system = "neogeo";
+    games[4].genre = "";
+    games[5].system = "neogeo";
+
+    CHECK(libraryAvailableGenres(games, "neogeo") ==
+          std::vector<std::string>{"Puzzle", "Shooter"});
+    CHECK(libraryAvailableGenres(games, "neogeocd") ==
+          std::vector<std::string>{"Adventure"});
+    CHECK(libraryAvailableGenres(games, "unknown").empty());
 }
 
 TEST_CASE("filtered selections require an exact visible media match",

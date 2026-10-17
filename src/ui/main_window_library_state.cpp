@@ -187,7 +187,8 @@ void MainWindow::refreshLibraryView(
     const bool filtered =
         (m_searchEntry && !m_searchEntry->text().isEmpty()) ||
         m_favoritesOnly ||
-        libraryPersonalFiltersActive(m_ratingFilter, m_playtimeFilter);
+        libraryPersonalFiltersActive(m_ratingFilter, m_playtimeFilter) ||
+        !m_genreFilter.empty();
     m_rebuildingLibraryView = true;
     if (filtered) {
         filterGames(m_searchEntry->text());
@@ -222,6 +223,7 @@ void MainWindow::setLibrarySystem(const std::string& system) {
     m_config.set("UI", "library_system", system);
     save_config(m_config);
 
+    rebuildGenreFilterMenu();
     refreshLibraryView(false);
     restoreCurrentLibraryListViewport();
 }
@@ -230,6 +232,7 @@ void MainWindow::filterGames(const QString& text) {
     QString needle = text.toLower().trimmed();
     const bool personalFiltersActive = libraryPersonalFiltersActive(
         m_ratingFilter, m_playtimeFilter);
+    const bool genreFilterActive = !m_genreFilter.empty();
 
     for (int i = 0; i < m_tree->topLevelItemCount(); ++i) {
         QTreeWidgetItem* parent = m_tree->topLevelItem(i);
@@ -239,6 +242,8 @@ void MainWindow::filterGames(const QString& text) {
             static_cast<std::size_t>(gameIdx);
         if (gameIndex >= m_games.size()) continue;
         const Game& game = m_games[gameIndex];
+        const bool genreMatch =
+            libraryGenreFilterAllows(m_genreFilter, game.genre);
 
         QString haystack = QString("%1 %2 %3 %4")
                                 .arg(QString::fromStdString(game.display))
@@ -253,7 +258,8 @@ void MainWindow::filterGames(const QString& text) {
             m_gameLibraryState.is_favorite(game.system, *parentMedia);
         const bool parentFilterMatch = parentMedia.has_value() &&
             mediaMatchesPersonalFilters(game, *parentMedia);
-        const bool parentOwnMatch = gameMatch && parentFilterMatch &&
+        const bool parentOwnMatch = gameMatch && genreMatch &&
+            parentFilterMatch &&
             (!m_favoritesOnly || parentFavorite);
         parent->setData(0, ExactMatchRole, parentOwnMatch);
 
@@ -283,6 +289,7 @@ void MainWindow::filterGames(const QString& text) {
                 m_showVariants, m_favoritesOnly, childFavorite,
                 personalFiltersActive, childFilterMatch);
             const bool childVisible = variantsAllowed && searchAllowsChild &&
+                genreMatch &&
                 childFilterMatch && (!m_favoritesOnly || childFavorite);
 
             child->setHidden(!childVisible);
@@ -295,7 +302,7 @@ void MainWindow::filterGames(const QString& text) {
         // A parent that does not itself match remains the necessary container
         // for an exact matching variant. Reveal that result immediately.
         if (!parentOwnMatch && visibleMatchingVariant &&
-            (m_favoritesOnly || personalFiltersActive)) {
+            (m_favoritesOnly || personalFiltersActive || genreFilterActive)) {
             parent->setData(0, FilterAutoExpandedRole, true);
             parent->setExpanded(true);
         }
@@ -303,7 +310,7 @@ void MainWindow::filterGames(const QString& text) {
     refreshLibraryListRowBackgrounds();
     if (!m_rebuildingLibraryView) {
         ensureVisibleSelection(!needle.isEmpty() || m_favoritesOnly ||
-                               personalFiltersActive);
+                               personalFiltersActive || genreFilterActive);
         refreshIconView();
     }
     updateStatus();
