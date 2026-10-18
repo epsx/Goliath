@@ -180,6 +180,7 @@ src/
 │   ├── jollygood_executable.hpp/.cpp
 │   ├── jollygood_launch.hpp/.cpp
 │   ├── jollygood_process.hpp/.cpp
+│   ├── jollygood_startup_diagnostics.hpp/.cpp
 │   ├── neocd_verification.hpp/.cpp
 │   ├── neogeo_metadata.hpp/.cpp
 │   ├── rescan_worker.hpp/.cpp
@@ -376,6 +377,7 @@ launch-process context.
 | `jollygood_benchmark` | core | Builds transient benchmark arguments, parses completion, resolves displayed overrides, and calculates metrics. |
 | `jollygood_launch` | core | Selects media, validates launch blockers, records the effective system mode, and prepares shared launch state. |
 | `jollygood_process` | app | Starts detached JGRF and redirects both output streams. |
+| `jollygood_startup_diagnostics` | core | Converts a narrow set of stable Geolith BIOS/system startup messages into tested actionable guidance. |
 | `detached_process_tracker` | app | Observes exact detached process objects without controlling them and reads Windows termination status when permitted. |
 | `about_dialog` | app | Presents Goliath identity/build metadata, authorship, upstream acknowledgements, and verified external links. |
 | `audio_export_dialog` | app | Selects, probes, and confirms a new one-shot WAV destination without creating the requested target. |
@@ -488,6 +490,9 @@ Launch responsibilities are deliberately separated:
   message boxes;
 - `jollygood_process` launches JGRF detached and appends stdout/stderr to
   `jollygood.log` for normal gameplay;
+- `jollygood_startup_diagnostics` recognizes only confirmed Geolith BIOS and
+  hardware/region incompatibility text, preserving the generic fallback for
+  every unknown message and never modifying configuration;
 - `detached_process_tracker` retains an exact Windows process handle or Linux
   `pidfd` where available, plus immutable title/system/log-offset diagnostic
   context, while one `MainWindow` timer polls all active normal launches for
@@ -985,6 +990,7 @@ tests/
 ├── test_input_maps.cpp
 ├── test_jollygood_benchmark.cpp
 ├── test_jollygood_bios.cpp
+├── test_jollygood_startup_diagnostics.cpp
 ├── test_library_details_presentation.cpp
 ├── test_library_view_logic.cpp
 ├── test_log_file.cpp
@@ -1030,6 +1036,7 @@ tests/
 | `test_input_maps.cpp` | Input normalization, profiles, bounded bindings, analog definitions, and JGRF hotkeys. |
 | `test_jollygood_benchmark.cpp` | Benchmark argument placement, completion parsing, displayed option resolution, and throughput metrics. |
 | `test_jollygood_bios.cpp` | BIOS path preparation, junction/copy policy, and safe migration decisions. |
+| `test_jollygood_startup_diagnostics.cpp` | Stable Geolith BIOS/system classifications, actionable guidance, case handling, and conservative unknown-message fallback. |
 | `test_library_details_presentation.cpp` | Metadata, profile, verification, and Last Started/Ended/Session formatting. |
 | `test_library_view_logic.cpp` | Display modes, filtering, sorting, selection, per-system viewport restoration, badges, and responsive tiles. |
 | `test_log_file.cpp` | Missing-log idempotence, regular-file truncation, and unsafe-target refusal. |
@@ -1229,6 +1236,7 @@ selected tree row
             -> ignore sessions shorter than five seconds
             -> reject validated loader/early-start failures
             -> show exit code + bounded new JGRF log tail
+            -> diagnose confirmed Geolith BIOS/system messages
             -> suggest exact-media AES only after an MVS failure
             -> remain windowless after UI close until every session ends
             -> atomically update config/game_playtime.json

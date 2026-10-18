@@ -8,8 +8,10 @@
 #include "game/jollygood_bios.hpp"
 #include "game/jollygood_launch.hpp"
 #include "game/jollygood_process.hpp"
+#include "game/jollygood_startup_diagnostics.hpp"
 #include "ui/widgets/title_bar.hpp"
 
+#include <QByteArray>
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QFile>
@@ -34,6 +36,12 @@ namespace {
 
 constexpr qint64 kLaunchLogExcerptBytes = 32 * 1024;
 constexpr std::size_t kLaunchLogExcerptLines = 10;
+
+struct TrackedLaunchFailurePresentation {
+    QString title = QStringLiteral("Game Stopped During Startup");
+    QString message;
+    NotificationAction action = NotificationAction::OpenLogs;
+};
 
 NotificationAction launch_notification_action(
         LaunchPreparationStatus status) {
@@ -98,11 +106,12 @@ QString launch_exit_code_text(std::optional<std::uint32_t> exitCode) {
         QString::number(*exitCode, 16).rightJustified(8, '0'));
 }
 
-QString tracked_launch_failure_text(
+TrackedLaunchFailurePresentation tracked_launch_failure_presentation(
         const DetachedProcessTracker& tracker,
         std::int64_t seconds,
         std::optional<std::uint32_t> exitCode,
         const fs::path& logPath) {
+    TrackedLaunchFailurePresentation presentation;
     QString reason;
     if (exitCode.has_value()) {
         const std::string_view loaderReason =
@@ -139,17 +148,33 @@ QString tracked_launch_failure_text(
 
     const QString excerpt =
         launch_log_excerpt(logPath, tracker.log_offset());
-    if (!excerpt.isEmpty())
+    std::optional<JollygoodStartupDiagnosis> diagnosis;
+    if (!excerpt.isEmpty()) {
+        const QByteArray excerptBytes = excerpt.toUtf8();
+        diagnosis = diagnose_jollygood_startup_failure(std::string_view(
+            excerptBytes.constData(),
+            static_cast<std::size_t>(excerptBytes.size())));
         message += QStringLiteral("\n\nRecent JGRF output:\n%1").arg(excerpt);
+    }
 
-    if (tracker.mvs_hardware()) {
+    if (diagnosis.has_value()) {
+        presentation.title = QString::fromStdString(diagnosis->title);
+        presentation.action = diagnosis->offer_bios_verification
+            ? NotificationAction::VerifyBios
+            : NotificationAction::OpenLogs;
+        message = QStringLiteral("%1\n\nWhat to do: %2\n\n%3")
+            .arg(QString::fromStdString(diagnosis->explanation))
+            .arg(QString::fromStdString(diagnosis->guidance))
+            .arg(message);
+    } else if (tracker.mvs_hardware()) {
         message += QStringLiteral(
             "\n\nCompatibility hint: this launch used MVS hardware. "
             "Some cartridges or homebrew require AES. In Game settings > "
             "General, try System Type: AES for this exact media. This is a "
             "suggestion, not an automatic diagnosis.");
     }
-    return message;
+    presentation.message = std::move(message);
+    return presentation;
 }
 
 QString unobserved_launch_text(
@@ -351,7 +376,7 @@ void MainWindow::closeCommandCompanion(std::int64_t pid) {
 
 void MainWindow::pollTrackedGameProcesses() {
     bool changed = false;
-    std::vector<QString> startupFailures;
+    std::vector<TrackedLaunchFailurePresentation> startupFailures;
     auto it = m_trackedGameProcesses.begin();
     while (it != m_trackedGameProcesses.end()) {
         DetachedProcessTracker& tracker = **it;
@@ -382,15 +407,16 @@ void MainWindow::pollTrackedGameProcesses() {
                     .arg(codeText)
                     .arg(QString::fromStdString(tracker.media())));
             if (is_likely_tracked_launch_failure(seconds, exitCode)) {
-                const QString failure = tracked_launch_failure_text(
-                    tracker, seconds, exitCode,
-                    m_paths.base_dir / "jollygood.log");
+                TrackedLaunchFailurePresentation failure =
+                    tracked_launch_failure_presentation(
+                        tracker, seconds, exitCode,
+                        m_paths.base_dir / "jollygood.log");
                 DebugLogger::logError(
                     QString("JGRF startup failure: %1")
-                        .arg(failure));
+                        .arg(failure.message));
                 if (!m_closeRequested &&
                     !m_exitWhenTrackedProcessesFinish && isVisible()) {
-                    startupFailures.push_back(failure);
+                    startupFailures.push_back(std::move(failure));
                 }
             }
         }
@@ -402,19 +428,19 @@ void MainWindow::pollTrackedGameProcesses() {
     // Remove every exited tracker before entering a modal dialog. The nested
     // event loop may deliver another timer tick; no failure may be reported
     // twice merely because its first message is still open.
-    for (const QString& failure : startupFailures) {
+    for (const TrackedLaunchFailurePresentation& failure : startupFailures) {
         addNotification({
             "launch:startup",
             NotificationCategory::Configuration,
             NotificationSeverity::Error,
-            "Game stopped during startup",
-            failure.left(1000).toStdString(),
+            failure.title.toStdString(),
+            failure.message.left(1000).toStdString(),
             QDateTime::currentSecsSinceEpoch(),
             false,
-            NotificationAction::OpenLogs,
+            failure.action,
         });
         showThemedMessageDialog(
-            this, "Game Stopped During Startup", failure,
+            this, failure.title, failure.message,
             ThemedMessageTone::Warning);
     }
 

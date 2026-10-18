@@ -4,16 +4,34 @@ This document records the major implementation, validation, refactoring, and
 repository-cleanup milestones of `goliath-qt-cpp`. Entries are newest first.
 
 Historical test counts are retained as checkpoint evidence. The current
-Patch 42A candidate passes:
+Patch 42B candidate passes:
 
 ```text
-All tests passed (4779 assertions in 325 test cases)
+All tests passed (4799 assertions in 329 test cases)
 ```
 
 The preceding `1360/99` Feature 9 baseline passed its per-game mapping,
 isolation, and global-configuration regression checks. The `1239/88` runtime
 baseline passed manual MVS/AES, Neo Geo CD CUE, Neo Geo CD CHD, Settings, and
 visible-only Random smoke tests.
+
+---
+
+## 2026-10-17 — Patch 42B: friendly Geolith startup errors (candidate)
+
+- Added a conservative parser for stable Geolith startup messages covering
+  missing BIOS-archive members, titles that require MVS/Universe BIOS, and the
+  unsupported US MVS combination.
+- Replaced the generic heading with a specific explanation and corrective step
+  when one of those messages is present, while retaining the exit context and
+  original bounded JGRF output. Unknown messages still use the existing generic
+  path and no setting is changed automatically.
+- BIOS diagnoses route their persistent notification action directly to
+  **Verify BIOS**; hardware and region diagnoses point to the exact-media game
+  settings while preserving **Open Logs** for technical follow-up.
+- Added case-insensitive positive and false-positive regression coverage. The
+  complete Windows UCRT64 suite passes at 4799 assertions in 329 test cases,
+  and the strict warnings-as-errors build is clean.
 
 ---
 

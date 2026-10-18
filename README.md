@@ -61,8 +61,9 @@ Linux support is maintained where practical.
   applying complete mappings globally or to one exact game.
 - Compact BIOS capability verification with detailed per-archive checks and
   safe JGRF BIOS preparation.
-- Exact launch-block explanations, on-demand game-integrity verification, and
-  a before/after library rescan summary.
+- Exact launch-block explanations, friendly known Geolith BIOS/system startup
+  diagnoses, on-demand game-integrity verification, and a before/after library
+  rescan summary.
 - Save-data backup, validation, restore, deletion, and folder access.
 - Exact-media playtime, session count, Last Started/Ended, and Last Session
   tracking, including background observation after the main window is closed.

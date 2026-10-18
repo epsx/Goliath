@@ -822,8 +822,11 @@ After a detached launch, Goliath also watches for a process that stops before a
 playable session is established. The startup dialog includes the exit code and
 up to ten new lines appended to `jollygood.log` since that launch. Known Windows
 loader codes receive a direct DLL/architecture explanation. If the failed
-launch used MVS hardware, Goliath suggests trying an exact-media AES override;
-this is a compatibility hint only and never changes the profile automatically.
+launch contains a known Geolith BIOS or system-compatibility message, Goliath
+explains the specific problem and points to **Verify BIOS** or the exact-media
+**Game settings -> General** controls. Other MVS failures retain the conservative
+AES compatibility hint. These diagnoses never change the profile or BIOS
+selection automatically.
 Launch notices use Goliath's themed frameless dialog; their complete plain-text
 details can be selected or copied with **Copy Details**.
 
@@ -1399,6 +1402,11 @@ Do not reuse that cache. Configure a new directory such as
 - Review `goliath-qt-debug.log`, then the complete `jollygood.log` if the
   bounded dialog excerpt is insufficient.
 - Verify the JGRF path, selected media path, BIOS report, and deployed core.
+- If the dialog reports required BIOS content, use its **Verify BIOS** alert
+  action or open **Tools -> Verify BIOS**, then repair the named archive/member.
+- If Geolith says the exact media requires MVS/Universe BIOS or rejects US MVS,
+  open **Game Settings -> General** and choose a supported system/region for
+  that exact media before retrying.
 - For MVS/AES, confirm the selected `main_rom` exists under the ROM root.
 - If the dialog says the launch used MVS and the title is known to require
   console hardware, open **Game Settings -> General**, set **System Type** to
@@ -1560,11 +1568,13 @@ closing the visible Goliath window before the detached game.
 
 For a launch-diagnostics change, temporarily rename one selected `.neo` file
 and confirm Launch, Performance Benchmark, and WAV export report the same
-missing path. Restore it, launch a title that fails rapidly under MVS, and
-confirm the dialog shows MVS, an exit code when available, new JGRF output, and
-the AES compatibility hint. Set only that title to AES and confirm a successful
-launch produces no failure dialog. Also close a healthy game manually within
-five seconds to review the intentionally conservative early-stop message.
+missing path. Restore it, then exercise known BIOS-member, AES incompatibility,
+and US MVS mismatch output and confirm each produces its specific guidance
+while retaining the raw excerpt. Confirm an unrelated rapid MVS failure still
+shows the generic exit context and conservative AES hint. No test may persist a
+system, region, or BIOS change automatically. Also close a healthy game
+manually within five seconds to review the intentionally conservative
+early-stop message.
 
 For a game-integrity change, use the context menu on one verified `.neo`, one
 verified CUE set, and one CHD. Confirm the current values match, then temporarily

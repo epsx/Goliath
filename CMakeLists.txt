@@ -192,6 +192,7 @@ add_library(goliath-core STATIC
     src/input/sdl_joystick.cpp
     src/game/jollygood_benchmark.cpp
     src/game/jollygood_process.cpp
+    src/game/jollygood_startup_diagnostics.cpp
     src/game/jollygood_launch.cpp
     src/game/jollygood_bios.cpp
     src/game/jollygood_executable.cpp
@@ -471,6 +472,7 @@ if(BUILD_TESTS)
         tests/test_game_system.cpp
         tests/test_game_profiles.cpp
         tests/test_game_playtime.cpp
+        tests/test_jollygood_startup_diagnostics.cpp
         tests/test_library_details_presentation.cpp
         tests/test_library_view_logic.cpp
         tests/test_gallery_frame.cpp
