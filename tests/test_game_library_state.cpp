@@ -1,8 +1,8 @@
 #include "game/game_library_state.hpp"
+#include "test_temp_directory.hpp"
 
 #include <catch2/catch.hpp>
 
-#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -11,18 +11,9 @@
 namespace fs = std::filesystem;
 
 using goliath::GameLibraryStateStore;
+using goliath::test::ScopedTestDirectory;
 
 namespace {
-
-fs::path make_library_state_test_root(const std::string& name) {
-    const auto stamp = std::chrono::high_resolution_clock::now()
-                           .time_since_epoch()
-                           .count();
-    const fs::path root = fs::temp_directory_path() /
-        ("goliath_library_state_" + name + "_" + std::to_string(stamp));
-    fs::create_directories(root);
-    return root;
-}
 
 void write_text(const fs::path& path, const std::string& text) {
     fs::create_directories(path.parent_path());
@@ -44,7 +35,8 @@ std::string read_text(const fs::path& path) {
 
 TEST_CASE("missing personal library state is a valid empty store",
           "[library-state][favorites]") {
-    const fs::path root = make_library_state_test_root("missing");
+    const ScopedTestDirectory temporary("goliath_library_state_missing");
+    const fs::path& root = temporary.path();
     GameLibraryStateStore store;
     std::string error;
 
@@ -87,7 +79,8 @@ TEST_CASE("ratings use normalized exact-media identities independently",
 
 TEST_CASE("favorite state saves and reloads atomically",
           "[library-state][favorites][persistence]") {
-    const fs::path root = make_library_state_test_root("roundtrip");
+    const ScopedTestDirectory temporary("goliath_library_state_roundtrip");
+    const fs::path& root = temporary.path();
     const fs::path path = root / "config/game_library_state.json";
 
     GameLibraryStateStore saved;
@@ -173,7 +166,8 @@ TEST_CASE("rating mutators reject unsupported values and identities",
 
 TEST_CASE("version one favorites migrate without data loss",
           "[library-state][favorites][ratings][migration]") {
-    const fs::path root = make_library_state_test_root("migration");
+    const ScopedTestDirectory temporary("goliath_library_state_migration");
+    const fs::path& root = temporary.path();
     const fs::path path = root / "game_library_state.json";
     write_text(path, R"({
   "version": 1,
@@ -201,7 +195,8 @@ TEST_CASE("version one favorites migrate without data loss",
 
 TEST_CASE("invalid favorite records are ignored safely",
           "[library-state][favorites][validation]") {
-    const fs::path root = make_library_state_test_root("validation");
+    const ScopedTestDirectory temporary("goliath_library_state_validation");
+    const fs::path& root = temporary.path();
     const fs::path path = root / "game_library_state.json";
     write_text(path, R"({
   "version": 1,
@@ -226,7 +221,9 @@ TEST_CASE("invalid favorite records are ignored safely",
 
 TEST_CASE("invalid version two rating records are ignored safely",
           "[library-state][ratings][validation]") {
-    const fs::path root = make_library_state_test_root("rating_validation");
+    const ScopedTestDirectory temporary(
+        "goliath_library_state_rating_validation");
+    const fs::path& root = temporary.path();
     const fs::path path = root / "game_library_state.json";
     write_text(path, R"({
   "version": 2,
@@ -254,7 +251,9 @@ TEST_CASE("invalid version two rating records are ignored safely",
 
 TEST_CASE("unsupported future library state never keeps stale data",
           "[library-state][favorites][ratings][validation]") {
-    const fs::path root = make_library_state_test_root("future_schema");
+    const ScopedTestDirectory temporary(
+        "goliath_library_state_future_schema");
+    const fs::path& root = temporary.path();
     const fs::path path = root / "game_library_state.json";
     write_text(path, R"({"version":3,"records":[]})");
 
@@ -272,7 +271,8 @@ TEST_CASE("unsupported future library state never keeps stale data",
 
 TEST_CASE("malformed personal library state never keeps stale favorites",
           "[library-state][favorites][validation]") {
-    const fs::path root = make_library_state_test_root("malformed");
+    const ScopedTestDirectory temporary("goliath_library_state_malformed");
+    const fs::path& root = temporary.path();
     const fs::path path = root / "game_library_state.json";
 
     GameLibraryStateStore store;
@@ -287,7 +287,8 @@ TEST_CASE("malformed personal library state never keeps stale favorites",
 
 TEST_CASE("favorites survive replacement of the generated game database",
           "[library-state][favorites][rescan]") {
-    const fs::path root = make_library_state_test_root("rescan");
+    const ScopedTestDirectory temporary("goliath_library_state_rescan");
+    const fs::path& root = temporary.path();
     const fs::path statePath = root / "config/game_library_state.json";
     const fs::path databasePath = root / "database/games.json";
 

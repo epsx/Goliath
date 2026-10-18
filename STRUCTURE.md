@@ -971,6 +971,7 @@ required during a normal build.
 ```text
 tests/
 ├── test_main.cpp
+├── test_temp_directory.hpp
 ├── test_animated_gif.cpp
 ├── test_audio.cpp
 ├── test_audio_export.cpp
@@ -1015,6 +1016,7 @@ tests/
 | File | Coverage |
 | --- | --- |
 | `test_main.cpp` | Catch2 test runner entry point. |
+| `test_temp_directory.hpp` | Shared unique temporary-directory ownership and automatic scope cleanup for persistence tests. |
 | `test_animated_gif.cpp` | GIF frame timing, palette, encoding, and output validation. |
 | `test_audio.cpp` | Volume bounds, device snapshot state, and default config. |
 | `test_audio_export.cpp` | Portable names, `.wav` normalization, collision avoidance, non-destructive target validation, configured-writer conflicts, and final argument placement. |

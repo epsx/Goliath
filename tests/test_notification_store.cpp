@@ -1,6 +1,7 @@
 #include "catch2/catch.hpp"
 
 #include "common/notification_store.hpp"
+#include "test_temp_directory.hpp"
 
 #include <filesystem>
 #include <fstream>
@@ -9,17 +10,9 @@
 
 namespace fs = std::filesystem;
 using namespace goliath;
+using goliath::test::ScopedTestDirectory;
 
 namespace {
-
-fs::path notification_test_root(const std::string& name) {
-    const fs::path root = fs::temp_directory_path() /
-        ("goliath_notification_store_" + name);
-    std::error_code ec;
-    fs::remove_all(root, ec);
-    fs::create_directories(root, ec);
-    return root;
-}
 
 AppNotification notification(std::string id, std::int64_t created) {
     return {
@@ -46,7 +39,9 @@ const AppNotification* find_notification(const NotificationStore& store,
 
 TEST_CASE("notification store treats a missing file as empty",
           "[notifications]") {
-    const fs::path root = notification_test_root("missing");
+    const ScopedTestDirectory temporary(
+        "goliath_notification_store_missing");
+    const fs::path& root = temporary.path();
     NotificationStore store;
     std::string error;
     CHECK(store.load(root / "notifications.json", &error));
@@ -56,7 +51,9 @@ TEST_CASE("notification store treats a missing file as empty",
 
 TEST_CASE("notification store round trips categories severities and actions",
           "[notifications]") {
-    const fs::path root = notification_test_root("roundtrip");
+    const ScopedTestDirectory temporary(
+        "goliath_notification_store_roundtrip");
+    const fs::path& root = temporary.path();
     const fs::path path = root / "nested" / "notifications.json";
     NotificationStore original;
     CHECK(original.upsert({
@@ -142,7 +139,9 @@ TEST_CASE("changed hover details become unread again",
 
 TEST_CASE("notification store accepts history without hover details",
           "[notifications]") {
-    const fs::path root = notification_test_root("legacy_without_hover");
+    const ScopedTestDirectory temporary(
+        "goliath_notification_store_legacy_without_hover");
+    const fs::path& root = temporary.path();
     const fs::path path = root / "notifications.json";
     {
         std::ofstream output(path, std::ios::binary);
@@ -178,7 +177,9 @@ TEST_CASE("notification store keeps only the newest bounded history",
 
 TEST_CASE("malformed notification JSON does not replace live history",
           "[notifications]") {
-    const fs::path root = notification_test_root("malformed");
+    const ScopedTestDirectory temporary(
+        "goliath_notification_store_malformed");
+    const fs::path& root = temporary.path();
     const fs::path path = root / "notifications.json";
     {
         std::ofstream output(path, std::ios::binary);

@@ -1,8 +1,8 @@
 #include "input/controller_profiles.hpp"
+#include "test_temp_directory.hpp"
 
 #include <catch2/catch.hpp>
 
-#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -17,19 +17,9 @@ using goliath::controller_profile_binding_count;
 using goliath::controller_profile_device_name;
 using goliath::controller_profile_sections;
 using goliath::sanitize_controller_profile_bindings;
+using goliath::test::ScopedTestDirectory;
 
 namespace {
-
-fs::path make_controller_profile_root(const std::string& name) {
-    const auto stamp = std::chrono::steady_clock::now()
-                           .time_since_epoch().count();
-    const fs::path root = fs::temp_directory_path() /
-        ("goliath_controller_profiles_" + name + "_" +
-         std::to_string(stamp));
-    fs::remove_all(root);
-    fs::create_directories(root);
-    return root;
-}
 
 void write_text(const fs::path& path, const std::string& text) {
     fs::create_directories(path.parent_path());
@@ -114,7 +104,9 @@ TEST_CASE("controller profile names are unique and operations are scoped",
 
 TEST_CASE("controller profiles save and reload atomically",
           "[controller_profiles][input][persistence]") {
-    const fs::path root = make_controller_profile_root("roundtrip");
+    const ScopedTestDirectory temporary(
+        "goliath_controller_profiles_roundtrip");
+    const fs::path& root = temporary.path();
     const fs::path path = root / "config/controller_profiles.json";
     ControllerProfileStore saved;
     std::string firstId;
@@ -149,7 +141,9 @@ TEST_CASE("controller profiles save and reload atomically",
 
 TEST_CASE("missing controller profile storage is a valid empty store",
           "[controller_profiles][input][persistence]") {
-    const fs::path root = make_controller_profile_root("missing");
+    const ScopedTestDirectory temporary(
+        "goliath_controller_profiles_missing");
+    const fs::path& root = temporary.path();
     ControllerProfileStore store;
     std::string error;
 
@@ -171,7 +165,9 @@ TEST_CASE("controller profile assigned bindings are safe per-game overrides",
 
 TEST_CASE("malformed controller profile storage fails safely",
           "[controller_profiles][input][persistence]") {
-    const fs::path root = make_controller_profile_root("malformed");
+    const ScopedTestDirectory temporary(
+        "goliath_controller_profiles_malformed");
+    const fs::path& root = temporary.path();
     const fs::path path = root / "controller_profiles.json";
     write_text(path, "{\"version\":99,\"profiles\":[]}");
 

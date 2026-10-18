@@ -447,6 +447,7 @@ if(BUILD_TESTS)
     enable_testing()
 
     add_executable(goliath-qt-tests
+        tests/test_temp_directory.hpp
         tests/test_main.cpp
         tests/test_goliath_config.cpp
         tests/test_ini_document.cpp

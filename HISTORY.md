@@ -4,7 +4,7 @@ This document records the major implementation, validation, refactoring, and
 repository-cleanup milestones of `goliath-qt-cpp`. Entries are newest first.
 
 Historical test counts are retained as checkpoint evidence. The current
-Patch 42B candidate passes:
+Patch 42C candidate passes:
 
 ```text
 All tests passed (4799 assertions in 329 test cases)
@@ -14,6 +14,20 @@ The preceding `1360/99` Feature 9 baseline passed its per-game mapping,
 isolation, and global-configuration regression checks. The `1239/88` runtime
 baseline passed manual MVS/AES, Neo Geo CD CUE, Neo Geo CD CHD, Settings, and
 visible-only Random smoke tests.
+
+---
+
+## 2026-10-18 — Patch 42C: automatic test-directory cleanup (candidate)
+
+- Added one scoped test-directory owner that creates unique temporary roots and
+  removes them automatically when each test scope ends, including after failed
+  assertions.
+- Migrated library-state, controller-profile, and notification-store
+  persistence tests away from persistent `%TEMP%` directories. Product code and
+  runtime behavior are unchanged.
+- The strict Windows UCRT64 build is clean, all 4799 assertions in 329 test
+  cases pass, and both targeted and full-suite runs leave the pre-existing
+  temporary-directory count unchanged.
 
 ---
 
