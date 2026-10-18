@@ -3,6 +3,7 @@
 #include "ui/capture_hotkeys.hpp"
 #include "ui/controller_profiles_dialog.hpp"
 
+#include "common/file_transaction.hpp"
 #include "common/goliath_common.hpp"
 #include "common/qt_path.hpp"
 #include "common/theme.hpp"
@@ -55,6 +56,18 @@ namespace goliath {
 namespace {
 
 constexpr int kDefaultAxisDeadzone = 5;
+
+void prepare_jgrf_input_documents(const AppPaths& paths, int deadzone,
+                                  IniDocument& settings,
+                                  IniDocument& core) {
+    settings.load(paths.jollygood_settings_ini);
+    settings.set("input", "axis_deadzone", std::to_string(deadzone));
+
+    // Keep settings.ini canonical for frontend settings. A stale core
+    // [input] override would otherwise silently win at the next JGRF launch.
+    core.load(paths.geolith_ini);
+    core.remove_section("input");
+}
 
 void restore_scroll_position_later(QScrollArea* scroll, int position) {
     if (!scroll) return;
@@ -624,28 +637,30 @@ void SettingsDialog::loadJgrfInputSettings() {
     m_axisDeadzoneSpin->setValue(value);
 }
 
-void SettingsDialog::persistJgrfInputSettings(int deadzone) {
-    std::error_code ec;
-    fs::create_directories(m_paths.jollygood_settings_ini.parent_path(), ec);
-
+bool SettingsDialog::persistJgrfInputSettings(int deadzone,
+                                              std::string* error) {
     IniDocument cfg;
-    cfg.load(m_paths.jollygood_settings_ini);
-    cfg.set("input", "axis_deadzone", std::to_string(deadzone));
-    cfg.save(m_paths.jollygood_settings_ini);
-
-    // Keep global settings.ini canonical for frontend settings; otherwise a
-    // stale core override would silently win at the next JGRF launch.
     IniDocument coreCfg;
-    coreCfg.load(m_paths.geolith_ini);
-    coreCfg.remove_section("input");
-    coreCfg.save(m_paths.geolith_ini);
+    prepare_jgrf_input_documents(m_paths, deadzone, cfg, coreCfg);
+
+    return save_ini_documents({
+        {m_paths.jollygood_settings_ini, &cfg},
+        {m_paths.geolith_ini, &coreCfg},
+    }, error);
 }
 
 void SettingsDialog::saveJgrfInputSettings() {
     if (!m_axisDeadzoneSpin) return;
 
-    persistJgrfInputSettings(m_axisDeadzoneSpin->value());
-
+    std::string error;
+    if (!persistJgrfInputSettings(m_axisDeadzoneSpin->value(), &error)) {
+        QMessageBox::warning(
+            this, "JGRF Input Settings",
+            QStringLiteral(
+                "The JGRF input settings could not be saved as one "
+                "transaction.\n\n") +
+                QString::fromStdString(error));
+    }
 }
 
 int SettingsDialog::storedInputProfile() const {
@@ -721,11 +736,8 @@ std::string SettingsDialog::canonicalInputKey(const std::string& section, const 
     return canonical_input_key(section, key);
 }
 
-void SettingsDialog::createDefaultInputConfig(int device) {
+IniDocument SettingsDialog::defaultInputConfigDocument(int device) const {
     if (device < 0) device = currentInputProfile();
-
-    std::error_code ec;
-    fs::create_directories(m_paths.input_config.parent_path(), ec);
 
     IniDocument doc;
     for (const QString& qsection : targetInputSections(device)) {
@@ -744,7 +756,7 @@ void SettingsDialog::createDefaultInputConfig(int device) {
             doc.set(section, key, value);
         }
     }
-    doc.save(m_paths.input_config);
+    return doc;
 }
 
 std::pair<std::string, std::string> SettingsDialog::normalizeInputValue(const std::string& valueIn) const {
@@ -944,12 +956,22 @@ void SettingsDialog::loadInputConfig() {
     int device = currentInputProfile();
     QStringList targetSections = targetInputSections(device);
 
-    if (!fs::is_regular_file(m_paths.input_config)) {
-        createDefaultInputConfig(device);
-    }
-
     IniDocument config;
-    config.load(m_paths.input_config);
+    if (!fs::is_regular_file(m_paths.input_config)) {
+        config = defaultInputConfigDocument(device);
+        std::string error;
+        if (!config.save(m_paths.input_config, &error)) {
+            QMessageBox::warning(
+                this, "Input Configuration",
+                QStringLiteral(
+                    "The default input configuration could not be created. "
+                    "Defaults are available for this session but were not "
+                    "saved.\n\n") +
+                    QString::fromStdString(error));
+        }
+    } else {
+        config.load(m_paths.input_config);
+    }
     for (const QString& qs : targetSections) {
         config.ensure_section(qs.toStdString());
     }
@@ -1269,28 +1291,39 @@ void SettingsDialog::saveInputConfig() {
         }
     }
 
-    std::error_code ec;
-    fs::create_directories(m_paths.input_config.parent_path(), ec);
-    config.save(m_paths.input_config);
-
+    Config candidate = m_config;
+    IniDocument coreCfg;
+    coreCfg.load(m_paths.geolith_ini);
     if (m_inputDeviceCombo) {
         const int profile = currentInputProfile();
 
         // Geolith only accepts input=0..3. V-Liner and Irritating Maze are
         // auto-detected from the loaded game's flags, so their frontend
         // profiles must use input=0 (Auto), never invalid values 4/5.
-        IniDocument coreCfg;
-        coreCfg.load(m_paths.geolith_ini);
         coreCfg.set("geolith", "input",
                     std::to_string(geolith_input_setting_for_device(profile)));
-        coreCfg.save(m_paths.geolith_ini);
 
         // Persist Goliath's richer profile separately so V-Liner/Irrmaze stay
         // selected when the Settings dialog is reopened.
-        m_config.set("UI", "input_device", std::to_string(profile));
-        save_config(m_config);
+        candidate.set("UI", "input_device", std::to_string(profile));
     }
 
+    std::string error;
+    if (!save_files_transactionally({
+            {m_paths.input_config, config.serialized_text()},
+            {m_paths.geolith_ini, coreCfg.serialized_text()},
+            {get_config_path(), candidate.serialized_text()},
+        }, &error)) {
+        QMessageBox::warning(
+            this, "Input Configuration",
+            QStringLiteral(
+                "The input mappings and selected device could not be saved "
+                "as one transaction.\n\n") +
+                QString::fromStdString(error));
+        return;
+    }
+
+    m_config = std::move(candidate);
 }
 
 void SettingsDialog::resetInputConfig() {
@@ -1325,15 +1358,29 @@ void SettingsDialog::resetInputConfig() {
         }
     }
 
-    std::error_code ec;
-    fs::create_directories(m_paths.input_config.parent_path(), ec);
-    config.save(m_paths.input_config);
-
     // "Reset to Defaults" applies to the whole Input tab. Axis Deadzone is
     // a global JGRF input setting, while the mappings above are profile-specific.
-    if (m_axisDeadzoneSpin) m_axisDeadzoneSpin->setValue(kDefaultAxisDeadzone);
-    persistJgrfInputSettings(kDefaultAxisDeadzone);
+    IniDocument settings;
+    IniDocument coreCfg;
+    prepare_jgrf_input_documents(
+        m_paths, kDefaultAxisDeadzone, settings, coreCfg);
 
+    std::string error;
+    if (!save_ini_documents({
+            {m_paths.input_config, &config},
+            {m_paths.jollygood_settings_ini, &settings},
+            {m_paths.geolith_ini, &coreCfg},
+        }, &error)) {
+        QMessageBox::warning(
+            this, "Reset Input Configuration",
+            QStringLiteral(
+                "The input mappings and JGRF deadzone could not be reset "
+                "as one transaction.\n\n") +
+                QString::fromStdString(error));
+        return;
+    }
+
+    if (m_axisDeadzoneSpin) m_axisDeadzoneSpin->setValue(kDefaultAxisDeadzone);
     loadInputConfig();
 }
 

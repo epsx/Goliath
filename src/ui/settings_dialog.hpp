@@ -37,6 +37,7 @@ class QScrollArea;
 namespace goliath {
 
 class Config;
+class IniDocument;
 class JoystickListener;
 class InfoTab;
 
@@ -75,7 +76,7 @@ private:
     void saveHotkeys();
     void updateHotkeyWarnings();
     void loadJgrfInputSettings();
-    void persistJgrfInputSettings(int deadzone);
+    bool persistJgrfInputSettings(int deadzone, std::string* error = nullptr);
 
     // Frontend input profile selected in the Input tab. Profile ids 4/5 are
     // Goliath-only choices for V-Liner/Irritating Maze; Geolith itself accepts
@@ -89,7 +90,7 @@ private:
     QStringList targetInputSections(int device = -1) const;
 
     void loadInputConfig();
-    void createDefaultInputConfig(int device = -1);
+    IniDocument defaultInputConfigDocument(int device = -1) const;
     void updateInputMappingPresentation();
     ControllerProfileBindings currentControllerProfileBindings() const;
     void applyControllerProfile(const ControllerProfileBindings& bindings);

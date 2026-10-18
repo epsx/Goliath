@@ -4,16 +4,36 @@ This document records the major implementation, validation, refactoring, and
 repository-cleanup milestones of `goliath-qt-cpp`. Entries are newest first.
 
 Historical test counts are retained as checkpoint evidence. The current
-Patch 42C candidate passes:
+Patch 42D candidate passes:
 
 ```text
-All tests passed (4799 assertions in 329 test cases)
+All tests passed (4820 assertions in 330 test cases)
 ```
 
 The preceding `1360/99` Feature 9 baseline passed its per-game mapping,
 isolation, and global-configuration regression checks. The `1239/88` runtime
 baseline passed manual MVS/AES, Neo Geo CD CUE, Neo Geo CD CHD, Settings, and
 visible-only Random smoke tests.
+
+---
+
+## 2026-10-18 — Patch 42D: transactional input-settings persistence (candidate)
+
+- Made global input mappings, the Geolith input mode, and Goliath's richer
+  selected profile commit as one recoverable transaction instead of three
+  unchecked independent writes.
+- Made the JGRF axis deadzone and its stale core override transactional, and
+  made Input reset update mappings and deadzone together. Failed explicit
+  saves now report the exact persistence error and do not update live Goliath
+  state.
+- Preserved mappings for other input devices and unrelated INI sections, kept
+  per-game profile storage/runtime behavior unchanged, and made first-use
+  default-input creation report failures while retaining usable session
+  defaults.
+- Added an exact global-input transaction regression, including blocked-save
+  recovery and preservation of other profiles. The strict Windows UCRT64 build
+  is warning-clean; all 4820 assertions in 330 test cases pass, including the
+  dedicated per-game input-runtime regressions.
 
 ---
 

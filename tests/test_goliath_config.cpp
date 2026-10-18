@@ -1,4 +1,5 @@
 #include "catch2/catch.hpp"
+#include "test_temp_directory.hpp"
 
 #include "common/file_transaction.hpp"
 #include "common/goliath_common.hpp"
@@ -15,6 +16,7 @@ using goliath::IniDocument;
 using goliath::default_config;
 using goliath::save_config_file;
 using goliath::save_files_transactionally;
+using goliath::test::ScopedTestDirectory;
 
 namespace {
 
@@ -146,4 +148,68 @@ TEST_CASE("Mixed settings transaction preserves every file when one is blocked",
     CHECK(read_text(configPath).find("volume = 37") != std::string::npos);
 
     fs::remove_all(root);
+}
+
+TEST_CASE("Global input settings commit together without losing other profiles",
+          "[config][ini][input][persistence][transaction]") {
+    const ScopedTestDirectory temporary(
+        "goliath_global_input_transaction");
+    const fs::path root = temporary.path();
+    const fs::path inputPath = root / "geolith_input.ini";
+    const fs::path corePath = root / "geolith.ini";
+    const fs::path blocker = root / "blocked";
+    const fs::path configPath = blocker / "goliath.ini";
+
+    const std::string originalInput =
+        "[neogeojs1]\nA = 4\nB = 5\n\n"
+        "[neogeojs2]\nA = j1b0\n\n"
+        "[unrelated]\nKeep = custom\n";
+    const std::string originalCore =
+        "[geolith]\ninput = 1\nregion = 2\n";
+    const std::string originalBlocker = "keep this blocker\n";
+    write_text(inputPath, originalInput);
+    write_text(corePath, originalCore);
+    write_text(blocker, originalBlocker);
+
+    IniDocument input;
+    input.load(inputPath);
+    input.set("neogeojs1", "A", "j0b2");
+    IniDocument core;
+    core.load(corePath);
+    core.set("geolith", "input", "3");
+    Config config = default_config();
+    config.set("UI", "input_device", "3");
+
+    std::string error;
+    CHECK_FALSE(save_files_transactionally({
+        {inputPath, input.serialized_text()},
+        {corePath, core.serialized_text()},
+        {configPath, config.serialized_text()},
+    }, &error));
+    CHECK_FALSE(error.empty());
+    CHECK(read_text(inputPath) == originalInput);
+    CHECK(read_text(corePath) == originalCore);
+    CHECK(read_text(blocker) == originalBlocker);
+
+    REQUIRE(fs::remove(blocker));
+    REQUIRE(save_files_transactionally({
+        {inputPath, input.serialized_text()},
+        {corePath, core.serialized_text()},
+        {configPath, config.serialized_text()},
+    }, &error));
+    CHECK(error.empty());
+
+    IniDocument savedInput;
+    savedInput.load(inputPath);
+    CHECK(savedInput.get("neogeojs1", "A") == "j0b2");
+    CHECK(savedInput.get("neogeojs1", "B") == "5");
+    CHECK(savedInput.get("neogeojs2", "A") == "j1b0");
+    CHECK(savedInput.get("unrelated", "Keep") == "custom");
+
+    IniDocument savedCore;
+    savedCore.load(corePath);
+    CHECK(savedCore.get("geolith", "input") == "3");
+    CHECK(savedCore.get("geolith", "region") == "2");
+    CHECK(read_text(configPath).find("input_device = 3") !=
+          std::string::npos);
 }
