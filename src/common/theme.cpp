@@ -456,6 +456,11 @@ QTabWidget::pane {
     top: -1px;
 }
 
+QTabWidget#settings_tabs::pane,
+QTabWidget#game_profile_tabs::pane {
+    border: none;
+}
+
 QTabBar::tab {
     background-color: @bg_secondary@;
     border: 1px solid @border@;

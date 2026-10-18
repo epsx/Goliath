@@ -365,6 +365,24 @@ TEST_CASE("frameless windows do not add an outer theme perimeter", "[theme]") {
     }
 }
 
+TEST_CASE("settings tab panes omit their redundant outer frame",
+          "[theme][settings][game-profile]") {
+    for (const Theme& theme : all_themes()) {
+        INFO("theme=" << theme.key);
+        const std::string stylesheet = generate_theme_style(theme);
+        CHECK(stylesheet.find(
+                  "QTabWidget#settings_tabs::pane,\n"
+                  "QTabWidget#game_profile_tabs::pane {\n"
+                  "    border: none;\n"
+                  "}") != std::string::npos);
+
+        const std::string generic_pane =
+            "QTabWidget::pane {\n"
+            "    border: 1px solid " + theme.border + ";";
+        CHECK(stylesheet.find(generic_pane) != std::string::npos);
+    }
+}
+
 TEST_CASE("generated scrollbars omit directional line buttons",
           "[theme][scrollbar]") {
     for (const Theme& theme : all_themes()) {

@@ -393,6 +393,7 @@ GameProfileDialog::GameProfileDialog(QString displayName,
     layout->addWidget(m_transferNote);
 
     auto* tabs = new QTabWidget();
+    tabs->setObjectName("game_profile_tabs");
     auto* generalTab = new QWidget(tabs);
     auto* generalTabLayout = new QVBoxLayout(generalTab);
     generalTabLayout->setContentsMargins(0, 0, 0, 0);

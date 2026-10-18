@@ -4,16 +4,28 @@ This document records the major implementation, validation, refactoring, and
 repository-cleanup milestones of `goliath-qt-cpp`. Entries are newest first.
 
 Historical test counts are retained as checkpoint evidence. The current
-Patch 42D candidate passes:
+Patch 42E candidate passes:
 
 ```text
-All tests passed (4820 assertions in 330 test cases)
+All tests passed (4846 assertions in 331 test cases)
 ```
 
 The preceding `1360/99` Feature 9 baseline passed its per-game mapping,
 isolation, and global-configuration regression checks. The `1239/88` runtime
 baseline passed manual MVS/AES, Neo Geo CD CUE, Neo Geo CD CHD, Settings, and
 visible-only Random smoke tests.
+
+---
+
+## 2026-10-18 — Patch 42E: cleaner settings tab panes (candidate)
+
+- Removed the redundant outer tab-pane frame from the global Settings and
+  per-game Settings dialogs while preserving their tab controls, interior
+  group boxes, fields, buttons, backgrounds, scrolling, and layout.
+- Scoped the style to those two dialogs so every unrelated tab widget retains
+  the existing theme-aware frame.
+- Added regression coverage across every bundled theme. The strict Windows
+  UCRT64 build is warning-clean; all 4846 assertions in 331 test cases pass.
 
 ---
 

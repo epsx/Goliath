@@ -150,6 +150,7 @@ SettingsDialog::SettingsDialog(Config& config, AppPaths paths,
     setupFramelessDialog(this, "Settings", &layout);
 
     m_tabs = new QTabWidget();
+    m_tabs->setObjectName("settings_tabs");
     layout->addWidget(m_tabs);
     connect(m_tabs, &QTabWidget::currentChanged, this, &SettingsDialog::onTabChanged);
 
