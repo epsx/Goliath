@@ -19,7 +19,8 @@ class ControllerButton;
 class InputPanelWidget : public QGroupBox {
     Q_OBJECT
 public:
-    explicit InputPanelWidget(QWidget* parent = nullptr);
+    explicit InputPanelWidget(const QString& title,
+                              QWidget* parent = nullptr);
     virtual QPushButton* button(const QString& key) const = 0;
     virtual QStringList keys() const = 0;
 };
@@ -30,7 +31,8 @@ class ControllerInputWidget : public InputPanelWidget {
 public:
     static const QStringList KEYS;
 
-    explicit ControllerInputWidget(QWidget* parent = nullptr);
+    explicit ControllerInputWidget(const QString& title,
+                                   QWidget* parent = nullptr);
     QPushButton* button(const QString& key) const override;
     QStringList keys() const override { return KEYS; }
 
@@ -45,7 +47,8 @@ class MahjongInputWidget : public InputPanelWidget {
 public:
     static const QStringList KEYS;
 
-    explicit MahjongInputWidget(QWidget* parent = nullptr);
+    explicit MahjongInputWidget(const QString& title,
+                                QWidget* parent = nullptr);
     QPushButton* button(const QString& key) const override;
     QStringList keys() const override { return KEYS; }
 
@@ -60,7 +63,8 @@ class VlinerInputWidget : public InputPanelWidget {
 public:
     static const QStringList KEYS;
 
-    explicit VlinerInputWidget(QWidget* parent = nullptr);
+    explicit VlinerInputWidget(const QString& title,
+                               QWidget* parent = nullptr);
     QPushButton* button(const QString& key) const override;
     QStringList keys() const override { return KEYS; }
 
@@ -75,7 +79,8 @@ class IrrmazeInputWidget : public InputPanelWidget {
 public:
     static const QStringList KEYS;
 
-    explicit IrrmazeInputWidget(QWidget* parent = nullptr);
+    explicit IrrmazeInputWidget(const QString& title,
+                                QWidget* parent = nullptr);
     QPushButton* button(const QString& key) const override;
     QStringList keys() const override { return KEYS; }
 
@@ -90,7 +95,8 @@ class SystemInputWidget : public InputPanelWidget {
 public:
     static const QStringList KEYS;
 
-    explicit SystemInputWidget(QWidget* parent = nullptr);
+    explicit SystemInputWidget(const QString& title,
+                               QWidget* parent = nullptr);
     QPushButton* button(const QString& key) const override;
     QStringList keys() const override { return KEYS; }
 

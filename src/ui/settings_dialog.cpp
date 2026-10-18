@@ -453,8 +453,11 @@ void SettingsDialog::buildInputTab(QWidget* inputWidget) {
     layout->setContentsMargins(10, 10, 10, 10);
     pageScroll->setWidget(content);
 
-    auto* deviceRow = new QHBoxLayout();
-    deviceRow->addWidget(new QLabel("Input Device:"));
+    auto* settingsGroup = new QGroupBox("JollyGood Input Settings");
+    auto* settingsLayout = new QVBoxLayout(settingsGroup);
+
+    auto* sourceRow = new QHBoxLayout();
+    sourceRow->addWidget(new QLabel("Input Device:"));
     m_inputDeviceCombo = new QComboBox();
     for (const auto& opt : inputDeviceOptions()) {
         m_inputDeviceCombo->addItem(opt.second, opt.first);
@@ -462,12 +465,10 @@ void SettingsDialog::buildInputTab(QWidget* inputWidget) {
     m_inputDeviceCombo->setCurrentIndex(0);
     connect(m_inputDeviceCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &SettingsDialog::onInputDeviceChanged);
-    deviceRow->addWidget(m_inputDeviceCombo);
-    deviceRow->addStretch();
-    layout->addLayout(deviceRow);
+    sourceRow->addWidget(m_inputDeviceCombo);
+    sourceRow->addSpacing(24);
 
-    auto* joystickRow = new QHBoxLayout();
-    joystickRow->addWidget(new QLabel("Capture from:"));
+    sourceRow->addWidget(new QLabel("Capture from:"));
     m_joystickCombo = new QComboBox();
     m_joystickCombo->setMinimumWidth(220);
     m_joystickCombo->setToolTip(
@@ -475,15 +476,15 @@ void SettingsDialog::buildInputTab(QWidget* inputWidget) {
         "captured alongside it.");
     connect(m_joystickCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, [this](int) { cancelListening(); });
-    joystickRow->addWidget(m_joystickCombo);
+    sourceRow->addWidget(m_joystickCombo);
     auto* refreshBtn = new QPushButton(QString::fromUtf8("\xE2\x86\xBB Refresh")); // ↻ Refresh
     connect(refreshBtn, &QPushButton::clicked, this, &SettingsDialog::refreshJoystickList);
-    joystickRow->addWidget(refreshBtn);
-    joystickRow->addStretch();
-    layout->addLayout(joystickRow);
+    sourceRow->addWidget(refreshBtn);
+    sourceRow->addStretch();
+    settingsLayout->addLayout(sourceRow);
     refreshJoystickList();
 
-    auto* jgrfInputGroup = new QGroupBox("JollyGood Input Settings");
+    auto* jgrfInputGroup = new QGroupBox("Axis Deadzone");
     auto* jgrfInputForm = new QFormLayout(jgrfInputGroup);
     m_axisDeadzoneSpin = new QSpinBox();
     m_axisDeadzoneSpin->setRange(0, 9);
@@ -510,18 +511,21 @@ void SettingsDialog::buildInputTab(QWidget* inputWidget) {
         "assignments are intentional. Right-click a control to reset only that "
         "mapping to its built-in default."));
     hotkeyNote->setWordWrap(true);
-    hotkeyNote->setObjectName("themed_note");
+    auto* mappingHelpGroup = new QGroupBox("Mapping Help");
+    auto* mappingHelpLayout = new QVBoxLayout(mappingHelpGroup);
+    mappingHelpLayout->addWidget(hotkeyNote);
 
     auto* auxiliaryRow = new QHBoxLayout();
     auxiliaryRow->setSpacing(8);
     auxiliaryRow->addWidget(createInputSectionToggle(
-        "Advanced Input Settings", jgrfInputGroup, content));
+        "Advanced Input Settings", jgrfInputGroup, settingsGroup));
     auxiliaryRow->addWidget(createInputSectionToggle(
-        "Mapping Help", hotkeyNote, content));
+        "Mapping Help", mappingHelpGroup, settingsGroup));
     auxiliaryRow->addStretch();
-    layout->addLayout(auxiliaryRow);
-    layout->addWidget(jgrfInputGroup);
-    layout->addWidget(hotkeyNote);
+    settingsLayout->addLayout(auxiliaryRow);
+    settingsLayout->addWidget(jgrfInputGroup);
+    settingsLayout->addWidget(mappingHelpGroup);
+    layout->addWidget(settingsGroup);
 
     m_inputConflictSummary = new QLabel();
     m_inputConflictSummary->setWordWrap(true);
@@ -1001,21 +1005,21 @@ void SettingsDialog::loadInputConfig() {
             }
         }
 
+        const QString sectionTitle = friendlySectionName(qs);
         InputPanelWidget* widget = nullptr;
         if (section.starts_with("neogeojs") && keysSubsetOfInputDefs(ControllerInputWidget::KEYS, section)) {
-            widget = new ControllerInputWidget(m_inputContainer);
+            widget = new ControllerInputWidget(sectionTitle, m_inputContainer);
         } else if (section == "neogeomahjong" && keysSubsetOfInputDefs(MahjongInputWidget::KEYS, section)) {
-            widget = new MahjongInputWidget(m_inputContainer);
+            widget = new MahjongInputWidget(sectionTitle, m_inputContainer);
         } else if (section == "neogeovliner" && keysSubsetOfInputDefs(VlinerInputWidget::KEYS, section)) {
-            widget = new VlinerInputWidget(m_inputContainer);
+            widget = new VlinerInputWidget(sectionTitle, m_inputContainer);
         } else if (section == "neogeoirrmaze" && keysSubsetOfInputDefs(IrrmazeInputWidget::KEYS, section)) {
-            widget = new IrrmazeInputWidget(m_inputContainer);
+            widget = new IrrmazeInputWidget(sectionTitle, m_inputContainer);
         } else if (section == "neogeosystem" && keysSubsetOfInputDefs(SystemInputWidget::KEYS, section)) {
-            widget = new SystemInputWidget(m_inputContainer);
+            widget = new SystemInputWidget(sectionTitle, m_inputContainer);
         }
 
         if (widget) {
-            widget->setTitle(friendlySectionName(qs));
             m_inputLayout->addWidget(widget);
         } else {
             auto* header = new QLabel(

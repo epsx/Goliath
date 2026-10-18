@@ -11,6 +11,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QEvent>
+#include <QGroupBox>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QLabel>
@@ -93,25 +94,27 @@ bool keys_subset_of_input_defs(const QStringList& widgetKeys,
 
 InputPanelWidget* create_input_panel(const std::string& section,
                                      QWidget* parent) {
+    const QString title = friendlySectionName(
+        QString::fromStdString(section));
     if (section.starts_with("neogeojs") &&
         keys_subset_of_input_defs(ControllerInputWidget::KEYS, section)) {
-        return new ControllerInputWidget(parent);
+        return new ControllerInputWidget(title, parent);
     }
     if (section == "neogeomahjong" &&
         keys_subset_of_input_defs(MahjongInputWidget::KEYS, section)) {
-        return new MahjongInputWidget(parent);
+        return new MahjongInputWidget(title, parent);
     }
     if (section == "neogeovliner" &&
         keys_subset_of_input_defs(VlinerInputWidget::KEYS, section)) {
-        return new VlinerInputWidget(parent);
+        return new VlinerInputWidget(title, parent);
     }
     if (section == "neogeoirrmaze" &&
         keys_subset_of_input_defs(IrrmazeInputWidget::KEYS, section)) {
-        return new IrrmazeInputWidget(parent);
+        return new IrrmazeInputWidget(title, parent);
     }
     if (section == "neogeosystem" &&
         keys_subset_of_input_defs(SystemInputWidget::KEYS, section)) {
-        return new SystemInputWidget(parent);
+        return new SystemInputWidget(title, parent);
     }
     return nullptr;
 }
@@ -180,6 +183,9 @@ GameInputMappingWidget::GameInputMappingWidget(
     layout->setSpacing(10);
     layout->setContentsMargins(10, 10, 10, 10);
 
+    auto* settingsGroup = new QGroupBox("Per-game Input Settings");
+    auto* settingsLayout = new QVBoxLayout(settingsGroup);
+
     auto* note = new QLabel(
         "Unchanged controls inherit Settings -> Input. A custom mapping "
         "affects only this exact ROM/CUE/CHD and is marked with a bullet. "
@@ -193,7 +199,9 @@ GameInputMappingWidget::GameInputMappingWidget(
         "tab Player 1 Controller retargets inherited bindings only; an "
         "explicit joystick mapping here retains the captured jN port.");
     note->setWordWrap(true);
-    note->setObjectName("themed_note");
+    auto* mappingHelpGroup = new QGroupBox("Mapping Help");
+    auto* mappingHelpLayout = new QVBoxLayout(mappingHelpGroup);
+    mappingHelpLayout->addWidget(note);
 
     auto* profileRow = new QHBoxLayout();
     profileRow->addWidget(new QLabel("Mapping profile:"));
@@ -226,10 +234,9 @@ GameInputMappingWidget::GameInputMappingWidget(
             });
     profileRow->addWidget(m_overridesOnlyCheck);
     profileRow->addWidget(createInputSectionToggle(
-        "Mapping Help", note, this));
+        "Mapping Help", mappingHelpGroup, settingsGroup));
     profileRow->addStretch();
-    layout->addLayout(profileRow);
-    layout->addWidget(note);
+    settingsLayout->addLayout(profileRow);
 
     auto* controllerRow = new QHBoxLayout();
     controllerRow->addWidget(new QLabel("Capture from:"));
@@ -249,7 +256,9 @@ GameInputMappingWidget::GameInputMappingWidget(
             this, &GameInputMappingWidget::refreshJoystickList);
     controllerRow->addWidget(refreshButton);
     controllerRow->addStretch();
-    layout->addLayout(controllerRow);
+    settingsLayout->addLayout(controllerRow);
+    settingsLayout->addWidget(mappingHelpGroup);
+    layout->addWidget(settingsGroup);
 
     auto* scroll = new QScrollArea();
     m_scroll = scroll;
@@ -462,7 +471,6 @@ void GameInputMappingWidget::rebuild() {
             ? nullptr
             : create_input_panel(section, m_container);
         if (panel) {
-            panel->setTitle(friendlySectionName(sectionName));
             m_containerLayout->addWidget(panel);
         } else {
             auto* heading = new QLabel(

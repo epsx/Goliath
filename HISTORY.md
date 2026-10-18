@@ -4,7 +4,7 @@ This document records the major implementation, validation, refactoring, and
 repository-cleanup milestones of `goliath-qt-cpp`. Entries are newest first.
 
 Historical test counts are retained as checkpoint evidence. The current
-Patch 42F candidate passes:
+Patch 42G candidate passes:
 
 ```text
 All tests passed (4846 assertions in 331 test cases)
@@ -14,6 +14,20 @@ The preceding `1360/99` Feature 9 baseline passed its per-game mapping,
 isolation, and global-configuration regression checks. The `1239/88` runtime
 baseline passed manual MVS/AES, Neo Geo CD CUE, Neo Geo CD CHD, Settings, and
 visible-only Random smoke tests.
+
+---
+
+## 2026-10-18 — Patch 42G: stable input-panel layout (candidate)
+
+- Fixed initial input-panel geometry by assigning section titles before layout
+  calculation and enforcing content-derived minimum sizes, preventing clipped
+  or overlapping controls without relying on a disclosure toggle to relayout.
+- Grouped the global and per-game input setup controls into titled sections,
+  with Axis Deadzone and Mapping Help presented as clear nested groups.
+- Preserved mapping, persistence, per-game inheritance, capture, reset, and
+  action-button behavior. The strict Windows UCRT64 build is warning-clean;
+  all 4846 assertions in 331 test cases pass. Initial-open and Mapping Help
+  smoke checks passed for both global and per-game Input pages.
 
 ---
 

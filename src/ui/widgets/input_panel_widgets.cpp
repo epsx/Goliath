@@ -21,8 +21,8 @@ QString friendlySectionName(const QString& section) {
     return section;
 }
 
-InputPanelWidget::InputPanelWidget(QWidget* parent)
-    : QGroupBox(parent) {
+InputPanelWidget::InputPanelWidget(const QString& title, QWidget* parent)
+    : QGroupBox(title, parent) {
     setObjectName("input_panel");
 }
 
@@ -54,14 +54,16 @@ QPushButton* createInputSectionToggle(const QString& title,
 const QStringList ControllerInputWidget::KEYS = {"Up", "Down", "Left", "Right", "Select",
                                                     "Start", "A", "B", "C", "D"};
 
-ControllerInputWidget::ControllerInputWidget(QWidget* parent)
-    : InputPanelWidget(parent) {
+ControllerInputWidget::ControllerInputWidget(const QString& title,
+                                             QWidget* parent)
+    : InputPanelWidget(title, parent) {
     setMinimumSize(520, 220);
     buildButtons();
 }
 
 void ControllerInputWidget::buildButtons() {
     auto* main = new QHBoxLayout(this);
+    main->setSizeConstraint(QLayout::SetMinimumSize);
     main->setSpacing(20);
     main->setContentsMargins(15, 15, 15, 15);
 
@@ -134,14 +136,15 @@ const QStringList MahjongInputWidget::KEYS = {
     "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N",
     "Pon", "Chi", "Kan", "Reach", "Ron", "Select", "Start"};
 
-MahjongInputWidget::MahjongInputWidget(QWidget* parent)
-    : InputPanelWidget(parent) {
+MahjongInputWidget::MahjongInputWidget(const QString& title, QWidget* parent)
+    : InputPanelWidget(title, parent) {
     setMinimumSize(720, 240);
     buildButtons();
 }
 
 void MahjongInputWidget::buildButtons() {
     auto* main = new QHBoxLayout(this);
+    main->setSizeConstraint(QLayout::SetMinimumSize);
     main->setSpacing(20);
     main->setContentsMargins(15, 15, 15, 15);
 
@@ -204,14 +207,15 @@ QPushButton* MahjongInputWidget::button(const QString& key) const {
 const QStringList VlinerInputWidget::KEYS = {"Up", "Down", "Left", "Right", "Big", "Small",
                                                "D-Up", "Start", "Operator", "ClearCredit", "HopperOut"};
 
-VlinerInputWidget::VlinerInputWidget(QWidget* parent)
-    : InputPanelWidget(parent) {
+VlinerInputWidget::VlinerInputWidget(const QString& title, QWidget* parent)
+    : InputPanelWidget(title, parent) {
     setMinimumSize(540, 260);
     buildButtons();
 }
 
 void VlinerInputWidget::buildButtons() {
     auto* main = new QHBoxLayout(this);
+    main->setSizeConstraint(QLayout::SetMinimumSize);
     main->setSpacing(20);
     main->setContentsMargins(15, 15, 15, 15);
 
@@ -300,14 +304,15 @@ QPushButton* VlinerInputWidget::button(const QString& key) const {
 
 const QStringList IrrmazeInputWidget::KEYS = {"XAxis", "YAxis", "LeftA", "LeftB", "RightA", "RightB", "Start"};
 
-IrrmazeInputWidget::IrrmazeInputWidget(QWidget* parent)
-    : InputPanelWidget(parent) {
+IrrmazeInputWidget::IrrmazeInputWidget(const QString& title, QWidget* parent)
+    : InputPanelWidget(title, parent) {
     setMinimumSize(520, 220);
     buildButtons();
 }
 
 void IrrmazeInputWidget::buildButtons() {
     auto* main = new QHBoxLayout(this);
+    main->setSizeConstraint(QLayout::SetMinimumSize);
     main->setSpacing(20);
     main->setContentsMargins(15, 15, 15, 15);
 
@@ -365,14 +370,15 @@ QPushButton* IrrmazeInputWidget::button(const QString& key) const {
 
 const QStringList SystemInputWidget::KEYS = {"Coin1", "Coin2", "Service", "Test"};
 
-SystemInputWidget::SystemInputWidget(QWidget* parent)
-    : InputPanelWidget(parent) {
+SystemInputWidget::SystemInputWidget(const QString& title, QWidget* parent)
+    : InputPanelWidget(title, parent) {
     setMinimumSize(420, 130);
     buildButtons();
 }
 
 void SystemInputWidget::buildButtons() {
     auto* main = new QHBoxLayout(this);
+    main->setSizeConstraint(QLayout::SetMinimumSize);
     main->setSpacing(20);
     main->setContentsMargins(15, 15, 15, 15);
 
