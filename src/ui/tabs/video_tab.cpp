@@ -104,10 +104,15 @@ void VideoTab::setupUi() {
     auto* container = new QWidget();
     auto* form = new QVBoxLayout(container);
 
-    auto* jgrfGroup = new QGroupBox("JollyGood (jgrf) Video Settings");
+    auto* jgrfGroup = new QGroupBox("JollyGood Renderer / Window");
     auto* jgrfLayout = new QFormLayout(jgrfGroup);
+    auto* crteaGroup = new QGroupBox("CRTea Shader");
+    auto* crteaLayout = new QFormLayout(crteaGroup);
     for (const FieldSpec& spec : jollygoodVideoFields()) {
-        m_jollygoodWidgets.addToForm(jgrfLayout, spec);
+        QFormLayout* target = spec.key.starts_with("crtea_")
+                                  ? crteaLayout
+                                  : jgrfLayout;
+        m_jollygoodWidgets.addToForm(target, spec);
     }
 
     m_videoApiCombo = qobject_cast<QComboBox*>(m_jollygoodWidgets.widget("api"));
@@ -120,8 +125,9 @@ void VideoTab::setupUi() {
                 this, &VideoTab::updateVulkanNote);
     }
     form->addWidget(jgrfGroup);
+    form->addWidget(crteaGroup);
 
-    auto* geoGroup = new QGroupBox("Geolith Core Video Settings");
+    auto* geoGroup = new QGroupBox("Geolith Core Video");
     auto* geoLayout = new QFormLayout(geoGroup);
     for (const FieldSpec& spec : geolithVideoFields()) {
         m_geolithWidgets.addToForm(geoLayout, spec);

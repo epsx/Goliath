@@ -4,7 +4,7 @@ This document records the major implementation, validation, refactoring, and
 repository-cleanup milestones of `goliath-qt-cpp`. Entries are newest first.
 
 Historical test counts are retained as checkpoint evidence. The current
-Patch 42E candidate passes:
+Patch 42F candidate passes:
 
 ```text
 All tests passed (4846 assertions in 331 test cases)
@@ -14,6 +14,21 @@ The preceding `1360/99` Feature 9 baseline passed its per-game mapping,
 isolation, and global-configuration regression checks. The `1239/88` runtime
 baseline passed manual MVS/AES, Neo Geo CD CUE, Neo Geo CD CHD, Settings, and
 visible-only Random smoke tests.
+
+---
+
+## 2026-10-18 — Patch 42F: cohesive settings section framing (candidate)
+
+- Promoted every visual input-mapping panel to a titled group, integrating
+  Neo Geo System, Player, Mahjong, V-Liner, Irritating Maze, and four-player
+  headings into their frames in both global and per-game settings.
+- Split global Video settings into the same JollyGood Renderer / Window,
+  CRTea Shader, and Geolith Core Video groups used by per-game settings.
+- Grouped the Path fields under a Paths frame and removed the obsolete menu
+  dropdown glyph from the Rescan ROMs guidance.
+- The strict Windows UCRT64 build is warning-clean; all 4846 assertions in
+  331 test cases pass. Manual Arctic Blue smoke checks covered global Video,
+  Input and Path plus per-game Input Mapping without saving configuration.
 
 ---
 

@@ -4,10 +4,7 @@
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QGroupBox>
-#include <QPainter>
 #include <QPushButton>
-#include <QStyle>
-#include <QStyleOption>
 #include <QVBoxLayout>
 
 namespace goliath {
@@ -25,18 +22,8 @@ QString friendlySectionName(const QString& section) {
 }
 
 InputPanelWidget::InputPanelWidget(QWidget* parent)
-    : QWidget(parent) {
+    : QGroupBox(parent) {
     setObjectName("input_panel");
-}
-
-void InputPanelWidget::paintEvent(QPaintEvent*) {
-    // QWidget subclasses do not automatically paint their QSS background and
-    // border. Draw PE_Widget so the shared #input_panel rule remains the sole
-    // source of the card colors, outline, and corner radius for every theme.
-    QStyleOption option;
-    option.initFrom(this);
-    QPainter painter(this);
-    style()->drawPrimitive(QStyle::PE_Widget, &option, &painter, this);
 }
 
 QPushButton* createInputSectionToggle(const QString& title,

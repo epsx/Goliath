@@ -1284,7 +1284,7 @@ QPushButton#input_section_toggle:checked {
     border-color: @accent@;
 }
 
-QWidget#input_panel {
+QGroupBox#input_panel {
     background-color: @bg_secondary@;
     border: 1px solid @border@;
     border-radius: 16px;

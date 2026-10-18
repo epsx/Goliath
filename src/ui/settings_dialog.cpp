@@ -572,6 +572,9 @@ void SettingsDialog::buildPathTab(QWidget* pathWidget) {
         pathLayout->contentsMargins().top(),
         pathLayout->contentsMargins().right(), 0);
 
+    auto* pathsGroup = new QGroupBox("Paths");
+    auto* pathsLayout = new QVBoxLayout(pathsGroup);
+
     for (const auto& ps : pathSettings()) {
         auto* row = new QHBoxLayout();
         auto* lbl = new QLabel(QString("%1:").arg(ps.label));
@@ -591,14 +594,15 @@ void SettingsDialog::buildPathTab(QWidget* pathWidget) {
         row->addWidget(btn);
 
         m_pathEntries[ps.key] = entry;
-        pathLayout->addLayout(row);
+        pathsLayout->addLayout(row);
     }
 
-    auto* note = new QLabel("After saving, use Tools \xE2\x96\xBC \xE2\x86\x92 Rescan ROMs (or F5) "
+    auto* note = new QLabel("After saving, use Tools \xE2\x86\x92 Rescan ROMs (or F5) "
                              "so the library picks up the new folders.");
     note->setWordWrap(true);
-    pathLayout->addWidget(note);
+    pathsLayout->addWidget(note);
 
+    pathLayout->addWidget(pathsGroup);
     pathLayout->addStretch();
 
     auto* saveBtn = new QPushButton("Save Path Settings");
@@ -997,10 +1001,6 @@ void SettingsDialog::loadInputConfig() {
             }
         }
 
-        auto* header = new QLabel(QString("<b>%1</b>").arg(friendlySectionName(qs)));
-        header->setObjectName("section_heading");
-        m_inputLayout->addWidget(header);
-
         InputPanelWidget* widget = nullptr;
         if (section.starts_with("neogeojs") && keysSubsetOfInputDefs(ControllerInputWidget::KEYS, section)) {
             widget = new ControllerInputWidget(m_inputContainer);
@@ -1015,7 +1015,13 @@ void SettingsDialog::loadInputConfig() {
         }
 
         if (widget) {
+            widget->setTitle(friendlySectionName(qs));
             m_inputLayout->addWidget(widget);
+        } else {
+            auto* header = new QLabel(
+                QString("<b>%1</b>").arg(friendlySectionName(qs)));
+            header->setObjectName("section_heading");
+            m_inputLayout->addWidget(header);
         }
 
         for (const std::string& key : shownKeys) {

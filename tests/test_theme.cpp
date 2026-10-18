@@ -409,7 +409,7 @@ TEST_CASE("input panels retain their theme-aware outer cards", "[theme]") {
     for (const Theme& theme : all_themes()) {
         INFO("theme=" << theme.key);
         const std::string expected_panel =
-            "QWidget#input_panel {\n"
+            "QGroupBox#input_panel {\n"
             "    background-color: " + theme.bg_secondary + ";\n"
             "    border: 1px solid " + theme.border + ";\n"
             "    border-radius: 16px;\n"

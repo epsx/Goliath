@@ -5,27 +5,23 @@
 // dispatch to whichever panel is currently showing.
 #pragma once
 
+#include <QGroupBox>
 #include <QMap>
 #include <QString>
 #include <QStringList>
-#include <QWidget>
 
 class QPushButton;
-class QPaintEvent;
 
 namespace goliath {
 
 class ControllerButton;
 
-class InputPanelWidget : public QWidget {
+class InputPanelWidget : public QGroupBox {
     Q_OBJECT
 public:
     explicit InputPanelWidget(QWidget* parent = nullptr);
     virtual QPushButton* button(const QString& key) const = 0;
     virtual QStringList keys() const = 0;
-
-protected:
-    void paintEvent(QPaintEvent* event) override;
 };
 
 // --- Neo Geo joystick (Up/Down/Left/Right/Select/Start/A/B/C/D) ---

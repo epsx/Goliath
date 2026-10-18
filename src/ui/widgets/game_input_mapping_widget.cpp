@@ -458,15 +458,18 @@ void GameInputMappingWidget::rebuild() {
             definition->second.begin(), definition->second.end(), hasOverride);
         if (overridesOnly && !sectionHasOverrides) continue;
 
-        auto* heading = new QLabel(
-            QString("<b>%1</b>").arg(friendlySectionName(sectionName)));
-        heading->setObjectName("section_heading");
-        m_containerLayout->addWidget(heading);
-
         InputPanelWidget* panel = overridesOnly
             ? nullptr
             : create_input_panel(section, m_container);
-        if (panel) m_containerLayout->addWidget(panel);
+        if (panel) {
+            panel->setTitle(friendlySectionName(sectionName));
+            m_containerLayout->addWidget(panel);
+        } else {
+            auto* heading = new QLabel(
+                QString("<b>%1</b>").arg(friendlySectionName(sectionName)));
+            heading->setObjectName("section_heading");
+            m_containerLayout->addWidget(heading);
+        }
 
         for (const std::string& key : definition->second) {
             if (overridesOnly && !hasOverride(key)) continue;
