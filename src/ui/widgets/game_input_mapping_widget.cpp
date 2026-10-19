@@ -590,7 +590,7 @@ void GameInputMappingWidget::startListening(
     button->setToolTip(
         "Press a keyboard key or use the selected controller. "
         "Click this control again to cancel.");
-    button->setStyleSheet("background-color: #3daee9; color: white;");
+    setButtonListeningStyle(button);
     const int scrollPosition = m_scroll
         ? m_scroll->verticalScrollBar()->value()
         : 0;

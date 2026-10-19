@@ -10,6 +10,10 @@ ControllerButton::ControllerButton(const QString& keyName, const QString& color,
                                      QWidget* parent)
     : QPushButton(parent) {
     m_defaultStyleSheet = buildStyleSheet(color, isRound);
+    // Capture mode must retain the complete keycap box model. Replacing this
+    // with a partial stylesheet makes compact controls inherit the theme's
+    // generic QPushButton padding and visibly resize while listening.
+    m_listeningStyleSheet = buildStyleSheet("#3daee9", isRound);
     setStyleSheet(m_defaultStyleSheet);
     setFlat(false);
     setCursor(Qt::PointingHandCursor);

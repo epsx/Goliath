@@ -424,6 +424,15 @@ QString buttonDisplayText(QPushButton* btn) {
     return btn->text();
 }
 
+void setButtonListeningStyle(QPushButton* btn) {
+    if (!btn) return;
+    if (auto* cb = qobject_cast<ControllerButton*>(btn)) {
+        btn->setStyleSheet(cb->listeningStyleSheet());
+    } else {
+        btn->setStyleSheet("background-color: #3daee9; color: white;");
+    }
+}
+
 void resetButtonStyle(QPushButton* btn) {
     if (!btn) return;
     if (auto* cb = qobject_cast<ControllerButton*>(btn)) {

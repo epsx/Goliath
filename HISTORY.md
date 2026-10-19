@@ -4,7 +4,7 @@ This document records the major implementation, validation, refactoring, and
 repository-cleanup milestones of `goliath-qt-cpp`. Entries are newest first.
 
 Historical test counts are retained as checkpoint evidence. The current
-Patch 42H candidate passes:
+Patch 42I candidate passes:
 
 ```text
 All tests passed (4846 assertions in 331 test cases)
@@ -14,6 +14,20 @@ The preceding `1360/99` Feature 9 baseline passed its per-game mapping,
 isolation, and global-configuration regression checks. The `1239/88` runtime
 baseline passed manual MVS/AES, Neo Geo CD CUE, Neo Geo CD CHD, Settings, and
 visible-only Random smoke tests.
+
+---
+
+## 2026-10-19 — Patch 42I: stable input keycaps during mapping (candidate)
+
+- Preserved the complete arcade-keycap box model while a control is waiting
+  for a new keyboard or controller assignment, preventing compact D-Pad and
+  A/B/C/D controls from resizing or shifting during capture.
+- Kept the existing capture highlight and waiting text while sharing the fix
+  between global Settings and Per-game Settings; mapping and persistence
+  behavior remain unchanged.
+- The strict Windows UCRT64 build is warning-clean; all 4846 assertions in
+  331 test cases pass. Manual Sakura Paper smoke checks covered Up and A
+  before, during, and after capture in both global and per-game Input pages.
 
 ---
 

@@ -27,6 +27,7 @@ public:
     QString valueText() const { return m_rawText; }
 
     QString defaultStyleSheet() const { return m_defaultStyleSheet; }
+    QString listeningStyleSheet() const { return m_listeningStyleSheet; }
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
@@ -37,6 +38,7 @@ private:
 
     QString m_rawText = "--";
     QString m_defaultStyleSheet;
+    QString m_listeningStyleSheet;
     QLabel* m_nameLabel = nullptr;
     QLabel* m_valueLabel = nullptr;
 };

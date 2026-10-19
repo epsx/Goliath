@@ -1117,7 +1117,7 @@ void SettingsDialog::startListening(QPushButton* btn, const QString& section, co
     btn->setToolTip(
         "Press a keyboard key or use the selected controller. "
         "Click this control again to cancel.");
-    btn->setStyleSheet("background-color: #3daee9; color: white;");
+    setButtonListeningStyle(btn);
 
     const int scrollPosition = m_inputScroll
         ? m_inputScroll->verticalScrollBar()->value()

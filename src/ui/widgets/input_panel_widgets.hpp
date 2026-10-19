@@ -119,6 +119,10 @@ void setButtonDisplayText(QPushButton* btn, const QString& text);
 // Same idea as the above, for reading back the currently-displayed text.
 QString buttonDisplayText(QPushButton* btn);
 
+// Applies the capture/listening appearance without changing the keycap box
+// model. Plain fallback buttons retain the generic capture highlight.
+void setButtonListeningStyle(QPushButton* btn);
+
 // Restores a button's default stylesheet (the colored ControllerButton look,
 // or an empty stylesheet for a plain QPushButton).
 void resetButtonStyle(QPushButton* btn);
