@@ -6,6 +6,7 @@
 #include "game/geolith_capabilities.hpp"
 #include "common/goliath_common.hpp"
 #include "ui/update_check.hpp"
+#include "ui/widgets/engraved_controls.hpp"
 #include "update/update_schedule.hpp"
 
 #include <QCryptographicHash>
@@ -83,8 +84,8 @@ void InfoTab::setupUi() {
     scroll->setWidget(content);
     rootLayout->addWidget(scroll, 1);
 
-    m_refreshButton = new QPushButton(
-        QString::fromUtf8("\xE2\x86\xBB Refresh Information"), this);
+    m_refreshButton = new EngravedActionButton(
+        "Refresh Information", EngravedActionButton::Glyph::Refresh, this);
     connect(m_refreshButton, &QPushButton::clicked, this, &InfoTab::refresh);
     rootLayout->addWidget(m_refreshButton);
 
@@ -119,9 +120,11 @@ void InfoTab::setupUi() {
     updatesLayout->addWidget(updateNote);
 
     auto* updateButtons = new QHBoxLayout();
-    m_checkUpdatesButton = new QPushButton("Check Now...", updatesGroup);
-    auto* saveUpdatePreference = new QPushButton(
-        "Save Update Preference", updatesGroup);
+    m_checkUpdatesButton = new EngravedActionButton(
+        "Check Now...", EngravedActionButton::Glyph::Search, updatesGroup);
+    auto* saveUpdatePreference = new EngravedActionButton(
+        "Save Update Preference", EngravedActionButton::Glyph::Save,
+        updatesGroup);
     updateButtons->addWidget(m_checkUpdatesButton);
     updateButtons->addStretch();
     updateButtons->addWidget(saveUpdatePreference);

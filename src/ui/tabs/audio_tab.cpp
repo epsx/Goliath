@@ -4,6 +4,7 @@
 #include "common/file_transaction.hpp"
 #include "common/goliath_common.hpp"
 #include "ini/ini_document.hpp"
+#include "ui/widgets/engraved_controls.hpp"
 
 #include <QAbstractItemView>
 #include <QComboBox>
@@ -72,7 +73,8 @@ void AudioTab::setupUi() {
     auto* outputLayout = new QHBoxLayout(outputRow);
     outputLayout->setContentsMargins(0, 0, 0, 0);
     outputLayout->addWidget(m_outputCombo, 1);
-    m_refreshButton = new QPushButton(QString::fromUtf8("\xE2\x86\xBB Refresh")); // ↻ Refresh
+    m_refreshButton = new EngravedActionButton(
+        "Refresh", EngravedActionButton::Glyph::Refresh);
     connect(m_refreshButton, &QPushButton::clicked, this, &AudioTab::refreshDevices);
     outputLayout->addWidget(m_refreshButton);
     form->addRow("Output Device:", outputRow);
@@ -128,7 +130,8 @@ void AudioTab::setupUi() {
     layout->addWidget(group);
     layout->addStretch();
 
-    auto* saveBtn = new QPushButton("Save Audio Settings");
+    auto* saveBtn = new EngravedActionButton(
+        "Save Audio Settings", EngravedActionButton::Glyph::Save);
     connect(saveBtn, &QPushButton::clicked, this, &AudioTab::save);
     layout->addWidget(saveBtn);
 }

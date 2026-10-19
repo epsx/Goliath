@@ -5,6 +5,7 @@
 #include "game/jollygood_capabilities.hpp"
 #include "game/jollygood_executable.hpp"
 #include "input/sdl_joystick.hpp"
+#include "ui/widgets/engraved_controls.hpp"
 #include "ui/widgets/game_input_mapping_widget.hpp"
 #include "ui/widgets/title_bar.hpp"
 
@@ -335,8 +336,10 @@ bool confirm_profile_import(QWidget* parent,
 
     auto* buttons = new QHBoxLayout();
     buttons->addStretch();
-    auto* cancelButton = new QPushButton("Cancel", &dialog);
-    auto* applyButton = new QPushButton("Apply to Editor", &dialog);
+    auto* cancelButton = new EngravedActionButton(
+        "Cancel", EngravedActionButton::Glyph::Cancel, &dialog);
+    auto* applyButton = new EngravedActionButton(
+        "Apply to Editor", EngravedActionButton::Glyph::Import, &dialog);
     applyButton->setDefault(true);
     buttons->addWidget(cancelButton);
     buttons->addWidget(applyButton);
@@ -530,7 +533,8 @@ GameProfileDialog::GameProfileDialog(QString displayName,
     m_crteaNote->setObjectName("themed_note");
     videoContainerLayout->addWidget(m_crteaNote);
 
-    auto* resetVideoButton = new QPushButton("Reset Video to Global");
+    auto* resetVideoButton = new EngravedActionButton(
+        "Reset Video to Global", EngravedActionButton::Glyph::Reset);
     resetVideoButton->setToolTip(
         "Clears only this profile's video overrides. System, input and exact-"
         "media mappings remain unchanged until Save Profile is pressed.");
@@ -547,18 +551,23 @@ GameProfileDialog::GameProfileDialog(QString displayName,
     layout->addWidget(tabs, 1);
 
     auto* buttons = new QHBoxLayout();
-    auto* importButton = new QPushButton("Import...");
+    auto* importButton = new EngravedActionButton(
+        "Import...", EngravedActionButton::Glyph::Import);
     importButton->setToolTip(
         "Load a portable Goliath per-game settings file into this editor.");
-    auto* exportButton = new QPushButton("Export...");
+    auto* exportButton = new EngravedActionButton(
+        "Export...", EngravedActionButton::Glyph::Export);
     exportButton->setToolTip(
         "Export the overrides currently shown without including ROM paths.");
-    auto* saveButton = new QPushButton("Save Profile");
-    auto* resetButton = new QPushButton("Reset All to Global...");
+    auto* saveButton = new EngravedActionButton(
+        "Save Profile", EngravedActionButton::Glyph::Save);
+    auto* resetButton = new EngravedActionButton(
+        "Reset All to Global...", EngravedActionButton::Glyph::Reset);
     resetButton->setToolTip(
         "Clear every override for this game and return it to the global "
         "Settings configuration.");
-    auto* cancelButton = new QPushButton("Cancel");
+    auto* cancelButton = new EngravedActionButton(
+        "Cancel", EngravedActionButton::Glyph::Cancel);
     buttons->addWidget(importButton);
     buttons->addWidget(exportButton);
     buttons->addStretch();

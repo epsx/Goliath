@@ -11,6 +11,7 @@
 #include "ui/tabs/core_tab.hpp"
 #include "ui/tabs/misc_tab.hpp"
 #include "ui/tabs/info_tab.hpp"
+#include "ui/widgets/engraved_controls.hpp"
 #include "ui/widgets/title_bar.hpp"
 #include "ini/ini_document.hpp"
 #include "input/input_maps.hpp"
@@ -286,7 +287,8 @@ void SettingsDialog::buildHotkeysTab(QWidget* widget) {
     connect(m_pngHotkeyEdit, &QKeySequenceEdit::keySequenceChanged,
             this, [this]() { updateHotkeyWarnings(); });
     auto* buttons = new QHBoxLayout();
-    auto* save = new QPushButton("Save Hotkeys", captureGroup);
+    auto* save = new EngravedActionButton(
+        "Save Hotkeys", EngravedActionButton::Glyph::Save, captureGroup);
 #if defined(_WIN32) || defined(GOLIATH_X11_CAPTURE) || defined(GOLIATH_WAYLAND_CAPTURE)
     connect(save, &QPushButton::clicked, this, [this]() {
         saveHotkeys();
@@ -294,7 +296,9 @@ void SettingsDialog::buildHotkeysTab(QWidget* widget) {
 #endif
     buttons->addWidget(save);
 
-    auto* reset = new QPushButton("Reset to Defaults", captureGroup);
+    auto* reset = new EngravedActionButton(
+        "Reset to Defaults", EngravedActionButton::Glyph::Reset,
+        captureGroup);
     connect(reset, &QPushButton::clicked, this, [this, gifDefault]() {
         m_gifHotkeyEdit->setKeySequence(QKeySequence(gifDefault,
                                                   QKeySequence::PortableText));
@@ -477,7 +481,8 @@ void SettingsDialog::buildInputTab(QWidget* inputWidget) {
     connect(m_joystickCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, [this](int) { cancelListening(); });
     sourceRow->addWidget(m_joystickCombo);
-    auto* refreshBtn = new QPushButton(QString::fromUtf8("\xE2\x86\xBB Refresh")); // ↻ Refresh
+    auto* refreshBtn = new EngravedActionButton(
+        "Refresh", EngravedActionButton::Glyph::Refresh);
     connect(refreshBtn, &QPushButton::clicked, this, &SettingsDialog::refreshJoystickList);
     sourceRow->addWidget(refreshBtn);
     sourceRow->addStretch();
@@ -493,7 +498,8 @@ void SettingsDialog::buildInputTab(QWidget* inputWidget) {
         "Higher values ignore more movement around the center of an analog axis.");
     jgrfInputForm->addRow("Axis Deadzone:", m_axisDeadzoneSpin);
 
-    auto* saveJgrfInputBtn = new QPushButton("Save JGRF Input Settings");
+    auto* saveJgrfInputBtn = new EngravedActionButton(
+        "Save JGRF Input Settings", EngravedActionButton::Glyph::Save);
     connect(saveJgrfInputBtn, &QPushButton::clicked,
             this, &SettingsDialog::saveJgrfInputSettings);
     jgrfInputForm->addRow("", saveJgrfInputBtn);
@@ -539,15 +545,18 @@ void SettingsDialog::buildInputTab(QWidget* inputWidget) {
     layout->addWidget(m_inputContainer);
 
     auto* inputBtnRow = new QHBoxLayout();
-    auto* saveBtn = new QPushButton("Save Input Config");
+    auto* saveBtn = new EngravedActionButton(
+        "Save Input Config", EngravedActionButton::Glyph::Save);
     connect(saveBtn, &QPushButton::clicked, this, &SettingsDialog::saveInputConfig);
     inputBtnRow->addWidget(saveBtn);
 
-    auto* resetBtn = new QPushButton("Reset to Defaults");
+    auto* resetBtn = new EngravedActionButton(
+        "Reset to Defaults", EngravedActionButton::Glyph::Reset);
     connect(resetBtn, &QPushButton::clicked, this, &SettingsDialog::resetInputConfig);
     inputBtnRow->addWidget(resetBtn);
 
-    auto* profilesBtn = new QPushButton("Controller Profiles...");
+    auto* profilesBtn = new EngravedActionButton(
+        "Controller Profiles...", EngravedActionButton::Glyph::Profiles);
     profilesBtn->setObjectName("controller_profiles_button");
     profilesBtn->setToolTip(
         "Save, apply, rename, update, or delete reusable controller mappings.");
@@ -589,7 +598,8 @@ void SettingsDialog::buildPathTab(QWidget* pathWidget) {
         entry->setReadOnly(true);
         row->addWidget(entry);
 
-        auto* btn = new QPushButton("Browse...");
+        auto* btn = new EngravedActionButton(
+            "Browse...", EngravedActionButton::Glyph::Browse);
         std::string key = ps.key;
         QString label = ps.label;
         connect(btn, &QPushButton::clicked, this, [this, key, label]() {
@@ -609,7 +619,8 @@ void SettingsDialog::buildPathTab(QWidget* pathWidget) {
     pathLayout->addWidget(pathsGroup);
     pathLayout->addStretch();
 
-    auto* saveBtn = new QPushButton("Save Path Settings");
+    auto* saveBtn = new EngravedActionButton(
+        "Save Path Settings", EngravedActionButton::Glyph::Save);
     connect(saveBtn, &QPushButton::clicked, this, &SettingsDialog::savePathConfig);
     pathLayout->addWidget(saveBtn);
 }

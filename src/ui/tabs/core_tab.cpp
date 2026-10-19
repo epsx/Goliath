@@ -1,6 +1,7 @@
 #include "core_tab.hpp"
 #include "core_tab_help.hpp"
 #include "ini/ini_document.hpp"
+#include "ui/widgets/engraved_controls.hpp"
 #include "ui/widgets/title_bar.hpp"
 
 #include <QDialog>
@@ -115,7 +116,8 @@ void CoreTab::setupUi() {
             form->addWidget(box);
 
             if (gf.group == "System") {
-                auto* helpButton = new QPushButton("Universe BIOS Help");
+                auto* helpButton = new EngravedActionButton(
+                    "Universe BIOS Help", EngravedActionButton::Glyph::Help);
                 helpButton->setObjectName("core_universe_bios_help");
                 helpButton->setIcon(helpButton->style()->standardIcon(
                     QStyle::SP_MessageBoxInformation, nullptr, helpButton));
@@ -146,11 +148,13 @@ void CoreTab::setupUi() {
     layout->addWidget(scroll);
 
     auto* buttonRow = new QHBoxLayout();
-    auto* saveBtn = new QPushButton("Save Core Settings");
+    auto* saveBtn = new EngravedActionButton(
+        "Save Core Settings", EngravedActionButton::Glyph::Save);
     connect(saveBtn, &QPushButton::clicked, this, &CoreTab::save);
     buttonRow->addWidget(saveBtn);
 
-    auto* resetBtn = new QPushButton("Reset to Defaults");
+    auto* resetBtn = new EngravedActionButton(
+        "Reset to Defaults", EngravedActionButton::Glyph::Reset);
     connect(resetBtn, &QPushButton::clicked,
             this, &CoreTab::resetDefaults);
     buttonRow->addWidget(resetBtn);

@@ -1,5 +1,6 @@
 #include "ui/tabs/misc_tab.hpp"
 #include "ini/ini_document.hpp"
+#include "ui/widgets/engraved_controls.hpp"
 
 #include <QFormLayout>
 #include <QHBoxLayout>
@@ -58,11 +59,13 @@ void MiscTab::setupUi() {
     layout->addStretch();
 
     auto* buttonRow = new QHBoxLayout();
-    auto* saveBtn = new QPushButton("Save Misc Settings");
+    auto* saveBtn = new EngravedActionButton(
+        "Save Misc Settings", EngravedActionButton::Glyph::Save);
     connect(saveBtn, &QPushButton::clicked, this, &MiscTab::save);
     buttonRow->addWidget(saveBtn);
 
-    auto* resetBtn = new QPushButton("Reset to Defaults");
+    auto* resetBtn = new EngravedActionButton(
+        "Reset to Defaults", EngravedActionButton::Glyph::Reset);
     connect(resetBtn, &QPushButton::clicked, this, &MiscTab::resetDefaults);
     buttonRow->addWidget(resetBtn);
     layout->addLayout(buttonRow);

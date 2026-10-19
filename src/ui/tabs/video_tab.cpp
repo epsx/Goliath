@@ -4,6 +4,7 @@
 #include "game/jollygood_executable.hpp"
 #include "game/video_settings.hpp"
 #include "ini/ini_document.hpp"
+#include "ui/widgets/engraved_controls.hpp"
 
 #include <QComboBox>
 #include <QFormLayout>
@@ -144,11 +145,13 @@ void VideoTab::setupUi() {
     layout->addWidget(m_vulkanNote);
 
     auto* buttonRow = new QHBoxLayout();
-    auto* saveBtn = new QPushButton("Save Video Settings");
+    auto* saveBtn = new EngravedActionButton(
+        "Save Video Settings", EngravedActionButton::Glyph::Save);
     connect(saveBtn, &QPushButton::clicked, this, &VideoTab::save);
     buttonRow->addWidget(saveBtn);
 
-    auto* resetBtn = new QPushButton("Reset to Defaults");
+    auto* resetBtn = new EngravedActionButton(
+        "Reset to Defaults", EngravedActionButton::Glyph::Reset);
     connect(resetBtn, &QPushButton::clicked, this, &VideoTab::resetDefaults);
     buttonRow->addWidget(resetBtn);
     layout->addLayout(buttonRow);

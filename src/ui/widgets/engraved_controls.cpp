@@ -62,8 +62,12 @@ void EngravedComboBox::paintEvent(QPaintEvent*) {
     QColor depthColor(property("goliathEngravedDepth").toString());
     QColor hoverColor(property("goliathEngravedHover").toString());
     if (!textColor.isValid()) textColor = palette().buttonText().color();
-    if (!depthColor.isValid()) depthColor = QColor(255, 255, 255, 120);
-    if (!hoverColor.isValid()) hoverColor = textColor;
+    if (!depthColor.isValid()) {
+        depthColor = palette().button().color().lightness() < 128
+            ? QColor(0, 0, 0, 190)
+            : QColor(255, 255, 255, 210);
+    }
+    if (!hoverColor.isValid()) hoverColor = palette().highlight().color();
     if (option.state.testFlag(QStyle::State_MouseOver) && isEnabled())
         textColor = hoverColor;
     if (!isEnabled()) textColor.setAlpha(120);
@@ -354,7 +358,7 @@ void EngravedActionButton::drawGlyph(
         painter.drawEllipse(QPointF(die.right() - 2.6,
                                     die.bottom() - 2.6), 0.9, 0.9);
         painter.setBrush(Qt::NoBrush);
-    } else {
+    } else if (m_glyph == Glyph::Alerts) {
         QPainterPath bell;
         bell.moveTo(centre.x(), bounds.top() + 1.5);
         bell.cubicTo(bounds.left() + 3.0, bounds.top() + 2.0,
@@ -369,6 +373,107 @@ void EngravedActionButton::drawGlyph(
                          QPointF(bounds.right() - 1.3, bounds.bottom() - 3.0));
         painter.drawArc(QRectF(centre.x() - 1.8, bounds.bottom() - 4.0,
                                3.6, 3.6), 180 * 16, 180 * 16);
+    } else if (m_glyph == Glyph::Save) {
+        const QRectF body = bounds.adjusted(1.5, 1.2, -1.5, -1.2);
+        painter.drawRoundedRect(body, 1.4, 1.4);
+        painter.drawRect(QRectF(body.left() + 2.2, body.top(),
+                                body.width() - 4.4, body.height() * 0.36));
+        painter.drawRoundedRect(
+            QRectF(body.left() + 2.4, body.center().y() + 1.0,
+                   body.width() - 4.8, body.height() * 0.30),
+            0.8, 0.8);
+        painter.drawLine(QPointF(body.right() - 3.4, body.top() + 0.8),
+                         QPointF(body.right() - 3.4,
+                                 body.top() + body.height() * 0.30));
+    } else if (m_glyph == Glyph::Reset ||
+               m_glyph == Glyph::Refresh) {
+        const QRectF arc = bounds.adjusted(2.0, 2.0, -2.0, -2.0);
+        painter.drawArc(arc, 35 * 16, 285 * 16);
+        QPainterPath arrow;
+        if (m_glyph == Glyph::Reset) {
+            arrow.moveTo(bounds.left() + 1.3, bounds.top() + 5.0);
+            arrow.lineTo(bounds.left() + 5.2, bounds.top() + 4.4);
+            arrow.lineTo(bounds.left() + 3.7, bounds.top() + 8.0);
+        } else {
+            arrow.moveTo(bounds.right() - 1.3, bounds.bottom() - 5.0);
+            arrow.lineTo(bounds.right() - 5.2, bounds.bottom() - 4.4);
+            arrow.lineTo(bounds.right() - 3.7, bounds.bottom() - 8.0);
+        }
+        painter.drawPath(arrow);
+    } else if (m_glyph == Glyph::Browse) {
+        QPainterPath folder;
+        folder.moveTo(bounds.left() + 1.2, bounds.top() + 4.3);
+        folder.lineTo(bounds.left() + 5.8, bounds.top() + 4.3);
+        folder.lineTo(bounds.left() + 7.4, bounds.top() + 2.3);
+        folder.lineTo(bounds.right() - 1.2, bounds.top() + 2.3);
+        folder.lineTo(bounds.right() - 1.2, bounds.bottom() - 1.8);
+        folder.lineTo(bounds.left() + 1.2, bounds.bottom() - 1.8);
+        folder.closeSubpath();
+        painter.drawPath(folder);
+        painter.drawLine(QPointF(bounds.left() + 1.7, bounds.top() + 6.0),
+                         QPointF(bounds.right() - 1.7, bounds.top() + 6.0));
+    } else if (m_glyph == Glyph::Help) {
+        painter.drawEllipse(bounds.adjusted(1.5, 1.5, -1.5, -1.5));
+        QFont glyphFont = painter.font();
+        glyphFont.setBold(true);
+        glyphFont.setPixelSize(11);
+        painter.setFont(glyphFont);
+        painter.drawText(bounds.adjusted(0.0, -0.5, 0.0, 0.0),
+                         Qt::AlignCenter, QStringLiteral("?"));
+    } else if (m_glyph == Glyph::Profiles) {
+        const QRectF pad = bounds.adjusted(1.0, 3.0, -1.0, -2.0);
+        QPainterPath body;
+        body.moveTo(pad.left() + 3.0, pad.top());
+        body.lineTo(pad.right() - 3.0, pad.top());
+        body.cubicTo(pad.right(), pad.top(), pad.right(), pad.bottom(),
+                     pad.right() - 2.0, pad.bottom());
+        body.lineTo(pad.center().x() + 2.0, pad.bottom() - 2.0);
+        body.lineTo(pad.center().x() - 2.0, pad.bottom() - 2.0);
+        body.lineTo(pad.left() + 2.0, pad.bottom());
+        body.cubicTo(pad.left(), pad.bottom(), pad.left(), pad.top(),
+                     pad.left() + 3.0, pad.top());
+        body.closeSubpath();
+        painter.drawPath(body);
+        painter.drawLine(QPointF(pad.left() + 3.0, pad.center().y()),
+                         QPointF(pad.left() + 7.0, pad.center().y()));
+        painter.drawLine(QPointF(pad.left() + 5.0, pad.center().y() - 2.0),
+                         QPointF(pad.left() + 5.0, pad.center().y() + 2.0));
+        painter.drawPoint(QPointF(pad.right() - 4.2, pad.center().y() - 1.3));
+        painter.drawPoint(QPointF(pad.right() - 2.4, pad.center().y() + 1.3));
+    } else if (m_glyph == Glyph::Import ||
+               m_glyph == Glyph::Export) {
+        const bool importing = m_glyph == Glyph::Import;
+        const qreal stemX = centre.x();
+        const qreal stemTop = bounds.top() + 1.5;
+        const qreal stemBottom = bounds.bottom() - 4.8;
+        painter.drawLine(QPointF(stemX, stemTop),
+                         QPointF(stemX, stemBottom));
+        QPainterPath arrow;
+        const qreal tipY = importing ? stemBottom : stemTop;
+        const qreal wingY = importing ? stemBottom - 3.0 : stemTop + 3.0;
+        arrow.moveTo(stemX - 3.0, wingY);
+        arrow.lineTo(stemX, tipY);
+        arrow.lineTo(stemX + 3.0, wingY);
+        painter.drawPath(arrow);
+        painter.drawLine(QPointF(bounds.left() + 2.0, bounds.bottom() - 2.0),
+                         QPointF(bounds.right() - 2.0, bounds.bottom() - 2.0));
+        painter.drawLine(QPointF(bounds.left() + 2.0, bounds.bottom() - 2.0),
+                         QPointF(bounds.left() + 2.0, bounds.bottom() - 5.0));
+        painter.drawLine(QPointF(bounds.right() - 2.0, bounds.bottom() - 2.0),
+                         QPointF(bounds.right() - 2.0, bounds.bottom() - 5.0));
+    } else if (m_glyph == Glyph::Cancel) {
+        painter.drawLine(bounds.topLeft() + QPointF(2.2, 2.2),
+                         bounds.bottomRight() - QPointF(2.2, 2.2));
+        painter.drawLine(QPointF(bounds.right() - 2.2,
+                                 bounds.top() + 2.2),
+                         QPointF(bounds.left() + 2.2,
+                                 bounds.bottom() - 2.2));
+    } else {
+        const QRectF lens(bounds.left() + 1.5, bounds.top() + 1.5,
+                          bounds.width() * 0.62, bounds.height() * 0.62);
+        painter.drawEllipse(lens);
+        painter.drawLine(lens.bottomRight() - QPointF(1.0, 1.0),
+                         bounds.bottomRight() - QPointF(1.4, 1.4));
     }
 }
 

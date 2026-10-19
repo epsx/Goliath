@@ -54,7 +54,24 @@ private:
 
 class EngravedActionButton final : public QPushButton {
 public:
-    enum class Glyph { Tools, Settings, About, Filters, Random, Alerts };
+    enum class Glyph {
+        Tools,
+        Settings,
+        About,
+        Filters,
+        Random,
+        Alerts,
+        Save,
+        Reset,
+        Refresh,
+        Browse,
+        Help,
+        Profiles,
+        Import,
+        Export,
+        Cancel,
+        Search,
+    };
 
     EngravedActionButton(const QString& label, Glyph glyph,
                          QWidget* parent = nullptr);

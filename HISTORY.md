@@ -4,7 +4,7 @@ This document records the major implementation, validation, refactoring, and
 repository-cleanup milestones of `goliath-qt-cpp`. Entries are newest first.
 
 Historical test counts are retained as checkpoint evidence. The current
-Patch 42G candidate passes:
+Patch 42H candidate passes:
 
 ```text
 All tests passed (4846 assertions in 331 test cases)
@@ -14,6 +14,21 @@ The preceding `1360/99` Feature 9 baseline passed its per-game mapping,
 isolation, and global-configuration regression checks. The `1239/88` runtime
 baseline passed manual MVS/AES, Neo Geo CD CUE, Neo Geo CD CHD, Settings, and
 visible-only Random smoke tests.
+
+---
+
+## 2026-10-19 — Patch 42H: semantic settings actions and arcade keycaps (candidate)
+
+- Added compact, theme-aware vector glyphs to the actions in global Settings
+  and Per-game Settings, covering save, reset, refresh, browse, help, profile,
+  import, export, search, and cancel without relying on platform icon packs.
+- Restyled every interactive input-mapping control as a dimensional arcade
+  keycap with a subtle gradient, lower rim, hover/focus feedback, pressed state,
+  and automatic light/dark label contrast.
+- Preserved mapping, persistence, inheritance, capture, reset, and save
+  behavior. The strict Windows UCRT64 build is warning-clean; all 4846
+  assertions in 331 test cases pass. Manual Sakura Paper and GitHub Dark smoke
+  checks covered global Video/Input and per-game General/Input Mapping pages.
 
 ---
 

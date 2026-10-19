@@ -5,6 +5,7 @@
 #include "input/input_maps.hpp"
 #include "input/joystick_listener.hpp"
 #include "ui/controller_profiles_dialog.hpp"
+#include "ui/widgets/engraved_controls.hpp"
 #include "ui/widgets/input_panel_widgets.hpp"
 
 #include <QAction>
@@ -250,8 +251,8 @@ GameInputMappingWidget::GameInputMappingWidget(
             this, [this](int) { cancelListening(); });
     controllerRow->addWidget(m_joystickCombo);
 
-    auto* refreshButton =
-        new QPushButton(QString::fromUtf8("\xE2\x86\xBB Refresh"));
+    auto* refreshButton = new EngravedActionButton(
+        "Refresh", EngravedActionButton::Glyph::Refresh);
     connect(refreshButton, &QPushButton::clicked,
             this, &GameInputMappingWidget::refreshJoystickList);
     controllerRow->addWidget(refreshButton);
@@ -269,8 +270,9 @@ GameInputMappingWidget::GameInputMappingWidget(
     scroll->setWidget(m_container);
     layout->addWidget(scroll);
 
-    auto* resetButton = new QPushButton(
-        QString::fromUtf8("\xE2\x86\xBB Reset shown mappings to Global"));
+    auto* resetButton = new EngravedActionButton(
+        "Reset shown mappings to Global",
+        EngravedActionButton::Glyph::Reset);
     resetButton->setToolTip(
         "Clears per-game overrides for the displayed mapping profile, "
         "including its shared Neo Geo System controls. Other mapping "
@@ -280,7 +282,8 @@ GameInputMappingWidget::GameInputMappingWidget(
     auto* mappingActions = new QHBoxLayout();
     mappingActions->addWidget(resetButton);
 
-    auto* loadProfileButton = new QPushButton("Load from Profile...");
+    auto* loadProfileButton = new EngravedActionButton(
+        "Load from Profile...", EngravedActionButton::Glyph::Profiles);
     loadProfileButton->setToolTip(
         "Load a compatible saved controller profile into this per-game "
         "editor. The global input configuration is not changed.");
