@@ -67,7 +67,7 @@ TEST_CASE("notification store round trips categories severities and actions",
     CHECK(original.upsert({
         "integrity:problem", NotificationCategory::Integrity,
         NotificationSeverity::Warning, "Integrity", "Mismatch", 20,
-        false, NotificationAction::OpenLogs,
+        false, NotificationAction::OpenVerificationReport,
         "Verification issues:\n• Game — disc.chd: CHD SHA-1 mismatch"}));
 
     std::string error;
@@ -86,6 +86,7 @@ TEST_CASE("notification store round trips categories severities and actions",
     const AppNotification* integrity =
         find_notification(restored, "integrity:problem");
     REQUIRE(integrity != nullptr);
+    CHECK(integrity->action == NotificationAction::OpenVerificationReport);
     CHECK(integrity->hover_details ==
           "Verification issues:\n• Game — disc.chd: CHD SHA-1 mismatch");
 }

@@ -302,6 +302,7 @@ add_executable(goliath-qt
     src/ui/game_profile_dialog.cpp
     src/ui/logging_dialog.cpp
     src/ui/notification_center_dialog.cpp
+    src/ui/verification_report_dialog.cpp
     src/ui/lithogen_dialog.cpp
     src/ui/save_data_dialog.cpp
     src/game/detached_process_tracker.cpp

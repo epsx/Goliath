@@ -103,6 +103,7 @@ void MainWindow::onRescanFinished(const RescanReport& report) {
     const std::size_t updated = report.comparison.updated.size();
     const std::size_t verificationIssues =
         report.scan.neo_geolith_crc32_mismatch_files +
+        report.scan.cd_redump_tracks_only_games +
         report.scan.cd_mame_chd_mismatch_games +
         report.scan.cd_unknown_games;
     if (added + removed + updated + verificationIssues != 0) {
@@ -150,7 +151,9 @@ void MainWindow::onRescanFinished(const RescanReport& report) {
             message.toStdString(),
             nowMs / 1000,
             false,
-            NotificationAction::None,
+            verificationIssues == 0
+                ? NotificationAction::None
+                : NotificationAction::OpenVerificationReport,
             hoverDetails.toStdString(),
         });
     }

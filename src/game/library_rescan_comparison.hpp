@@ -30,10 +30,32 @@ struct LibraryVerificationIssue {
     std::string problem;
 };
 
+struct LibraryVerificationSummary {
+    std::size_t verified = 0;
+    std::size_t cue_mismatches = 0;
+    std::size_t chd_mismatches = 0;
+    std::size_t crc32_mismatches = 0;
+    std::size_t metadata_only = 0;
+    std::size_t unknown = 0;
+
+    [[nodiscard]] std::size_t mismatch_count() const {
+        return cue_mismatches + chd_mismatches + crc32_mismatches;
+    }
+    [[nodiscard]] std::size_t issue_count() const {
+        return mismatch_count() + unknown;
+    }
+};
+
 // Ordering changes alone are ignored. An entry is updated when its exact
 // system/media identity remains present but scanner-owned metadata changes.
 LibraryRescanComparison compare_library_snapshots(
     const std::vector<Game>& previous,
+    const std::vector<Game>& current);
+
+// Counts exact verification states across cartridge files and Neo Geo CD
+// images. CUE track-only matches are deliberately classified as mismatches:
+// their track hashes match Redump, but the CUE layout itself does not.
+LibraryVerificationSummary summarize_library_verification(
     const std::vector<Game>& current);
 
 // Returns at most maximum_entries concrete verification problems from the

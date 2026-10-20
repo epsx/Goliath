@@ -40,6 +40,8 @@ QString actionLabel(NotificationAction action) {
     case NotificationAction::OpenUpdate: return "View Update";
     case NotificationAction::OpenSettings: return "Open Settings";
     case NotificationAction::RescanLibrary: return "Rescan Library";
+    case NotificationAction::OpenVerificationReport:
+        return "View Verification Report";
     case NotificationAction::VerifyBios: return "Verify BIOS";
     case NotificationAction::OpenLogs: return "Open Logs";
     case NotificationAction::None: break;

@@ -994,6 +994,65 @@ QPushButton#notification_primary_action:hover {
     color: @on_accent_hover@;
 }
 
+QFrame#verification_metric_card,
+QFrame#verification_issue_card {
+    background-color: @bg_secondary@;
+    border: 1px solid @border@;
+    border-radius: 10px;
+}
+
+QFrame#verification_metric_card[verificationStatus="good"],
+QFrame#verification_issue_card[verificationStatus="good"] {
+    border-left: 4px solid @success@;
+}
+
+QFrame#verification_metric_card[verificationStatus="bad"],
+QFrame#verification_issue_card[verificationStatus="bad"] {
+    border-left: 4px solid @danger@;
+}
+
+QScrollArea#verification_report_scroll,
+QScrollArea#verification_report_scroll QWidget#qt_scrollarea_viewport,
+QWidget#verification_report_contents {
+    background-color: transparent;
+    border: none;
+}
+
+QLabel#verification_report_heading,
+QLabel#verification_issue_heading,
+QLabel#verification_issue_title {
+    color: @text_primary@;
+    font-weight: 600;
+}
+
+QLabel#verification_report_heading {
+    color: @accent@;
+    font-size: 14px;
+}
+
+QLabel#verification_metric_title,
+QLabel#verification_metric_detail,
+QLabel#verification_report_explanation,
+QLabel#verification_issue_media {
+    color: @text_secondary@;
+}
+
+QLabel#verification_metric_value {
+    color: @text_primary@;
+    font-size: 20px;
+    font-weight: 700;
+}
+
+QFrame#verification_metric_card[verificationStatus="good"] QLabel#verification_metric_value {
+    color: @success@;
+}
+
+QFrame#verification_metric_card[verificationStatus="bad"] QLabel#verification_metric_value,
+QLabel#verification_issue_problem {
+    color: @danger@;
+    font-weight: 600;
+}
+
 QFrame#controller_profile_card[profileCompatible="true"] {
     border-left: 3px solid @accent@;
 }

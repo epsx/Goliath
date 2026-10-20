@@ -4,6 +4,7 @@
 #include "common/debug_logger.hpp"
 #include "common/notification_store.hpp"
 #include "ui/notification_center_dialog.hpp"
+#include "ui/verification_report_dialog.hpp"
 
 #include <QPushButton>
 #include <QStyle>
@@ -92,6 +93,11 @@ void MainWindow::performNotificationAction(NotificationAction action) {
     case NotificationAction::RescanLibrary:
         rescanRoms();
         break;
+    case NotificationAction::OpenVerificationReport: {
+        VerificationReportDialog dialog(m_games, this);
+        dialog.exec();
+        break;
+    }
     case NotificationAction::VerifyBios:
         verifyBios();
         break;

@@ -4,16 +4,33 @@ This document records the major implementation, validation, refactoring, and
 repository-cleanup milestones of `goliath-qt-cpp`. Entries are newest first.
 
 Historical test counts are retained as checkpoint evidence. The current
-Patch 42I candidate passes:
+Patch 42J candidate passes:
 
 ```text
-All tests passed (4846 assertions in 331 test cases)
+All tests passed (4857 assertions in 332 test cases)
 ```
 
 The preceding `1360/99` Feature 9 baseline passed its per-game mapping,
 isolation, and global-configuration regression checks. The `1239/88` runtime
 baseline passed manual MVS/AES, Neo Geo CD CUE, Neo Geo CD CHD, Settings, and
 visible-only Random smoke tests.
+
+---
+
+## 2026-10-20 — Patch 42J: complete library-verification alerts (candidate)
+
+- Fixed rescan alerts so Redump track matches with a different CUE layout are
+  included in the verification-issue total instead of reporting only CHD,
+  CRC-32, and unknown-media problems.
+- Added a dedicated, scrollable Library Verification Report opened directly
+  from the notification. It presents the exact verified total in green,
+  mismatch totals and CUE/CHD/CRC-32 breakdown in red, metadata-only and
+  unknown totals, plus every affected game and media path.
+- Preserved the concise notification preview while making its full report
+  action explicit and persistent. The strict Windows UCRT64 build is
+  warning-clean; all 4857 assertions in 332 test cases pass. A Sakura Paper
+  smoke test against the real test library confirmed the alert count, report
+  totals, CHD classification, affected game, and read-state transition.
 
 ---
 

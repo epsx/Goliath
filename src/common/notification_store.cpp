@@ -76,6 +76,8 @@ const char* action_key(NotificationAction action) {
     case NotificationAction::OpenUpdate: return "open_update";
     case NotificationAction::OpenSettings: return "open_settings";
     case NotificationAction::RescanLibrary: return "rescan_library";
+    case NotificationAction::OpenVerificationReport:
+        return "open_verification_report";
     case NotificationAction::VerifyBios: return "verify_bios";
     case NotificationAction::OpenLogs: return "open_logs";
     }
@@ -104,6 +106,8 @@ bool parse_action(const std::string& key, NotificationAction* out) {
     else if (key == "open_update") *out = NotificationAction::OpenUpdate;
     else if (key == "open_settings") *out = NotificationAction::OpenSettings;
     else if (key == "rescan_library") *out = NotificationAction::RescanLibrary;
+    else if (key == "open_verification_report")
+        *out = NotificationAction::OpenVerificationReport;
     else if (key == "verify_bios") *out = NotificationAction::VerifyBios;
     else if (key == "open_logs") *out = NotificationAction::OpenLogs;
     else return false;

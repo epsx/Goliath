@@ -162,6 +162,46 @@ LibraryRescanComparison compare_library_snapshots(
     return result;
 }
 
+LibraryVerificationSummary summarize_library_verification(
+        const std::vector<Game>& current) {
+    LibraryVerificationSummary summary;
+    for (const Game& game : current) {
+        if (game.system == "neogeocd") {
+            if (!game.identified) {
+                ++summary.unknown;
+            } else if (game.verification ==
+                       std::optional<std::string>("redump-tracks-only")) {
+                ++summary.cue_mismatches;
+            } else if (game.verification ==
+                       std::optional<std::string>("mame-chd-mismatch")) {
+                ++summary.chd_mismatches;
+            } else if (game.verification ==
+                           std::optional<std::string>("redump-cue") ||
+                       game.verification ==
+                           std::optional<std::string>("mame-chd")) {
+                ++summary.verified;
+            } else {
+                ++summary.metadata_only;
+            }
+            continue;
+        }
+
+        for (const Rom& rom : game.roms) {
+            if (rom.verification ==
+                std::optional<std::string>("geolith-crc32")) {
+                ++summary.verified;
+            } else if (rom.verification ==
+                       std::optional<std::string>(
+                           "geolith-crc32-mismatch")) {
+                ++summary.crc32_mismatches;
+            } else {
+                ++summary.metadata_only;
+            }
+        }
+    }
+    return summary;
+}
+
 std::vector<LibraryVerificationIssue> collect_library_verification_issues(
         const std::vector<Game>& current, std::size_t maximum_entries) {
     std::vector<LibraryVerificationIssue> issues;
@@ -185,6 +225,11 @@ std::vector<LibraryVerificationIssue> collect_library_verification_issues(
                 game.roms.empty() ? std::string() : game.roms.front().file);
             if (!game.identified) {
                 add_issue(game, media, "Unknown Neo Geo CD image");
+            } else if (game.verification ==
+                       std::optional<std::string>("redump-tracks-only")) {
+                add_issue(
+                    game, media,
+                    "CUE layout mismatch (track SHA-1s match Redump)");
             } else if (game.verification ==
                        std::optional<std::string>("mame-chd-mismatch")) {
                 add_issue(game, media, "CHD SHA-1 mismatch");

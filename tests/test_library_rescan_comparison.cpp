@@ -154,22 +154,56 @@ TEST_CASE("rescan verification preview identifies exact media and problem",
     auto chd = make_game("Bad CHD", "bad.chd", "neogeocd");
     chd.verification = "mame-chd-mismatch";
 
+    auto cue = make_game("Bad CUE", "bad.cue", "neogeocd");
+    cue.verification = "redump-tracks-only";
+
     auto unknown = make_game("Mystery Disc", "mystery.cue", "neogeocd");
     unknown.identified = false;
     unknown.verification.reset();
 
     const auto issues = goliath::collect_library_verification_issues(
-        {cartridge, chd, unknown}, 3);
-    REQUIRE(issues.size() == 3);
+        {cartridge, chd, cue, unknown}, 4);
+    REQUIRE(issues.size() == 4);
     CHECK(issues[0].display == "Bad Cartridge");
     CHECK(issues[0].media == "bad.neo");
     CHECK(issues[0].problem == "CRC-32 mismatch");
     CHECK(issues[1].display == "Bad CHD");
     CHECK(issues[1].media == "bad.chd");
     CHECK(issues[1].problem == "CHD SHA-1 mismatch");
-    CHECK(issues[2].display == "Mystery Disc");
-    CHECK(issues[2].media == "mystery.cue");
-    CHECK(issues[2].problem == "Unknown Neo Geo CD image");
+    CHECK(issues[2].display == "Bad CUE");
+    CHECK(issues[2].media == "bad.cue");
+    CHECK(issues[2].problem.find("CUE layout mismatch") != std::string::npos);
+    CHECK(issues[3].display == "Mystery Disc");
+    CHECK(issues[3].media == "mystery.cue");
+    CHECK(issues[3].problem == "Unknown Neo Geo CD image");
+}
+
+TEST_CASE("library verification summary counts CUE mismatches as issues",
+          "[rescan][verification]") {
+    auto verifiedCue = make_game("Good CUE", "good.cue", "neogeocd");
+    verifiedCue.verification = "redump-cue";
+
+    auto cueMismatch = make_game("Bad CUE", "bad.cue", "neogeocd");
+    cueMismatch.verification = "redump-tracks-only";
+
+    auto chdMismatch = make_game("Bad CHD", "bad.chd", "neogeocd");
+    chdMismatch.verification = "mame-chd-mismatch";
+
+    auto crcMismatch = make_game("Bad Cart", "bad.neo");
+    crcMismatch.roms.front().verification = "geolith-crc32-mismatch";
+
+    auto unknown = make_game("Unknown", "unknown.cue", "neogeocd");
+    unknown.identified = false;
+
+    const auto summary = goliath::summarize_library_verification(
+        {verifiedCue, cueMismatch, chdMismatch, crcMismatch, unknown});
+    CHECK(summary.verified == 1);
+    CHECK(summary.cue_mismatches == 1);
+    CHECK(summary.chd_mismatches == 1);
+    CHECK(summary.crc32_mismatches == 1);
+    CHECK(summary.mismatch_count() == 3);
+    CHECK(summary.unknown == 1);
+    CHECK(summary.issue_count() == 4);
 }
 
 TEST_CASE("rescan verification preview is capped without hiding total data",

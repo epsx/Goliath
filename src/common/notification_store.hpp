@@ -28,6 +28,7 @@ enum class NotificationAction {
     OpenUpdate,
     OpenSettings,
     RescanLibrary,
+    OpenVerificationReport,
     VerifyBios,
     OpenLogs,
 };
