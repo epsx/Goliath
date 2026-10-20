@@ -206,6 +206,40 @@ TEST_CASE("library verification summary counts CUE mismatches as issues",
     CHECK(summary.issue_count() == 4);
 }
 
+TEST_CASE("library verification entries support report category filters",
+          "[rescan][verification]") {
+    auto verified = make_game("Verified Cart", "verified.neo");
+    verified.roms.front().verification = "geolith-crc32";
+
+    auto mismatch = make_game("Bad CUE", "bad.cue", "neogeocd");
+    mismatch.verification = "redump-tracks-only";
+
+    auto metadata = make_game("Metadata Cart", "metadata.neo");
+
+    auto unknown = make_game("Mystery Disc", "mystery.chd", "neogeocd");
+    unknown.identified = false;
+
+    const auto entries = goliath::collect_library_verification_entries(
+        {verified, mismatch, metadata, unknown});
+    REQUIRE(entries.size() == 4);
+    CHECK(entries[0].status ==
+          goliath::LibraryVerificationStatus::Verified);
+    CHECK(entries[0].detail == "CRC-32 matches Geolith");
+    CHECK(entries[1].status ==
+          goliath::LibraryVerificationStatus::Mismatch);
+    CHECK(entries[1].detail.find("CUE layout mismatch") !=
+          std::string::npos);
+    CHECK(entries[2].status ==
+          goliath::LibraryVerificationStatus::MetadataOnly);
+    CHECK(entries[2].media == "metadata.neo");
+    CHECK(entries[3].status ==
+          goliath::LibraryVerificationStatus::Unknown);
+    CHECK(entries[3].detail == "Unknown Neo Geo CD image");
+
+    CHECK(goliath::collect_library_verification_issues(
+              {mismatch}, 0).empty());
+}
+
 TEST_CASE("rescan verification preview is capped without hiding total data",
           "[rescan][verification]") {
     auto first = make_game("First", "first.neo");

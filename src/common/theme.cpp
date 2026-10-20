@@ -994,6 +994,7 @@ QPushButton#notification_primary_action:hover {
     color: @on_accent_hover@;
 }
 
+QPushButton#verification_metric_card,
 QFrame#verification_metric_card,
 QFrame#verification_issue_card {
     background-color: @bg_secondary@;
@@ -1001,14 +1002,37 @@ QFrame#verification_issue_card {
     border-radius: 10px;
 }
 
+QPushButton#verification_metric_card {
+    padding: 0;
+    text-align: left;
+}
+
+QPushButton#verification_metric_card:hover,
+QPushButton#verification_metric_card:focus {
+    background-color: @bg_hover@;
+}
+
+QPushButton#verification_metric_card[verificationSelected="true"] {
+    background-color: @bg_hover@;
+    border-top: 2px solid @accent@;
+    border-right: 2px solid @accent@;
+    border-bottom: 2px solid @accent@;
+}
+
+QPushButton#verification_metric_card[verificationStatus="good"],
 QFrame#verification_metric_card[verificationStatus="good"],
 QFrame#verification_issue_card[verificationStatus="good"] {
     border-left: 4px solid @success@;
 }
 
-QFrame#verification_metric_card[verificationStatus="bad"],
+QPushButton#verification_metric_card[verificationStatus="bad"],
 QFrame#verification_issue_card[verificationStatus="bad"] {
     border-left: 4px solid @danger@;
+}
+
+QPushButton#verification_metric_card[verificationStatus="neutral"],
+QFrame#verification_issue_card[verificationStatus="neutral"] {
+    border-left: 4px solid @accent@;
 }
 
 QScrollArea#verification_report_scroll,
@@ -1043,13 +1067,21 @@ QLabel#verification_metric_value {
     font-weight: 700;
 }
 
-QFrame#verification_metric_card[verificationStatus="good"] QLabel#verification_metric_value {
+QPushButton#verification_metric_card[verificationStatus="good"] QLabel#verification_metric_value,
+QFrame#verification_metric_card[verificationStatus="good"] QLabel#verification_metric_value,
+QLabel#verification_issue_success {
     color: @success@;
+    font-weight: 600;
 }
 
-QFrame#verification_metric_card[verificationStatus="bad"] QLabel#verification_metric_value,
+QPushButton#verification_metric_card[verificationStatus="bad"] QLabel#verification_metric_value,
 QLabel#verification_issue_problem {
     color: @danger@;
+    font-weight: 600;
+}
+
+QLabel#verification_issue_detail {
+    color: @accent@;
     font-weight: 600;
 }
 

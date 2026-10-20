@@ -2,11 +2,14 @@
 // overview opened from actionable rescan notifications.
 #pragma once
 
-#include "game/game_model.hpp"
+#include "game/library_rescan_comparison.hpp"
 
 #include <QDialog>
 
 #include <vector>
+
+class QLabel;
+class QVBoxLayout;
 
 namespace goliath {
 
@@ -15,6 +18,13 @@ class VerificationReportDialog final : public QDialog {
 public:
     explicit VerificationReportDialog(const std::vector<Game>& games,
                                       QWidget* parent = nullptr);
+
+private:
+    void showEntries(LibraryVerificationStatus status);
+
+    std::vector<LibraryVerificationEntry> m_entries;
+    QLabel* m_entryHeading = nullptr;
+    QVBoxLayout* m_entryLayout = nullptr;
 };
 
 } // namespace goliath

@@ -202,49 +202,90 @@ LibraryVerificationSummary summarize_library_verification(
     return summary;
 }
 
-std::vector<LibraryVerificationIssue> collect_library_verification_issues(
-        const std::vector<Game>& current, std::size_t maximum_entries) {
-    std::vector<LibraryVerificationIssue> issues;
-    issues.reserve(std::min(maximum_entries, current.size()));
+std::vector<LibraryVerificationEntry> collect_library_verification_entries(
+        const std::vector<Game>& current) {
+    std::vector<LibraryVerificationEntry> entries;
+    entries.reserve(current.size());
 
-    const auto add_issue = [&](const Game& game, const std::string& media,
-                               std::string problem) {
-        if (issues.size() >= maximum_entries) return;
-        issues.push_back({
+    const auto add_entry = [&](const Game& game, const std::string& media,
+                               LibraryVerificationStatus status,
+                               std::string detail) {
+        entries.push_back({
             game.display.empty() ? game.name : game.display,
             media,
-            std::move(problem),
+            status,
+            std::move(detail),
         });
     };
 
     for (const Game& game : current) {
-        if (issues.size() >= maximum_entries) break;
-
         if (game.system == "neogeocd") {
             const std::string media = game.main_rom.value_or(
                 game.roms.empty() ? std::string() : game.roms.front().file);
             if (!game.identified) {
-                add_issue(game, media, "Unknown Neo Geo CD image");
+                add_entry(game, media, LibraryVerificationStatus::Unknown,
+                          "Unknown Neo Geo CD image");
             } else if (game.verification ==
                        std::optional<std::string>("redump-tracks-only")) {
-                add_issue(
-                    game, media,
+                add_entry(
+                    game, media, LibraryVerificationStatus::Mismatch,
                     "CUE layout mismatch (track SHA-1s match Redump)");
             } else if (game.verification ==
                        std::optional<std::string>("mame-chd-mismatch")) {
-                add_issue(game, media, "CHD SHA-1 mismatch");
+                add_entry(game, media, LibraryVerificationStatus::Mismatch,
+                          "CHD SHA-1 mismatch");
+            } else if (game.verification ==
+                       std::optional<std::string>("redump-cue")) {
+                add_entry(game, media, LibraryVerificationStatus::Verified,
+                          "Redump CUE and track SHA-1s match");
+            } else if (game.verification ==
+                       std::optional<std::string>("mame-chd")) {
+                add_entry(game, media, LibraryVerificationStatus::Verified,
+                          "MAME CHD SHA-1 matches");
+            } else {
+                add_entry(
+                    game, media, LibraryVerificationStatus::MetadataOnly,
+                    "Recognized metadata; no exact hash verification");
             }
             continue;
         }
 
         for (const Rom& rom : game.roms) {
-            if (rom.verification !=
-                std::optional<std::string>("geolith-crc32-mismatch")) {
-                continue;
+            if (rom.verification ==
+                std::optional<std::string>("geolith-crc32")) {
+                add_entry(game, rom.file,
+                          LibraryVerificationStatus::Verified,
+                          "CRC-32 matches Geolith");
+            } else if (rom.verification ==
+                       std::optional<std::string>(
+                           "geolith-crc32-mismatch")) {
+                add_entry(game, rom.file,
+                          LibraryVerificationStatus::Mismatch,
+                          "CRC-32 mismatch");
+            } else {
+                add_entry(
+                    game, rom.file,
+                    LibraryVerificationStatus::MetadataOnly,
+                    "Recognized metadata; no exact hash verification");
             }
-            add_issue(game, rom.file, "CRC-32 mismatch");
-            if (issues.size() >= maximum_entries) break;
         }
+    }
+    return entries;
+}
+
+std::vector<LibraryVerificationIssue> collect_library_verification_issues(
+        const std::vector<Game>& current, std::size_t maximum_entries) {
+    std::vector<LibraryVerificationIssue> issues;
+    issues.reserve(std::min(maximum_entries, current.size()));
+    if (maximum_entries == 0) return issues;
+    for (const LibraryVerificationEntry& entry :
+         collect_library_verification_entries(current)) {
+        if (entry.status != LibraryVerificationStatus::Mismatch &&
+            entry.status != LibraryVerificationStatus::Unknown) {
+            continue;
+        }
+        issues.push_back({entry.display, entry.media, entry.detail});
+        if (issues.size() >= maximum_entries) break;
     }
     return issues;
 }

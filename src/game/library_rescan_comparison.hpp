@@ -30,6 +30,21 @@ struct LibraryVerificationIssue {
     std::string problem;
 };
 
+enum class LibraryVerificationStatus {
+    Verified,
+    Mismatch,
+    MetadataOnly,
+    Unknown,
+};
+
+struct LibraryVerificationEntry {
+    std::string display;
+    std::string media;
+    LibraryVerificationStatus status =
+        LibraryVerificationStatus::MetadataOnly;
+    std::string detail;
+};
+
 struct LibraryVerificationSummary {
     std::size_t verified = 0;
     std::size_t cue_mismatches = 0;
@@ -56,6 +71,11 @@ LibraryRescanComparison compare_library_snapshots(
 // images. CUE track-only matches are deliberately classified as mismatches:
 // their track hashes match Redump, but the CUE layout itself does not.
 LibraryVerificationSummary summarize_library_verification(
+    const std::vector<Game>& current);
+
+// Returns every independently verified cartridge file or Neo Geo CD image,
+// classified for the interactive verification report.
+std::vector<LibraryVerificationEntry> collect_library_verification_entries(
     const std::vector<Game>& current);
 
 // Returns at most maximum_entries concrete verification problems from the

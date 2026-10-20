@@ -4,16 +4,33 @@ This document records the major implementation, validation, refactoring, and
 repository-cleanup milestones of `goliath-qt-cpp`. Entries are newest first.
 
 Historical test counts are retained as checkpoint evidence. The current
-Patch 42J candidate passes:
+Patch 42K candidate passes:
 
 ```text
-All tests passed (4857 assertions in 332 test cases)
+All tests passed (4867 assertions in 333 test cases)
 ```
 
 The preceding `1360/99` Feature 9 baseline passed its per-game mapping,
 isolation, and global-configuration regression checks. The `1239/88` runtime
 baseline passed manual MVS/AES, Neo Geo CD CUE, Neo Geo CD CHD, Settings, and
 visible-only Random smoke tests.
+
+---
+
+## 2026-10-20 — Patch 42K: interactive verification filters (candidate)
+
+- Turned the Mismatches, Metadata only, and Unknown summary cards into
+  in-place filters for the Library Verification Report, with a clear selected
+  state and an automatic return to the top of the refreshed list.
+- Added exact category entries and explanations for cartridge files and Neo
+  Geo CD images, plus explicit empty-state messages instead of blank results.
+  The Verified total remains informational so large libraries do not create
+  hundreds of unnecessary widgets during normal problem review.
+- Preserved notification previews and mismatch counting. The strict Windows
+  UCRT64 build is warning-clean; all 4867 assertions in 333 test cases pass.
+  A Sakura Paper smoke test covered all three filters, populated metadata-only
+  results, the empty Unknown state, default Mismatches selection, and selection
+  highlighting.
 
 ---
 
