@@ -12,6 +12,7 @@
 #include <QCryptographicHash>
 #include <QComboBox>
 #include <QDateTime>
+#include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QFormLayout>
@@ -432,9 +433,11 @@ void InfoTab::startCoreProbe() {
     if (exe.empty()) exe = m_jollygoodExe;
     const fs::path coreLibrary = geolith_library_for_jgrf(exe);
 
-    m_coreLibrary->setText(coreLibrary.empty()
-                               ? "Unavailable"
-                               : path_to_qstring(coreLibrary));
+    m_coreLibrary->setText(
+        coreLibrary.empty()
+            ? "Unavailable"
+            : QDir::toNativeSeparators(
+                  QDir::cleanPath(path_to_qstring(coreLibrary))));
 
     m_corePending = true;
     auto result = std::make_shared<GeolithCapabilities>();

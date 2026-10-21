@@ -21,6 +21,7 @@
 #include <QSpinBox>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <memory>
 #include <utility>
 
@@ -36,6 +37,14 @@ const std::vector<FieldSpec>& jollygoodAudioFields() {
         {"rsqual", "Resampler Quality", 3, Kind::Spin, {}, 0, 10},
     };
     return fields;
+}
+
+void fitDeviceListToContents(QListWidget* list) {
+    if (!list) return;
+    const int visibleRows = std::clamp(list->count(), 1, 5);
+    int rowHeight = list->sizeHintForRow(0);
+    if (rowHeight <= 0) rowHeight = list->fontMetrics().height() + 8;
+    list->setFixedHeight(visibleRows * rowHeight + 2 * list->frameWidth());
 }
 } // namespace
 
@@ -85,7 +94,7 @@ void AudioTab::setupUi() {
 
     m_deviceList = new QListWidget();
     m_deviceList->setSelectionMode(QAbstractItemView::NoSelection);
-    m_deviceList->setMaximumHeight(120);
+    fitDeviceListToContents(m_deviceList);
     form->addRow("Detected Playback Devices:", m_deviceList);
 
     auto* volumeRow = new QWidget();
@@ -182,6 +191,7 @@ void AudioTab::refreshDevices() {
     m_deviceStatus->setText("Detecting playback devices...");
     m_deviceList->clear();
     m_deviceList->addItem("(Scanning...)");
+    fitDeviceListToContents(m_deviceList);
 
     // SDL audio enumeration can block for several seconds on Windows when an
     // endpoint/driver is slow to respond. Never run it in the Settings dialog
@@ -219,6 +229,8 @@ void AudioTab::applyDeviceSnapshot(const AudioDeviceSnapshot& snapshot) {
         }
         m_deviceStatus->setText(status);
     }
+
+    fitDeviceListToContents(m_deviceList);
 
     m_refreshInProgress = false;
     if (m_refreshButton) m_refreshButton->setEnabled(true);

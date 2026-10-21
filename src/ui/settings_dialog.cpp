@@ -58,6 +58,12 @@ namespace {
 
 constexpr int kDefaultAxisDeadzone = 5;
 
+void setOptionalNote(QLabel* label, const QString& text) {
+    if (!label) return;
+    label->setText(text);
+    label->setVisible(!text.isEmpty());
+}
+
 void prepare_jgrf_input_documents(const AppPaths& paths, int deadzone,
                                   IniDocument& settings,
                                   IniDocument& core) {
@@ -265,6 +271,7 @@ void SettingsDialog::buildHotkeysTab(QWidget* widget) {
     m_gifHotkeyWarning = new QLabel(captureGroup);
     m_gifHotkeyWarning->setWordWrap(true);
     m_gifHotkeyWarning->setObjectName("themed_note");
+    m_gifHotkeyWarning->hide();
     form->addRow("", m_gifHotkeyWarning);
     m_gifDurationCombo = new QComboBox(captureGroup);
     m_gifDurationCombo->addItem("5 seconds", 5);
@@ -279,6 +286,7 @@ void SettingsDialog::buildHotkeysTab(QWidget* widget) {
     m_pngHotkeyWarning = new QLabel(captureGroup);
     m_pngHotkeyWarning->setWordWrap(true);
     m_pngHotkeyWarning->setObjectName("themed_note");
+    m_pngHotkeyWarning->hide();
     form->addRow("", m_pngHotkeyWarning);
     captureLayout->addLayout(form);
 
@@ -362,9 +370,9 @@ void SettingsDialog::buildHotkeysTab(QWidget* widget) {
     updateHotkeyWarnings();
 #if !defined(_WIN32)
 #if !defined(GOLIATH_X11_CAPTURE)
-    m_gifHotkeyWarning->clear();
+    setOptionalNote(m_gifHotkeyWarning, {});
 #endif
-    m_pngHotkeyWarning->clear();
+    setOptionalNote(m_pngHotkeyWarning, {});
 #endif
 }
 
@@ -373,9 +381,12 @@ void SettingsDialog::updateHotkeyWarnings() {
     if (QGuiApplication::platformName() == "wayland") {
         QString error;
         parseCaptureHotkey(m_gifHotkeyEdit->keySequence(), &error);
-        m_gifHotkeyWarning->setText(error.isEmpty()
-            ? jgrfWarningForHotkey(m_gifHotkeyEdit->keySequence()) : error);
-        m_pngHotkeyWarning->clear();
+        setOptionalNote(
+            m_gifHotkeyWarning,
+            error.isEmpty()
+                ? jgrfWarningForHotkey(m_gifHotkeyEdit->keySequence())
+                : error);
+        setOptionalNote(m_pngHotkeyWarning, {});
         return;
     }
 #endif
@@ -389,11 +400,11 @@ void SettingsDialog::updateHotkeyWarnings() {
             if (!shown.isEmpty()) shown += " ";
             shown += "This single key will be consumed while the tracked game has focus.";
         }
-        label->setText(shown);
+        setOptionalNote(label, shown);
     };
     update(m_gifHotkeyEdit, m_gifHotkeyWarning);
 #if defined(GOLIATH_X11_CAPTURE)
-    m_pngHotkeyWarning->clear();
+    setOptionalNote(m_pngHotkeyWarning, {});
     return;
 #endif
     update(m_pngHotkeyEdit, m_pngHotkeyWarning);
@@ -401,8 +412,10 @@ void SettingsDialog::updateHotkeyWarnings() {
     const auto png = parseCaptureHotkey(m_pngHotkeyEdit->keySequence());
     if (gif && png && gif->virtualKey &&
         gif->virtualKey == png->virtualKey && gif->modifiers == png->modifiers) {
-        m_gifHotkeyWarning->setText("GIF and PNG cannot use the same shortcut.");
-        m_pngHotkeyWarning->setText("GIF and PNG cannot use the same shortcut.");
+        setOptionalNote(m_gifHotkeyWarning,
+                        "GIF and PNG cannot use the same shortcut.");
+        setOptionalNote(m_pngHotkeyWarning,
+                        "GIF and PNG cannot use the same shortcut.");
     }
 }
 
