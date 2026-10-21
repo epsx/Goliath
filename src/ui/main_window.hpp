@@ -144,6 +144,7 @@ private:
     QWidget* buildDetailsGalleryPanel();
     void buildDetailsDescription(QVBoxLayout* detailsLayout);
     void buildDetailsPanel();
+    void updateDetailsLayoutMode();
     void buildStatusBar();
     void setupKeyboardShortcuts();
     // Apply a built-in theme by key; unknown keys fall back to Dark Modern.
@@ -332,6 +333,10 @@ private:
     QPushButton* m_launchButton = nullptr;
 
     QScrollArea* m_detailsScroll = nullptr;
+    QHBoxLayout* m_detailsMediaLayout = nullptr;
+    QWidget* m_detailsInfoCard = nullptr;
+    QWidget* m_detailsGalleryPanel = nullptr;
+    bool m_detailsMediaStacked = false;
     QLabel* m_snapshotLabel = nullptr;
     QPushButton* m_gallerySnaps = nullptr;
     QPushButton* m_galleryGifs = nullptr;

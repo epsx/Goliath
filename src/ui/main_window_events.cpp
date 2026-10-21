@@ -100,6 +100,7 @@ void MainWindow::resizeEvent(QResizeEvent* event) {
     // Recalculate only the icon-mode grid once the new viewport width exists.
     QTimer::singleShot(0, this, [this]() {
         updateIconViewGridSize();
+        updateDetailsLayoutMode();
     });
 
     if (!m_splitter) {

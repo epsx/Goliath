@@ -184,6 +184,7 @@ void MainWindow::buildLibraryWorkspace(QVBoxLayout* mainLayout) {
     connect(m_splitter, &QSplitter::splitterMoved, this,
             [this](int, int) {
                 updateIconViewGridSize();
+                updateDetailsLayoutMode();
             });
 
 }

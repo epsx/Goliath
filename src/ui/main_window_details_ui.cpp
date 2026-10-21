@@ -5,6 +5,7 @@
 #include "ui/widgets/main_window_panel_widgets.hpp"
 
 #include <QButtonGroup>
+#include <QBoxLayout>
 #include <QDesktopServices>
 #include <QFont>
 #include <QFormLayout>
@@ -22,6 +23,7 @@
 #include <QStatusBar>
 #include <QStyle>
 #include <QTextEdit>
+#include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -498,14 +500,18 @@ void MainWindow::buildDetailsPanel() {
     detailsLayout->addWidget(buildDetailsHeaderCard());
     detailsLayout->addSpacing(12);
 
-    auto* mediaRow = new QHBoxLayout();
-    mediaRow->setSpacing(8);
+    m_detailsMediaLayout = new QHBoxLayout();
+    m_detailsMediaLayout->setSpacing(8);
     // The gallery container establishes the row's vertical shadow room. Keep
     // the row itself margin-free so its total height remains unchanged.
-    mediaRow->setContentsMargins(0, 0, 0, 0);
-    mediaRow->addWidget(buildDetailsInfoCard(), 1, Qt::AlignVCenter);
-    mediaRow->addWidget(buildDetailsGalleryPanel(), 0, Qt::AlignTop);
-    detailsLayout->addLayout(mediaRow);
+    m_detailsMediaLayout->setContentsMargins(0, 0, 0, 0);
+    m_detailsInfoCard = buildDetailsInfoCard();
+    m_detailsGalleryPanel = buildDetailsGalleryPanel();
+    m_detailsMediaLayout->addWidget(
+        m_detailsInfoCard, 1, Qt::AlignVCenter);
+    m_detailsMediaLayout->addWidget(
+        m_detailsGalleryPanel, 0, Qt::AlignTop);
+    detailsLayout->addLayout(m_detailsMediaLayout);
 
     buildDetailsDescription(detailsLayout);
 
@@ -513,6 +519,38 @@ void MainWindow::buildDetailsPanel() {
     rightLayout->addWidget(m_detailsScroll, 1);
 
     m_splitter->addWidget(rightWidget);
+
+    QTimer::singleShot(0, this, [this]() { updateDetailsLayoutMode(); });
+
+}
+
+void MainWindow::updateDetailsLayoutMode() {
+    if (!m_detailsScroll || !m_detailsMediaLayout ||
+        !m_detailsInfoCard || !m_detailsGalleryPanel) {
+        return;
+    }
+
+    // The horizontal media row needs enough room for both the information
+    // card and the original-size gallery. On narrower details panes, stacking
+    // those cards keeps the complete snapshot visible and avoids a workspace-
+    // wide horizontal scrollbar.
+    constexpr int kHorizontalMediaWidth = 1180;
+    const bool stacked =
+        m_detailsScroll->viewport()->width() < kHorizontalMediaWidth;
+    if (stacked == m_detailsMediaStacked) return;
+
+    m_detailsMediaStacked = stacked;
+    m_detailsMediaLayout->setDirection(
+        stacked ? QBoxLayout::TopToBottom : QBoxLayout::LeftToRight);
+    m_detailsMediaLayout->setAlignment(
+        m_detailsInfoCard,
+        stacked ? Qt::AlignTop : Qt::AlignVCenter);
+    m_detailsMediaLayout->setAlignment(
+        m_detailsGalleryPanel,
+        stacked ? Qt::AlignTop | Qt::AlignHCenter : Qt::AlignTop);
+    m_detailsScroll->setHorizontalScrollBarPolicy(
+        stacked ? Qt::ScrollBarAlwaysOff : Qt::ScrollBarAsNeeded);
+    m_detailsMediaLayout->invalidate();
 
 }
 
