@@ -13,7 +13,7 @@ source and Windows runtime components used or redistributed with Goliath.
 - `msys2/libffi/` and `msys2/libjpeg-turbo/` cover transitive DLLs collected
   from the deployed Qt runtime.
 - `msys2/qt6-base/` contains the full installed license directory from the
-  exact Qt Base 6.11.2-2 package. This release of that package has no installed
+  exact Qt Base 6.12.0-1 package. This release of that package has no installed
   SPDX file.
 - `SHA256SUMS` records the exact bytes of every other file in this directory.
 

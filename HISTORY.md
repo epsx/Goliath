@@ -4,7 +4,7 @@ This document records the major implementation, validation, refactoring, and
 repository-cleanup milestones of `goliath-qt-cpp`. Entries are newest first.
 
 Historical test counts are retained as checkpoint evidence. The current
-Patch 42K candidate passes:
+Goliath 0.41.1 preview candidate passes:
 
 ```text
 All tests passed (4867 assertions in 333 test cases)
@@ -14,6 +14,32 @@ The preceding `1360/99` Feature 9 baseline passed its per-game mapping,
 isolation, and global-configuration regression checks. The `1239/88` runtime
 baseline passed manual MVS/AES, Neo Geo CD CUE, Neo Geo CD CHD, Settings, and
 visible-only Random smoke tests.
+
+---
+
+## 2026-10-21 — Goliath 0.41.1 preview candidate
+
+- Consolidated the fourteen post-0.41.0 commits into a focused reliability and
+  interface release while preserving Goliath's established frontend role and
+  exact-media configuration behavior.
+- Added the persistent, system-specific Genre filter and friendly Geolith
+  startup diagnoses for known BIOS, hardware-mode, and region failures.
+- Made global input settings transactional and made test-owned temporary
+  directories self-cleaning without changing user save-data or per-game
+  profile behavior.
+- Refined global and per-game Settings with consistent section framing,
+  stable input geometry, semantic action icons, dimensional arcade keycaps,
+  and controls that no longer resize while waiting for a mapping.
+- Expanded Alerts with the complete Library Verification Report and in-place
+  filters for mismatches, metadata-only media, and unknown images, while
+  keeping the Verified total informational for large libraries.
+- Improved narrow-window presentation by stacking game details cleanly and
+  polished optional audio, device, core-path, and help text across Settings.
+- Refreshed the exact Windows CI package pins and matching runtime-license
+  inventory after the MSYS2 Qt, GCC runtime, FreeType, and winpthreads updates.
+  The strict Windows UCRT64 build is warning-clean; all 4867 assertions in 333
+  test cases pass, and the release commit is validated by the Windows/Linux CI
+  matrix before packaging.
 
 ---
 

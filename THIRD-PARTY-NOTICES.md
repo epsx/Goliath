@@ -92,7 +92,7 @@ project author's direction. It is not derived from the Jolly Good icon.
 
 ## Windows runtime packages
 
-The Windows frontend audited from GitHub Actions run `35733913007` uses the
+The Windows frontend audited from GitHub Actions run `39659221345` uses the
 following MSYS2 UCRT64 runtime packages. CI checks these package versions
 before staging subsequent Windows archives.
 The staged Windows archive contains the installed license directories of its
@@ -101,15 +101,15 @@ preserved where an upstream package supplies more than one option.
 
 | Component | Audited package version | Selected/disclosed license |
 | --- | --- | --- |
-| Qt Base | 6.11.2-2 | LGPL-3.0-only for the redistributed Qt DLLs and plugins; Qt's bundled third-party material retains its own license terms |
+| Qt Base | 6.12.0-1 | LGPL-3.0-only for the redistributed Qt DLLs and plugins; Qt's bundled third-party material retains its own license terms |
 | SDL3 | 3.4.18-1 | Zlib |
 | libb2 | 0.98.1-3 | CC0-1.0 |
 | Brotli | 1.2.0-1 | MIT |
 | bzip2 | 1.0.8-4 | bzip2 license |
 | double-conversion | 3.4.0-1 | BSD-3-Clause |
 | libffi | 3.8.0-1 | MIT |
-| FreeType | 2.14.3-1 | FreeType License selected from its FTL/GPL dual license |
-| GCC runtime libraries (libgcc, libstdc++) | 16.2.0-4 | GPL-3.0-or-later WITH GCC-exception-3.1 and applicable LGPL terms |
+| FreeType | 2.15.0-1 | FreeType License selected from its FTL/GPL dual license |
+| GCC runtime libraries (libgcc, libstdc++) | 16.2.0-6 | GPL-3.0-or-later WITH GCC-exception-3.1 and GFDL-1.3-or-later documentation terms |
 | GLib | 2.90.1-1 | LGPL-2.1-or-later |
 | Graphite2 | 1.3.15-1 | LGPL-2.1-or-later |
 | HarfBuzz | 14.6.0-1 | MIT |
@@ -120,7 +120,7 @@ preserved where an upstream package supplies more than one option.
 | md4c | 0.6.0-1 | MIT |
 | PCRE2 | 10.49-1 | BSD-3-Clause with the package's binary-like-packages exception where applicable |
 | libpng | 1.6.59-1 | libpng license |
-| libwinpthread | 14.0.0.r426.g4564ee4b5-1 | MIT and BSD-3-Clause-Clear |
+| libwinpthread | 14.0.0.r495.g63ebe6cdb-2 | MIT and BSD-3-Clause |
 | zstd | 1.5.7-2 | BSD-3-Clause selected from its BSD/GPL dual license |
 | zlib | 1.3.2-2 | Zlib |
 
@@ -128,11 +128,12 @@ The audited Qt deployment contains `Qt6Core.dll`, `Qt6Gui.dll`,
 `Qt6Network.dll`, `Qt6Widgets.dll`, and the plugins selected by
 `windeployqt6.exe` under `generic/`, `imageformats/`, `networkinformation/`,
 `platforms/`, `styles/`, and `tls/`. They are dynamically linked and may be
-replaced by the user with interface-compatible builds. The Qt Base 6.11.2-2
+replaced by the user with interface-compatible builds. The Qt Base 6.12.0-1
 package's full installed license set is in `licenses/msys2/qt6-base/`. This
 package does not install an SPDX document. The corresponding Qt Base upstream
-source, MSYS2 recipe, and patches are available in
-`mingw-w64-qt6-base-6.11.2-2.src.tar.zst` alongside the release.
+source, MSYS2 recipe, and patches are provided by MSYS2 in the exact source
+package
+[`mingw-w64-qt6-base-6.12.0-1.src.tar.zst`](https://repo.msys2.org/mingw/sources/mingw-w64-qt6-base-6.12.0-1.src.tar.zst).
 
 Goliath's official Windows build dynamically links the staged GCC runtime,
 libstdc++, winpthreads, Qt, and SDL DLLs. JGRF and Geolith have their own

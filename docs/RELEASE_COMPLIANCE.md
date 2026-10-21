@@ -35,7 +35,7 @@ LGPL-3.0-only. For the exact Qt binaries in a release:
 
 1. keep the Qt notice, LGPL/GPL texts, and the package's complete installed
    Qt attribution files from `licenses/msys2/qt6-base/`; the audited MSYS2
-   Qt Base 6.11.2-2 package does not install an SPDX SBOM;
+   Qt Base 6.12.0-1 package does not install an SPDX SBOM;
 2. permit replacement of the Qt DLLs and reverse engineering for debugging
    such replacements;
 3. publish the complete corresponding Qt Base source used by the MSYS2 build
